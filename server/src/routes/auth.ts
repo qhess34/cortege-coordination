@@ -14,7 +14,7 @@ const MAX_FAILURES = 5;
 const LOCK_MS = 15 * 60 * 1000;
 
 export async function authRoutes(app: FastifyInstance) {
-  app.post('/api/auth/login', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req, reply) => {
+  app.post('/api/auth/login', { config: { rateLimit: { max: app.config.loginRateLimit, timeWindow: '1 minute' } } }, async (req, reply) => {
     const body = LoginBody.parse(req.body);
     const f = failures.get(body.login);
     if (f && f.count >= MAX_FAILURES && f.until > Date.now()) {

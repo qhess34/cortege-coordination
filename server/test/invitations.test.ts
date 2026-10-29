@@ -247,3 +247,23 @@ describe('navigateur déjà connecté avec un compte', () => {
     expect((await orga.get('/api/events/' + eventId)).statusCode).toBe(200);
   });
 });
+
+describe('compte membre d’une équipe', () => {
+  it("un organisateur ajouté à une équipe voit sa vue d'équipe en plus de l'organisation", async () => {
+    expect((await orga.get('/api/events/' + eventId + '/mes-equipes')).json().teams).toEqual([]);
+    const me = (await orga.get('/api/auth/me')).json();
+    expect((await orga.post('/api/teams/' + teamB + '/members', { userId: me.id })).statusCode).toBe(200);
+    const r = (await orga.get('/api/events/' + eventId + '/mes-equipes')).json();
+    expect(r.teams).toHaveLength(1);
+    expect(r.teams[0]).toMatchObject({ name: 'Équipe B', role: 'membre' });
+    expect(r.teams[0].missions[0].point.name).toBe('Angle B');
+    expect(r.event.instructions).toBe('Gilets obligatoires.');
+    await orga.request('DELETE', '/api/teams/' + teamB + '/members/' + me.id);
+  });
+  it('inaccessible sans accès à la manifestation', async () => {
+    await createUser(ctx.db, 'etranger', 'organisateur');
+    const e = new Agent(ctx.app);
+    await e.login('etranger');
+    expect((await e.get('/api/events/' + eventId + '/mes-equipes')).statusCode).toBe(404);
+  });
+});

@@ -149,6 +149,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `PORT`, `HOST` | Écoute du serveur | `3000`, `127.0.0.1` |
 | `COOKIE_SECURE` | Cookies réservés à HTTPS | `true` en production |
 | `SESSION_TTL_HOURS` | Durée des sessions (glissante) | `12` |
+| `LOGIN_RATE_LIMIT` | Tentatives de connexion par minute et par adresse IP | `20` |
 | `JOIN_RATE_LIMIT` | Ouvertures de lien d'invitation par minute et par adresse IP | `30` |
 | `OVERPASS_URL` | Serveurs Overpass, séparés par des virgules, essayés dans l'ordre | `overpass-api.de`, puis `overpass.private.coffee` |
 | `OSM_USER_AGENT` | Identification envoyée à Overpass | `cortege-coordination (auto-hébergé)` |

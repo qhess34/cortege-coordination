@@ -1,15 +1,15 @@
 // Espace du participant (en attendant l'application de terrain du lot 3) : son équipe, ses consignes, ses missions.
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
-import { MISSION_STATUS, SUGGESTION_TYPES, dateTime, km } from '../labels';
-import type { Position } from '../types';
+import { TeamSpace, type SpaceEvent, type SpaceMission, type SpaceTeam } from '../components/TeamSpace';
+import { dateTime } from '../labels';
 
 interface Moi {
   participant: { id: number; displayName: string };
-  event: { id: number; name: string; startsAt: string | null; endsAt: string | null; instructions: string; status: string };
-  team: { id: number; name: string; color: string; instructions: string; role: string; leaderName: string | null; closed: boolean } | null;
+  event: SpaceEvent;
+  team: SpaceTeam | null;
   pendingTeam: string | null;
-  missions: { order: number; status: string; instructions: string; point: { name: string; type: string; description: string; position: Position; distance: number | null } }[];
+  missions: SpaceMission[];
 }
 
 export function ParticipantPage({ onLogout }: { onLogout: () => void }) {
@@ -52,29 +52,7 @@ export function ParticipantPage({ onLogout }: { onLogout: () => void }) {
       )}
       {!moi.team && !moi.pendingTeam && <p className="warning">Vous n’êtes plus membre d’aucune équipe.</p>}
 
-      {moi.team && (
-        <>
-          {moi.team.leaderName && <p>Responsable : <b>{moi.team.leaderName}</b></p>}
-          {moi.event.instructions && <section className="card"><h2>Consignes générales</h2><p className="pre">{moi.event.instructions}</p></section>}
-          {moi.team.instructions && <section className="card"><h2>Consignes de l’équipe</h2><p className="pre">{moi.team.instructions}</p></section>}
-          <section className="card">
-            <h2>Missions de l’équipe</h2>
-            {moi.missions.length === 0 ? <p className="muted">Aucune mission pour l’instant.</p> : (
-              <ol className="missions">
-                {moi.missions.map((m) => (
-                  <li key={m.order}>
-                    <b>{m.point.name}</b> <span className="muted">— {SUGGESTION_TYPES[m.point.type] ?? m.point.type}, {km(m.point.distance)}, {MISSION_STATUS[m.status] ?? m.status}</span>
-                    {m.instructions && <p className="pre">Consignes : {m.instructions}</p>}
-                    <p className="small">
-                      <a href={'https://www.openstreetmap.org/?mlat=' + m.point.position[1] + '&mlon=' + m.point.position[0] + '#map=18/' + m.point.position[1] + '/' + m.point.position[0]} target="_blank" rel="noreferrer">Voir sur une carte</a>
-                    </p>
-                  </li>
-                ))}
-              </ol>
-            )}
-          </section>
-        </>
-      )}
+      {moi.team && <TeamSpace event={moi.event} team={moi.team} missions={moi.missions} />}
       <p className="muted small">L’application de terrain (navigation, confirmations, messages) arrive dans une prochaine version.</p>
       <button onClick={() => void load()}>Actualiser</button>
     </main>

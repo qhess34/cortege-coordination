@@ -82,3 +82,22 @@ test('lien individuel : affiché une seule fois, utilisable une seule fois', asy
   await phone.close();
   await other.close();
 });
+
+test('un organisateur membre d’une équipe a aussi l’onglet « Mon équipe »', async ({ page }) => {
+  await page.request.post('/api/auth/login', { data: { login: 'admin', password: 'admin-e2e-motdepasse' }, headers: H });
+  const ev = await (await page.request.post('/api/events', { data: { name: 'Orga et membre', instructions: 'Gilet jaune.' }, headers: H })).json();
+  await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Est', color: '#3a86ff' }, headers: H });
+  await page.goto('/#/evenements/' + ev.id);
+  await expect(page.getByRole('tab', { name: 'Mon équipe' })).toHaveCount(0);
+  await page.getByRole('tab', { name: /Équipes/ }).click();
+  await page.getByRole('button', { name: /Membres et invitations/ }).click();
+  await page.getByLabel('Compte à ajouter').selectOption({ label: 'Admin E2E' });
+  await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
+  await expect(page.getByText('Compte ajouté à l’équipe.')).toBeVisible();
+  await page.getByRole('tab', { name: 'Mon équipe' }).click();
+  await expect(page.getByTestId('mon-equipe')).toContainText('Équipe Est');
+  await expect(page.getByTestId('mon-equipe')).toContainText('Gilet jaune.');
+  // L'organisation reste accessible.
+  await page.getByRole('tab', { name: /Synthèse/ }).click();
+  await expect(page.getByTestId('acces-manifestation')).toBeVisible();
+});

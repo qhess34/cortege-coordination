@@ -28,6 +28,7 @@ export async function setup(opts: { logStream?: NodeJS.WritableStream; joinRateL
     overpassUrls: ['http://overpass.test'], userAgent: 'test', maxGpxBytes: 1024 * 1024, webDist: null,
     // Les tests ouvrent de nombreux liens depuis la même adresse ; la limite est testée à part.
     joinRateLimit: opts.joinRateLimit ?? 10_000,
+    loginRateLimit: 20,
   };
   const osm: TestContext['osm'] = { data: { elements: [] }, queries: [], fail: null, respond: null };
   const app = await buildApp({

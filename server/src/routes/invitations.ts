@@ -7,9 +7,9 @@ import { z } from 'zod';
 import { idParam, requireUser } from '../app.js';
 import { SESSION_COOKIE, createSessionUntil, hashToken, revokeUserSessions } from '../auth.js';
 import { audit } from '../audit.js';
-import { tx, type Client } from '../db.js';
+import { tx, type Client, type Db } from '../db.js';
 import { HttpError, badRequest, conflict, forbidden, notFound } from '../errors.js';
-import { requireTeamManager } from '../permissions.js';
+import { requireEventRole, requireTeamManager } from '../permissions.js';
 
 /** Durée maximale d'une session de participant. */
 const MAX_SESSION_DAYS = 30;
@@ -97,6 +97,20 @@ const CreateInvitation = z.object({
   maxUses: z.number().int().min(1).max(10000).nullable().optional(),
   expiresAt: z.iso.datetime({ offset: true }).nullable().optional(),
 });
+
+/** Missions actives d'une équipe, dans l'ordre, telles que les voit un membre. */
+async function teamMissions(db: Db, teamId: number) {
+  const r = await db.query(
+    `SELECT m.position, m.status, m.instructions, p.name, p.type, p.description, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat, p.distance_m
+       FROM missions m JOIN mission_points p ON p.id = m.mission_point_id
+      WHERE m.team_id = $1 AND m.cancelled_at IS NULL ORDER BY m.position`,
+    [teamId],
+  );
+  return r.rows.map((m) => ({
+    order: m.position, status: m.status, instructions: m.instructions,
+    point: { name: m.name, type: m.type, description: m.description, position: [m.lon, m.lat], distance: m.distance_m },
+  }));
+}
 
 export async function invitationRoutes(app: FastifyInstance) {
   // --- Côté participant : ouvrir une invitation, la valider -------------------------------------------------------
@@ -194,26 +208,44 @@ export async function invitationRoutes(app: FastifyInstance) {
       )
     ).rows[0];
     const pending = (await app.db.query("SELECT t.name FROM admission_requests a JOIN teams t ON t.id = a.team_id WHERE a.user_id = $1 AND a.status = 'en_attente'", [u.id])).rows[0];
-    let missions: unknown[] = [];
-    if (tm) {
-      missions = (
-        await app.db.query(
-          `SELECT m.position, m.status, m.instructions, p.name, p.type, p.description, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat, p.distance_m
-             FROM missions m JOIN mission_points p ON p.id = m.mission_point_id
-            WHERE m.team_id = $1 AND m.cancelled_at IS NULL ORDER BY m.position`,
-          [tm.id],
-        )
-      ).rows.map((m) => ({
-        order: m.position, status: m.status, instructions: m.instructions,
-        point: { name: m.name, type: m.type, description: m.description, position: [m.lon, m.lat], distance: m.distance_m },
-      }));
-    }
+    const missions = tm ? await teamMissions(app.db, tm.id) : [];
     return {
       participant: { id: u.id, displayName: u.displayName },
       event: { id: ev.id, name: ev.name, startsAt: ev.starts_at, endsAt: ev.ends_at, instructions: ev.instructions, status: ev.status },
       team: tm ? { id: tm.id, name: tm.name, color: tm.color, instructions: tm.instructions, role: tm.role, leaderName: tm.leader_name, closed: !!tm.disabled_at } : null,
       pendingTeam: pending ? pending.name : null,
       missions,
+    };
+  });
+
+  // Équipes dont un compte (organisateur, responsable…) fait partie dans une manifestation : la même vue que
+  // celle d'un participant, en plus de l'interface d'organisation.
+  app.get('/api/events/:id/mes-equipes', async (req) => {
+    const u = requireUser(req);
+    const eventId = idParam(req);
+    await requireEventRole(app.db, u, eventId, 'lecture');
+    const ev = (await app.db.query('SELECT id, name, starts_at, ends_at, instructions, status FROM events WHERE id = $1', [eventId])).rows[0];
+    const rows = (
+      await app.db.query(
+        `SELECT t.id, t.name, t.color, t.instructions, t.disabled_at, l.display_name AS leader_name,
+                CASE WHEN t.leader_user_id = $2 THEN 'responsable' ELSE m.role END AS role
+           FROM teams t LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = $2
+           LEFT JOIN users l ON l.id = t.leader_user_id
+          WHERE t.event_id = $1 AND (m.user_id IS NOT NULL OR t.leader_user_id = $2)
+          ORDER BY t.name`,
+        [eventId, u.id],
+      )
+    ).rows;
+    const teams = [];
+    for (const t of rows) {
+      teams.push({
+        id: t.id, name: t.name, color: t.color, instructions: t.instructions, role: t.role, leaderName: t.leader_name,
+        closed: !!t.disabled_at, missions: await teamMissions(app.db, t.id),
+      });
+    }
+    return {
+      event: { id: ev.id, name: ev.name, startsAt: ev.starts_at, endsAt: ev.ends_at, instructions: ev.instructions, status: ev.status },
+      teams,
     };
   });
 

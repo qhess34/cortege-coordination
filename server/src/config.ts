@@ -14,6 +14,8 @@ export interface Config {
   webDist: string | null;
   /** Ouvertures de lien d'invitation autorisées par minute et par adresse IP. */
   joinRateLimit: number;
+  /** Tentatives de connexion autorisées par minute et par adresse IP. */
+  loginRateLimit: number;
 }
 
 function bool(v: string | undefined, def: boolean): boolean {
@@ -37,5 +39,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     maxGpxBytes: Number(env.MAX_GPX_BYTES ?? 10 * 1024 * 1024),
     webDist: env.WEB_DIST ?? null,
     joinRateLimit: Number(env.JOIN_RATE_LIMIT ?? 30),
+    loginRateLimit: Number(env.LOGIN_RATE_LIMIT ?? 20),
   };
 }

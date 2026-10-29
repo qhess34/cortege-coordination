@@ -3,6 +3,7 @@ import { Route } from '../../../server/src/geo/route';
 import { ApiError, api } from '../api';
 import { MapView, type PointEdit, type Selection } from '../components/MapView';
 import { MapMenu } from '../components/MapMenu';
+import { TeamSpace, type SpaceEvent, type SpaceMission, type SpaceTeam } from '../components/TeamSpace';
 import { PointEditor } from '../components/PointEditor';
 import { SuggestionPopup } from '../components/SuggestionPopup';
 import { TeamLegend, visiblePoints } from '../components/TeamLegend';
@@ -40,7 +41,7 @@ export interface PanelProps {
   startDraft: (p: Position) => void;
 }
 
-type Tab = 'synthese' | 'parcours' | 'suggestions' | 'points' | 'equipes' | 'historique';
+type Tab = 'synthese' | 'parcours' | 'suggestions' | 'points' | 'equipes' | 'mon_equipe' | 'historique';
 /** Préférence locale (simple confort d'affichage) : couverture des photos Panoramax sur la carte. */
 const PNX_PREF = 'cortege.panoramax';
 function readPanoramaxPref(): boolean {
@@ -59,6 +60,8 @@ function readBasemapPref(): string {
     return DEFAULT_BASEMAP;
   }
 }
+
+interface MyTeams { event: SpaceEvent; teams: (SpaceTeam & { missions: SpaceMission[] })[] }
 
 const TABS: [Tab, string][] = [
   ['synthese', 'Synthèse'], ['parcours', 'Parcours'], ['suggestions', 'Suggestions'], ['points', 'Points'], ['equipes', 'Équipes'], ['historique', 'Historique'],
@@ -81,6 +84,12 @@ export function EventPage({ eventId }: { eventId: number }) {
   const [edit, setEdit] = useState<PointEdit | null>(null);
   const [focus, setFocus] = useState<{ position: Position; n: number } | null>(null);
   const closeEdit = useCallback(() => setEdit(null), []);
+  // Équipes dont la personne connectée fait partie : onglet « Mon équipe », en plus de l'organisation.
+  const [myTeams, setMyTeams] = useState<MyTeams | null>(null);
+  useEffect(() => {
+    if (!data) return;
+    api.get<MyTeams>('/api/events/' + eventId + '/mes-equipes').then(setMyTeams, () => setMyTeams(null));
+  }, [data, eventId]);
   // Nouveau point : propose le nom de la rue ou du croisement (OSM), sans écraser un nom saisi.
   const draftKey = edit?.kind === 'new' && edit.autoName ? edit.position.join() : null;
   useEffect(() => {
@@ -367,7 +376,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           {!canEdit && <span className="badge">lecture seule</span>}
         </div>
         <nav className="tabs" role="tablist">
-          {TABS.map(([id, label]) => (
+          {(myTeams?.teams.length ? [...TABS.slice(0, 5), ['mon_equipe', myTeams.teams.length > 1 ? 'Mes équipes' : 'Mon équipe'] as [Tab, string], ...TABS.slice(5)] : TABS).map(([id, label]) => (
             <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
               {label}
               {id === 'suggestions' && data.summary.suggestions.a_examiner ? <span className="count">{data.summary.suggestions.a_examiner}</span> : null}
@@ -381,6 +390,17 @@ export function EventPage({ eventId }: { eventId: number }) {
           {tab === 'points' && <PointsPanel {...props} />}
           {tab === 'equipes' && <TeamsPanel {...props} />}
           {tab === 'historique' && <HistoryPanel {...props} />}
+          {tab === 'mon_equipe' && myTeams && (
+            <div className="stack" data-testid="mon-equipe">
+              {myTeams.teams.length === 0 && <p className="muted">Vous ne faites plus partie d’aucune équipe.</p>}
+              {myTeams.teams.map((t) => (
+                <div key={t.id} className="stack">
+                  <h2><span className="dot" style={{ background: t.color }} /> {t.name}{t.role === 'responsable' ? ' (responsable)' : ''}</h2>
+                  <TeamSpace event={myTeams.event} team={t} missions={t.missions} />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       </aside>
       {toast && <div className={'toast ' + toast.kind} role="status">{toast.text}</div>}
