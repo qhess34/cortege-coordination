@@ -1,6 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../api';
-import { MISSION_STATUS, MISSION_TRANSITIONS, km } from '../../labels';
+import { MISSION_STATUS, MISSION_TRANSITIONS, TEAM_KIND, TEAM_KIND_SHORT, km } from '../../labels';
 import { TeamAccess } from '../../components/TeamAccess';
 import type { Team } from '../../types';
 import type { PanelProps } from '../EventPage';
@@ -11,13 +11,14 @@ interface Member { id: number; displayName: string; role: string }
 export function TeamsPanel(props: PanelProps) {
   const { data, canEdit, run } = props;
   const [name, setName] = useState('');
+  const [kind, setKind] = useState('points');
   const [members, setMembers] = useState<Member[]>([]);
   useEffect(() => { void api.get<Member[]>('/api/events/' + data.event.id + '/members').then(setMembers); }, [data.event.id]);
 
   const create = async (e: FormEvent) => {
     e.preventDefault();
     const color = PALETTE[data.teams.length % PALETTE.length];
-    if (await run(() => api.post('/api/events/' + data.event.id + '/teams', { name, color }), 'Équipe créée.')) setName('');
+    if (await run(() => api.post('/api/events/' + data.event.id + '/teams', { name, color, kind }), 'Équipe créée.')) setName('');
   };
 
   return (
@@ -29,6 +30,9 @@ export function TeamsPanel(props: PanelProps) {
       {canEdit && (
         <form className="row" onSubmit={create}>
           <input placeholder="Nom de la nouvelle équipe" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} />
+          <select value={kind} onChange={(e) => setKind(e.target.value)} aria-label="Type d’équipe">
+            {Object.entries(TEAM_KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+          </select>
           <button className="primary">Créer</button>
         </form>
       )}
@@ -40,7 +44,7 @@ export function TeamsPanel(props: PanelProps) {
 
 function TeamCard({ team: t, members, data, canEdit, run, select, reload }: PanelProps & { team: Team; members: Member[] }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: t.name, color: t.color, description: t.description, instructions: t.instructions, leaderUserId: t.leaderUserId, leaderCanInvite: t.leaderCanInvite });
+  const [form, setForm] = useState({ name: t.name, color: t.color, description: t.description, instructions: t.instructions, leaderUserId: t.leaderUserId, leaderCanInvite: t.leaderCanInvite, kind: t.kind });
   const [toAdd, setToAdd] = useState('');
   const [access, setAccess] = useState(false);
   // Le serveur reste seul juge : un responsable n'a accès à cette section que si l'organisateur l'a permis.
@@ -68,7 +72,7 @@ function TeamCard({ team: t, members, data, canEdit, run, select, reload }: Pane
   return (
     <div className={'card team' + (t.disabled ? ' disabled' : '')} style={{ borderLeftColor: t.color }}>
       <div className="row">
-        <h3 className="grow">{t.name} {t.disabled && <span className="badge">désactivée</span>}</h3>
+        <h3 className="grow">{t.name} {t.kind !== 'points' && <span className="badge" title={TEAM_KIND[t.kind]}>{TEAM_KIND_SHORT[t.kind]}</span>} {t.disabled && <span className="badge">désactivée</span>}</h3>
         {!t.disabled && <a className="button" href={'#/evenements/' + data.event.id + '/roadbook/equipe/' + t.id} aria-label={'Roadbook de l’équipe ' + t.name}>📄 Roadbook</a>}
         {canEdit && <button onClick={() => setEditing(!editing)}>{editing ? 'Fermer' : 'Modifier'}</button>}
       </div>
@@ -90,6 +94,11 @@ function TeamCard({ team: t, members, data, canEdit, run, select, reload }: Pane
             <label className="grow">Nom<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
             <label>Couleur<input type="color" value={form.color} onChange={(e) => setForm({ ...form, color: e.target.value })} /></label>
           </div>
+          <label>Type d’équipe
+            <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as Team['kind'] })}>
+              {Object.entries(TEAM_KIND).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+          </label>
           <label>Responsable
             <select value={form.leaderUserId ?? ''} onChange={(e) => setForm({ ...form, leaderUserId: e.target.value ? Number(e.target.value) : null })}>
               <option value="">— aucun —</option>

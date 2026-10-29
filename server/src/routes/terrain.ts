@@ -31,29 +31,48 @@ const INCIDENT_CATEGORIES = ['aide', 'securite', 'sante', 'circulation', 'materi
 const Lon = z.number().min(-180).max(180);
 const Lat = z.number().min(-90).max(90);
 
-export interface TeamAccess { eventId: number; role: 'membre' | 'responsable'; asOrganizer: boolean }
+export type TeamKind = 'points' | 'volante' | 'ouverture' | 'fermeture';
+export interface TeamAccess { eventId: number; role: 'membre' | 'responsable'; asOrganizer: boolean; kind: TeamKind }
 
 /**
  * Accès « terrain » à une équipe : ses membres (participants ou comptes), son responsable, et les organisateurs
  * de la manifestation. Une équipe invisible répond 404.
  */
 export async function requireTeamMember(c: Client, user: SessionUser, teamId: number): Promise<TeamAccess> {
-  const t = (await c.query('SELECT event_id, leader_user_id FROM teams WHERE id = $1', [teamId])).rows[0];
+  const t = (await c.query('SELECT event_id, leader_user_id, kind FROM teams WHERE id = $1', [teamId])).rows[0];
   if (!t) throw notFound('Équipe');
   const m = (await c.query('SELECT role FROM team_memberships WHERE team_id = $1 AND user_id = $2', [teamId, user.id])).rows[0];
   const organizer = (await eventRole(c, user, t.event_id)) === 'organisateur';
-  if (t.leader_user_id === user.id || m?.role === 'responsable') return { eventId: t.event_id, role: 'responsable', asOrganizer: organizer };
-  if (m) return { eventId: t.event_id, role: 'membre', asOrganizer: organizer };
-  if (organizer) return { eventId: t.event_id, role: 'responsable', asOrganizer: true };
+  const base = { eventId: t.event_id as number, kind: t.kind as TeamKind };
+  if (t.leader_user_id === user.id || m?.role === 'responsable') return { ...base, role: 'responsable', asOrganizer: organizer };
+  if (m) return { ...base, role: 'membre', asOrganizer: organizer };
+  if (organizer) return { ...base, role: 'responsable', asOrganizer: true };
   throw notFound('Équipe');
 }
 
-/** Peut déclarer la progression du cortège : organisateur, ou responsable d'une équipe de la manifestation. */
-async function canDeclareProgress(c: Client, user: SessionUser, eventId: number): Promise<boolean> {
-  if ((await eventRole(c, user, eventId)) === 'organisateur') return true;
+/**
+ * Qui peut déclarer la progression : l'organisation (tête et queue) ; l'équipe d'ouverture et les responsables
+ * d'équipe pour la tête ; l'équipe de fermeture pour la queue.
+ */
+async function canDeclare(c: Client, user: SessionUser, eventId: number): Promise<{ tete: boolean; queue: boolean }> {
+  if ((await eventRole(c, user, eventId)) === 'organisateur') return { tete: true, queue: true };
+  const r = await c.query(
+    `SELECT t.kind, (t.leader_user_id = $2 OR m.role = 'responsable') AS leader
+       FROM teams t LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = $2
+      WHERE t.event_id = $1 AND t.disabled_at IS NULL AND (t.leader_user_id = $2 OR m.user_id IS NOT NULL)`,
+    [eventId, user.id],
+  );
+  return {
+    tete: r.rows.some((t) => t.kind === 'ouverture' || t.leader),
+    queue: r.rows.some((t) => t.kind === 'fermeture'),
+  };
+}
+
+/** Membre d'une équipe volante active de la manifestation : peut intervenir sur tous ses incidents. */
+async function inFlyingTeam(c: Client, user: SessionUser, eventId: number): Promise<boolean> {
   const r = await c.query(
     `SELECT 1 FROM teams t LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = $2
-      WHERE t.event_id = $1 AND t.disabled_at IS NULL AND (t.leader_user_id = $2 OR m.role = 'responsable') LIMIT 1`,
+      WHERE t.event_id = $1 AND t.kind = 'volante' AND t.disabled_at IS NULL AND (t.leader_user_id = $2 OR m.user_id IS NOT NULL) LIMIT 1`,
     [eventId, user.id],
   );
   return !!r.rowCount;
@@ -80,15 +99,18 @@ const publicMessage = (r: Record<string, unknown>) => ({
   reads: r.reads === undefined ? undefined : Number(r.reads), recipients: r.recipients === undefined ? undefined : Number(r.recipients),
 });
 
-async function latestProgress(c: Client, eventId: number) {
+async function latestProgress(c: Client, eventId: number, part: 'tete' | 'queue' = 'tete') {
   const r = await c.query(
     `SELECT g.distance_m, g.note, g.created_at, u.display_name FROM event_progress g LEFT JOIN users u ON u.id = g.author_id
-      WHERE g.event_id = $1 ORDER BY g.created_at DESC, g.id DESC LIMIT 1`,
-    [eventId],
+      WHERE g.event_id = $1 AND g.part = $2 ORDER BY g.created_at DESC, g.id DESC LIMIT 1`,
+    [eventId, part],
   );
   const g = r.rows[0];
-  return g ? { distance: g.distance_m, note: g.note, at: g.created_at, authorName: g.display_name } : null;
+  return g ? { distance: g.distance_m as number, note: g.note, at: g.created_at, authorName: g.display_name } : null;
 }
+
+/** La queue du cortège a dépassé ce point : il pourra être levé (sur instruction de l'organisation). */
+const passed = (tail: { distance: number } | null, distance: number | null) => !!tail && distance !== null && tail.distance >= distance;
 
 export async function terrainRoutes(app: FastifyInstance) {
   // --- Vue de mission d'une équipe --------------------------------------------------------------------------------
@@ -97,7 +119,8 @@ export async function terrainRoutes(app: FastifyInstance) {
     const teamId = idParam(req);
     const access = await requireTeamMember(app.db, u, teamId);
     const { eventId } = access;
-    const [ev, team, missions, messages, incidents, track, progress] = await Promise.all([
+    const flying = access.kind === 'volante';
+    const [ev, team, missions, messages, incidents, track, progress, tail, eventPoints] = await Promise.all([
       app.db.query('SELECT id, name, starts_at, ends_at, instructions, status FROM events WHERE id = $1', [eventId]),
       app.db.query(
         `SELECT t.id, t.name, t.color, t.instructions, t.disabled_at, l.display_name AS leader_name
@@ -120,27 +143,45 @@ export async function terrainRoutes(app: FastifyInstance) {
           ORDER BY g.created_at DESC, g.id DESC LIMIT 50`,
         [teamId, eventId, u.id],
       ),
-      app.db.query(INCIDENT_SELECT + ` WHERE i.team_id = $1 AND (i.status <> 'resolu' OR i.resolved_at > now() - interval '2 hours')
-                                       ORDER BY i.created_at DESC LIMIT 30`, [teamId]),
+      // Équipe volante : tous les incidents en cours de la manifestation ; sinon ceux de l'équipe.
+      flying
+        ? app.db.query(INCIDENT_SELECT + ` WHERE i.event_id = $1 AND (i.status <> 'resolu' OR i.resolved_at > now() - interval '2 hours')
+                                           ORDER BY (i.status = 'resolu'), (i.priority = 'haute') DESC, i.created_at DESC LIMIT 50`, [eventId])
+        : app.db.query(INCIDENT_SELECT + ` WHERE i.team_id = $1 AND (i.status <> 'resolu' OR i.resolved_at > now() - interval '2 hours')
+                                           ORDER BY i.created_at DESC LIMIT 30`, [teamId]),
       currentTrack(app.db, eventId),
-      latestProgress(app.db, eventId),
+      latestProgress(app.db, eventId, 'tete'),
+      latestProgress(app.db, eventId, 'queue'),
+      // Équipes sans point fixe (volante, ouverture, fermeture) : tous les points tenus, pour s'orienter.
+      access.kind === 'points' ? Promise.resolve(null) : app.db.query(
+        `SELECT p.name, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat, p.distance_m, m.status, t.name AS team_name, t.color
+           FROM missions m JOIN mission_points p ON p.id = m.mission_point_id JOIN teams t ON t.id = m.team_id
+          WHERE m.event_id = $1 AND m.cancelled_at IS NULL AND t.disabled_at IS NULL ORDER BY p.distance_m NULLS LAST`,
+        [eventId],
+      ),
     ]);
     const e = ev.rows[0];
     const t = team.rows[0];
     return {
       me: { id: u.id, displayName: u.displayName, role: access.role, organizer: access.asOrganizer },
       event: { id: e.id, name: e.name, startsAt: e.starts_at, endsAt: e.ends_at, instructions: e.instructions, status: e.status },
-      team: { id: t.id, name: t.name, color: t.color, instructions: t.instructions, leaderName: t.leader_name, closed: !!t.disabled_at },
+      team: { id: t.id, name: t.name, color: t.color, instructions: t.instructions, leaderName: t.leader_name, closed: !!t.disabled_at, kind: access.kind },
       missions: missions.rows.map((m) => ({
         id: m.id, version: m.version, order: m.position, status: m.status, instructions: m.instructions, statusChangedAt: m.status_changed_at,
         point: { name: m.name, type: m.type, description: m.description, position: [m.lon, m.lat], distance: m.distance_m },
+        passedByTail: passed(tail, m.distance_m),
       })),
+      eventPoints: eventPoints ? eventPoints.rows.map((p) => ({
+        name: p.name, position: [p.lon, p.lat], distance: p.distance_m, status: p.status, teamName: p.team_name, color: p.color,
+      })) : [],
       messages: messages.rows.map(publicMessage),
       incidents: incidents.rows.map(publicIncident),
       // Parcours simplifié (affichage sur téléphone).
       track: track ? track.route.segments.map((s) => simplify(s, 8)) : [],
       progress,
-      canDeclareProgress: await canDeclareProgress(app.db, u, eventId),
+      tail,
+      canDeclare: await canDeclare(app.db, u, eventId),
+      canHandleIncidents: flying || access.asOrganizer || access.role === 'responsable',
       routing: !!app.router,
     };
   });
@@ -227,7 +268,8 @@ export async function terrainRoutes(app: FastifyInstance) {
       const i = (await c.query('SELECT * FROM incidents WHERE id = $1 FOR UPDATE', [id])).rows[0];
       if (!i) throw notFound('Incident');
       const organizer = (await eventRole(c, u, i.event_id)) === 'organisateur';
-      if (!organizer) {
+      // Équipe volante : intervient sur tous les incidents de la manifestation.
+      if (!organizer && !(await inFlyingTeam(c, u, i.event_id))) {
         const access = i.team_id ? await requireTeamMember(c, u, i.team_id).catch(() => null) : null;
         if (!access) {
           if ((await eventRole(c, u, i.event_id)) === null) throw notFound('Incident');
@@ -312,21 +354,35 @@ export async function terrainRoutes(app: FastifyInstance) {
   });
 
   // --- Progression déclarée du cortège ---------------------------------------------------------------------------
+  // Distance parcourue déclarée, ou position du téléphone (« la tête est ici ») projetée sur le parcours.
   app.post('/api/events/:id/progression', async (req, reply) => {
     const u = requireUser(req);
     const eventId = idParam(req);
-    const b = z.object({ distance: z.number().min(0).max(1_000_000), note: z.string().trim().max(300).default('') }).parse(req.body);
+    const b = z.object({
+      part: z.enum(['tete', 'queue']).default('tete'),
+      distance: z.number().min(0).max(1_000_000).optional(),
+      position: z.tuple([Lon, Lat]).optional(),
+      note: z.string().trim().max(300).default(''),
+    }).refine((x) => (x.distance === undefined) !== (x.position === undefined), 'Indiquez une distance ou une position.').parse(req.body);
     return tx(app.db, async (c) => {
-      if (!(await canDeclareProgress(c, u, eventId))) {
+      const rights = await canDeclare(c, u, eventId);
+      if (!rights[b.part]) {
         if ((await eventRole(c, u, eventId)) === null && u.eventId !== eventId) throw notFound('Événement');
         throw forbidden();
       }
       const track = await currentTrack(c, eventId);
-      if (track && b.distance > track.route.length + 50) throw badRequest('Distance au-delà de la fin du parcours.');
-      await c.query('INSERT INTO event_progress(event_id, distance_m, note, author_id) VALUES ($1, $2, $3, $4)', [eventId, b.distance, b.note, u.id]);
-      await audit(c, { actorId: u.id, eventId, entity: 'event_progress', entityId: null, action: 'declaration', details: { distance: b.distance } });
+      let distance = b.distance;
+      if (b.position) {
+        const pr = track?.route.locate(b.position as Position);
+        if (!pr) throw badRequest('Aucun parcours importé : indiquez la distance.');
+        if (pr.offset > 150) throw badRequest('Vous êtes à ' + Math.round(pr.offset) + ' m du parcours : position non retenue.');
+        distance = Math.round(pr.distance);
+      }
+      if (track && distance! > track.route.length + 50) throw badRequest('Distance au-delà de la fin du parcours.');
+      await c.query('INSERT INTO event_progress(event_id, distance_m, note, author_id, part) VALUES ($1, $2, $3, $4, $5)', [eventId, distance, b.note, u.id, b.part]);
+      await audit(c, { actorId: u.id, eventId, entity: 'event_progress', entityId: null, action: 'declaration', details: { part: b.part, distance } });
       reply.status(201);
-      return latestProgress(c, eventId);
+      return { part: b.part, ...(await latestProgress(c, eventId, b.part)) };
     });
   });
 
@@ -335,8 +391,8 @@ export async function terrainRoutes(app: FastifyInstance) {
     const u = requireUser(req);
     const eventId = idParam(req);
     await requireEventRole(app.db, u, eventId, 'lecture');
-    const [teams, missions, presence, incidents, progress, history] = await Promise.all([
-      app.db.query('SELECT id, name, color, disabled_at FROM teams WHERE event_id = $1 ORDER BY name', [eventId]),
+    const [teams, missions, presence, incidents, progress, tail, history] = await Promise.all([
+      app.db.query('SELECT id, name, color, disabled_at, kind FROM teams WHERE event_id = $1 ORDER BY name', [eventId]),
       app.db.query(
         `SELECT m.id, m.team_id, m.version, m.position, m.status, m.status_changed_at, p.name, p.distance_m, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat,
                 cb.display_name AS changed_by
@@ -354,27 +410,29 @@ export async function terrainRoutes(app: FastifyInstance) {
         [eventId],
       ),
       app.db.query(INCIDENT_SELECT + " WHERE i.event_id = $1 AND i.status <> 'resolu' ORDER BY (i.priority = 'haute') DESC, i.created_at", [eventId]),
-      latestProgress(app.db, eventId),
+      latestProgress(app.db, eventId, 'tete'),
+      latestProgress(app.db, eventId, 'queue'),
       app.db.query(
-        `SELECT g.distance_m, g.note, g.created_at, u.display_name FROM event_progress g LEFT JOIN users u ON u.id = g.author_id
-          WHERE g.event_id = $1 ORDER BY g.created_at DESC, g.id DESC LIMIT 10`,
+        `SELECT g.distance_m, g.note, g.created_at, g.part, u.display_name FROM event_progress g LEFT JOIN users u ON u.id = g.author_id
+          WHERE g.event_id = $1 ORDER BY g.created_at DESC, g.id DESC LIMIT 20`,
         [eventId],
       ),
     ]);
     const pres = new Map(presence.rows.map((p) => [p.team_id, p]));
     return {
       teams: teams.rows.map((t) => ({
-        id: t.id, name: t.name, color: t.color, disabled: !!t.disabled_at,
+        id: t.id, name: t.name, color: t.color, disabled: !!t.disabled_at, kind: t.kind,
         members: Number(pres.get(t.id)?.members ?? 0), active: Number(pres.get(t.id)?.active ?? 0),
         missions: missions.rows.filter((m) => m.team_id === t.id).map((m) => ({
           id: m.id, version: m.version, order: m.position, status: m.status, statusChangedAt: m.status_changed_at, changedBy: m.changed_by,
-          pointName: m.name, distance: m.distance_m, position: [m.lon, m.lat],
+          pointName: m.name, distance: m.distance_m, position: [m.lon, m.lat], passedByTail: passed(tail, m.distance_m),
         })),
       })),
       incidents: incidents.rows.map(publicIncident),
       progress,
-      progressHistory: history.rows.map((g) => ({ distance: g.distance_m, note: g.note, at: g.created_at, authorName: g.display_name })),
-      canDeclareProgress: await canDeclareProgress(app.db, u, eventId),
+      tail,
+      progressHistory: history.rows.map((g) => ({ part: g.part, distance: g.distance_m, note: g.note, at: g.created_at, authorName: g.display_name })),
+      canDeclare: await canDeclare(app.db, u, eventId),
       live: app.live.count(eventId),
     };
   });

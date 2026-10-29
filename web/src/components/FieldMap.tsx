@@ -10,7 +10,7 @@ import type { Position } from '../types';
 
 maplibregl.setWorkerUrl(workerUrl);
 
-export interface FieldPoint { position: Position; label: string; current: boolean; done: boolean }
+export interface FieldPoint { position: Position; label: string; current: boolean; done: boolean; color?: string }
 
 interface Props {
   track: Position[][];
@@ -36,7 +36,7 @@ export function FieldMap({ track, points, me, route, color }: Props) {
     const { track: t, points: p, me: pos, route: r } = latest.current;
     (m.getSource('parcours') as GeoJSONSource).setData(fc(t.map((s) => ({ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: s } }))));
     (m.getSource('points') as GeoJSONSource).setData(fc(p.map((x) => ({
-      type: 'Feature', properties: { label: x.label, current: x.current, done: x.done }, geometry: { type: 'Point', coordinates: x.position },
+      type: 'Feature', properties: { label: x.label, current: x.current, done: x.done, color: x.color ?? color }, geometry: { type: 'Point', coordinates: x.position },
     }))));
     (m.getSource('moi') as GeoJSONSource).setData(fc(pos ? [{ type: 'Feature', properties: {}, geometry: { type: 'Point', coordinates: pos } }] : []));
     (m.getSource('itineraire') as GeoJSONSource).setData(fc(r ? [{ type: 'Feature', properties: {}, geometry: { type: 'LineString', coordinates: r } }] : []));
@@ -73,7 +73,7 @@ export function FieldMap({ track, points, me, route, color }: Props) {
         id: 'points', type: 'circle', source: 'points',
         paint: {
           'circle-radius': ['case', ['get', 'current'], 11, 7],
-          'circle-color': ['case', ['get', 'done'], '#8d99ae', color],
+          'circle-color': ['case', ['get', 'done'], '#8d99ae', ['get', 'color']],
           'circle-stroke-color': '#fff', 'circle-stroke-width': ['case', ['get', 'current'], 3, 2],
         },
       });

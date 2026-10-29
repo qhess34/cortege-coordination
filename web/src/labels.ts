@@ -60,3 +60,9 @@ export function fieldDescription(text: string): string {
     .trim();
 }
 
+
+/** Types d'équipe. */
+export const TEAM_KIND: Record<string, string> = {
+  points: 'Points fixes', volante: 'Équipe volante', ouverture: 'Ouverture (tête du cortège)', fermeture: 'Fermeture (queue du cortège)',
+};
+export const TEAM_KIND_SHORT: Record<string, string> = { points: '', volante: 'volante', ouverture: 'ouverture', fermeture: 'fermeture' };

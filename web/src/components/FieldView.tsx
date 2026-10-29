@@ -1,31 +1,40 @@
 // Vue terrain (téléphone) d'une équipe : ma mission, grands boutons de statut, itinéraire, messages, incidents.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError, api } from '../api';
-import { MISSION_STATUS, SUGGESTION_TYPES, km } from '../labels';
-import type { Position } from '../types';
+import { MISSION_STATUS, SUGGESTION_TYPES, TEAM_KIND, km } from '../labels';
+import type { Position, TeamKind } from '../types';
 import { ago, useLive } from '../useLive';
 import { FieldMap } from './FieldMap';
 
 export interface FieldMission {
   id: number; version: number; order: number; status: string; instructions: string; statusChangedAt: string | null;
   point: { name: string; type: string; description: string; position: Position; distance: number | null };
+  /** La queue du cortège a dépassé ce point. */
+  passedByTail: boolean;
 }
 export interface FieldMessage { id: number; teamId: number | null; body: string; urgent: boolean; createdAt: string; authorName: string; fromOrganisation: boolean; read?: boolean }
 export interface FieldIncident {
   id: number; teamId: number | null; missionId: number | null; pointName: string | null; category: string; priority: string; status: string;
   description: string; reporterName: string | null; handledByName: string | null; createdAt: string; updatedAt: string; version: number;
+  teamName?: string | null; position?: Position | null;
 }
 export interface Progress { distance: number; note: string; at: string; authorName: string | null }
 export interface Terrain {
   me: { id: number; displayName: string; role: 'membre' | 'responsable'; organizer: boolean };
   event: { id: number; name: string; startsAt: string | null; instructions: string; status: string };
-  team: { id: number; name: string; color: string; instructions: string; leaderName: string | null; closed: boolean };
+  team: { id: number; name: string; color: string; instructions: string; leaderName: string | null; closed: boolean; kind: TeamKind };
   missions: FieldMission[];
   messages: FieldMessage[];
   incidents: FieldIncident[];
   track: Position[][];
+  /** Tête et queue du cortège déclarées. */
   progress: Progress | null;
-  canDeclareProgress: boolean;
+  tail: Progress | null;
+  canDeclare: { tete: boolean; queue: boolean };
+  /** Peut prendre en charge et clore les incidents affichés (volante, responsable, organisation). */
+  canHandleIncidents: boolean;
+  /** Points tenus par toutes les équipes (équipes sans point fixe). */
+  eventPoints: { name: string; position: Position; distance: number | null; status: string; teamName: string; color: string }[];
   routing: boolean;
 }
 
@@ -191,8 +200,9 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
           {data.messages.some((m) => m.urgent && m.read === false) && (
             <button className="urgent-banner" onClick={() => setTab('messages')}>⚠ Message urgent de l’organisation — lire</button>
           )}
-          <Progression data={data} reload={load} setToast={setToast} />
-          {!current ? (
+          <Progression data={data} reload={load} setToast={setToast} locate={locate} />
+          {data.team.kind !== 'points' && <RoleCard data={data} openIncidents={() => setTab('incidents')} />}
+          {!current ? (data.team.kind !== 'points' ? null :
             <div className="card"><p>{data.missions.length ? 'Toutes les missions de l’équipe sont terminées. Merci !' : 'Aucune mission pour l’instant.'}</p></div>
           ) : (
             <div className="card mission-card" data-testid="ma-mission">
@@ -202,6 +212,9 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
                 {current.statusChangedAt && <span className="muted small"> {ago(current.statusChangedAt)}</span>}</p>
               {progressTo(current) !== null && (
                 <p className="small">{progressTo(current)! > 0 ? 'Tête du cortège à ' + meters(progressTo(current)!) + ' de ce point.' : 'La tête du cortège a dépassé ce point.'}</p>
+              )}
+              {current.passedByTail && current.status !== 'terminee' && (
+                <p className="warning small" data-testid="queue-passee">La fermeture du cortège a dépassé ce point : vous pourrez le lever sur instruction de l’organisation.</p>
               )}
               {current.point.description && <p className="pre small">{current.point.description}</p>}
               {current.instructions && <p className="pre"><b>Consignes :</b> {current.instructions}</p>}
@@ -225,18 +238,21 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
             </div>
           )}
 
-          {current && (
+          {(current || data.team.kind !== 'points') && (
             <div className="card">
               <FieldMap
                 track={data.track}
                 color={data.team.color}
                 me={me}
                 route={route?.geometry ?? null}
-                points={data.missions.map((m) => ({ position: m.point.position, label: m.point.name, current: m.id === current.id, done: m.status === 'terminee' }))}
+                points={[
+                  ...data.eventPoints.map((p) => ({ position: p.position, label: p.name + ' (' + p.teamName + ')', current: false, done: p.status === 'terminee', color: p.color })),
+                  ...data.missions.map((m) => ({ position: m.point.position, label: m.point.name, current: m.id === current?.id, done: m.status === 'terminee' })),
+                ]}
               />
               <div className="row small">
                 <button onClick={() => void locate()}>📍 Ma position</button>
-                <button onClick={() => void itinerary()}>Itinéraire à pied</button>
+                {current && <button onClick={() => void itinerary()}>Itinéraire à pied</button>}
                 {route && <span className="muted">{meters(route.distance)} · environ {minutes(route.duration)}</span>}
               </div>
               {geoError && <p className="muted small">{geoError}</p>}
@@ -285,30 +301,73 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
   );
 }
 
-function Progression({ data, reload, setToast }: { data: Terrain; reload: () => Promise<void>; setToast: (t: { kind: 'ok' | 'error'; text: string }) => void }) {
-  const [value, setValue] = useState('');
-  const declare = async (e: FormEvent) => {
-    e.preventDefault();
+const PART: Record<'tete' | 'queue', { title: string; here: string }> = {
+  tete: { title: 'Tête du cortège', here: '📍 La tête est ici' },
+  queue: { title: 'Queue du cortège', here: '📍 La queue est ici' },
+};
+
+function Progression({ data, reload, setToast, locate }: {
+  data: Terrain; reload: () => Promise<void>; setToast: (t: { kind: 'ok' | 'error'; text: string }) => void; locate: () => Promise<Position | null>;
+}) {
+  const [value, setValue] = useState<Record<string, string>>({});
+  const send = async (part: 'tete' | 'queue', body: Record<string, unknown>) => {
     try {
-      await api.post('/api/events/' + data.event.id + '/progression', { distance: Math.round(Number(value.replace(',', '.')) * 1000) });
-      setValue('');
-      setToast({ kind: 'ok', text: 'Progression déclarée.' });
+      await api.post('/api/events/' + data.event.id + '/progression', { part, ...body });
+      setValue((v) => ({ ...v, [part]: '' }));
+      setToast({ kind: 'ok', text: PART[part].title + ' déclarée.' });
       await reload();
     } catch (err) {
       setToast({ kind: 'error', text: err instanceof ApiError ? err.message : 'Déclaration impossible.' });
     }
   };
-  if (!data.progress && !data.canDeclareProgress) return null;
+  const parts = (['tete', 'queue'] as const).filter((p) => (p === 'tete' ? data.progress : data.tail) || data.canDeclare[p]);
+  if (!parts.length) return null;
   return (
     <div className="card small" data-testid="progression">
-      {data.progress
-        ? <p>Tête du cortège déclarée au <b>{km(data.progress.distance)}</b> <span className="muted">— {ago(data.progress.at)}{data.progress.note ? ' · ' + data.progress.note : ''}</span></p>
-        : <p className="muted">Progression du cortège non déclarée.</p>}
-      {data.canDeclareProgress && (
-        <form className="row" onSubmit={declare}>
-          <input inputMode="decimal" placeholder="km parcourus (ex. 2,4)" value={value} onChange={(e) => setValue(e.target.value)} aria-label="Distance parcourue en km" required pattern="\d+([.,]\d+)?" />
-          <button>Déclarer</button>
-        </form>
+      {parts.map((part) => {
+        const p = part === 'tete' ? data.progress : data.tail;
+        return (
+          <div key={part} data-testid={'progression-' + part}>
+            {p
+              ? <p>{PART[part].title} déclarée au <b>{km(p.distance)}</b> <span className="muted">— {ago(p.at)}{p.note ? ' · ' + p.note : ''}</span></p>
+              : <p className="muted">{PART[part].title} : non déclarée.</p>}
+            {data.canDeclare[part] && (
+              <form className="row" onSubmit={(e: FormEvent) => { e.preventDefault(); void send(part, { distance: Math.round(Number((value[part] ?? '').replace(',', '.')) * 1000) }); }}>
+                <button type="button" className={data.team.kind === (part === 'tete' ? 'ouverture' : 'fermeture') ? 'big primary' : ''}
+                  onClick={async () => { const pos = await locate(); if (pos) void send(part, { position: pos }); else setToast({ kind: 'error', text: 'Position indisponible : indiquez les km.' }); }}>
+                  {PART[part].here}
+                </button>
+                <input inputMode="decimal" placeholder="ou km (ex. 2,4)" value={value[part] ?? ''} onChange={(e) => setValue((v) => ({ ...v, [part]: e.target.value }))}
+                  aria-label={PART[part].title + ' : distance parcourue en km'} required pattern="\d+([.,]\d+)?" />
+                <button>Déclarer</button>
+              </form>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Rôle d'une équipe sans point fixe. */
+function RoleCard({ data, openIncidents }: { data: Terrain; openIncidents: () => void }) {
+  const open = data.incidents.filter((i) => i.status !== 'resolu');
+  const behindTail = data.tail ? data.eventPoints.filter((p) => p.distance !== null && p.distance <= data.tail!.distance && p.status !== 'terminee') : [];
+  return (
+    <div className="card mission-card" data-testid="role-equipe">
+      <h2>{TEAM_KIND[data.team.kind]}</h2>
+      {data.team.kind === 'volante' && (
+        <>
+          <p>Pas de point fixe : vous intervenez là où l’organisation ou les équipes en ont besoin. Les incidents de toute la manifestation s’affichent ici.</p>
+          <button className="big primary" onClick={openIncidents}>{open.length ? open.length + ' incident(s) en cours' : 'Aucun incident en cours'}</button>
+        </>
+      )}
+      {data.team.kind === 'ouverture' && <p>Vous ouvrez le cortège : déclarez régulièrement la position de la tête (bouton ci-dessus). Les équipes voient à quelle distance elle se trouve de leur point.</p>}
+      {data.team.kind === 'fermeture' && (
+        <>
+          <p>Vous fermez le cortège : déclarez régulièrement la position de la queue. Les points dépassés pourront être levés sur instruction de l’organisation.</p>
+          {data.tail && <p className="small">{behindTail.length ? behindTail.length + ' point(s) dépassé(s), encore tenu(s) : ' + behindTail.map((p) => p.name).join(', ') : 'Aucun point dépassé encore tenu.'}</p>}
+        </>
       )}
     </div>
   );
@@ -379,7 +438,14 @@ function Incidents({ data, teamId, current, me, locate, act, busy }: {
           <li key={i.id} className={'card incident p-' + i.priority + ' st-' + i.status}>
             <p><b>{INCIDENT_CATEGORY[i.category] ?? i.category}</b> — {INCIDENT_STATUS[i.status]}{i.handledByName && i.status !== 'ouvert' ? ' par ' + i.handledByName : ''}</p>
             {i.description && <p className="pre small">{i.description}</p>}
-            <p className="muted small">{i.pointName ? i.pointName + ' · ' : ''}{i.reporterName ?? ''} · {ago(i.createdAt)}</p>
+            <p className="muted small">{i.teamName && i.teamId !== teamId ? i.teamName + ' · ' : ''}{i.pointName ? i.pointName + ' · ' : ''}{i.reporterName ?? ''} · {ago(i.createdAt)}</p>
+            {data.canHandleIncidents && i.status !== 'resolu' && (
+              <div className="row">
+                {i.position && <GpsButton to={i.position} label={INCIDENT_CATEGORY[i.category] ?? 'Incident'} />}
+                {i.status === 'ouvert' && <button className="primary" disabled={busy} onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'pris_en_charge', version: i.version }), 'Vous prenez l’incident en charge.')}>J’y vais</button>}
+                <button disabled={busy} onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version }), 'Incident résolu.')}>Résolu</button>
+              </div>
+            )}
           </li>
         ))}
       </ul>

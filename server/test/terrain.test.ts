@@ -182,3 +182,50 @@ describe('direct (WebSocket)', () => {
     }
   });
 });
+
+describe('équipes volante, d’ouverture et de fermeture', () => {
+  const joinTeam = async (kind: string, name: string) => {
+    const team = (await orga.post('/api/events/' + eventId + '/teams', { name: 'Équipe ' + kind, color: '#6a4c93', kind })).json();
+    expect(team.kind).toBe(kind);
+    const inv = (await orga.post('/api/teams/' + team.id + '/invitations', { kind: 'equipe', admission: 'immediate' })).json();
+    const a = new Agent(ctx.app);
+    await a.join(inv.token, name);
+    return { team, agent: a };
+  };
+
+  it('l’ouverture déclare la tête (y compris par sa position), la fermeture la queue ; les points dépassés sont signalés', async () => {
+    const tete = await joinTeam('ouverture', 'Olga');
+    const queue = await joinTeam('fermeture', 'Félix');
+    expect((await tete.agent.get('/api/terrain/equipes/' + tete.team.id)).json().canDeclare).toEqual({ tete: true, queue: false });
+    expect((await queue.agent.post('/api/events/' + eventId + '/progression', { part: 'tete', distance: 300 })).statusCode).toBe(403);
+    // « La tête est ici » : position projetée sur le parcours.
+    const r = await tete.agent.post('/api/events/' + eventId + '/progression', { part: 'tete', position: at(320, 20) });
+    expect(r.statusCode).toBe(201);
+    expect(r.json().distance).toBeCloseTo(320, -1);
+    expect((await tete.agent.post('/api/events/' + eventId + '/progression', { part: 'tete', position: at(320, 400) })).json().error).toMatch(/du parcours/);
+    // La queue dépasse le point « Angle » (200 m).
+    expect((await queue.agent.post('/api/events/' + eventId + '/progression', { part: 'queue', distance: 210 })).statusCode).toBe(201);
+    const a = (await alice.get('/api/terrain/equipes/' + teamA)).json();
+    expect(a.tail.distance).toBe(210);
+    expect(a.missions[0].passedByTail).toBe(true);
+    const t = (await orga.get('/api/events/' + eventId + '/tableau')).json();
+    expect(t.tail.distance).toBe(210);
+    expect(t.teams.find((x: { id: number }) => x.id === teamA).missions[0].passedByTail).toBe(true);
+    expect(t.teams.find((x: { id: number }) => x.id === queue.team.id).kind).toBe('fermeture');
+    // Équipes sans point fixe : elles voient les points tenus pour s'orienter.
+    expect((await queue.agent.get('/api/terrain/equipes/' + queue.team.id)).json().eventPoints.map((p: { name: string }) => p.name)).toContain('Angle');
+  });
+
+  it('l’équipe volante voit et prend en charge les incidents de toutes les équipes', async () => {
+    const vol = await joinTeam('volante', 'Vic');
+    const inc = (await bob.post('/api/terrain/equipes/' + teamB + '/incidents', { category: 'materiel', description: 'Barrière tombée' })).json();
+    const v = (await vol.agent.get('/api/terrain/equipes/' + vol.team.id)).json();
+    expect(v.canHandleIncidents).toBe(true);
+    expect(v.incidents.map((i: { id: number }) => i.id)).toContain(inc.id);
+    const taken = await vol.agent.patch('/api/incidents/' + inc.id, { status: 'pris_en_charge', version: inc.version });
+    expect(taken.json()).toMatchObject({ status: 'pris_en_charge', handledByName: 'Vic' });
+    // Un membre d'une équipe à points fixes ne voit que les incidents de son équipe.
+    expect((await alice.get('/api/terrain/equipes/' + teamA)).json().incidents.map((i: { id: number }) => i.id)).not.toContain(inc.id);
+    expect((await alice.patch('/api/incidents/' + inc.id, { status: 'resolu', version: taken.json().version })).statusCode).toBe(404);
+  });
+});

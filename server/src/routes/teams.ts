@@ -17,6 +17,8 @@ const TeamFields = {
   status: z.enum(['non_confirmee', 'prete', 'en_mission', 'indisponible']),
   /** Le responsable peut gérer les invitations et les membres de son équipe. */
   leaderCanInvite: z.boolean(),
+  /** Points fixes, volante, ouverture (tête du cortège) ou fermeture (queue). */
+  kind: z.enum(['points', 'volante', 'ouverture', 'fermeture']),
 };
 const CreateTeam = z.object({
   name: TeamFields.name,
@@ -24,6 +26,7 @@ const CreateTeam = z.object({
   description: TeamFields.description.default(''),
   instructions: TeamFields.instructions.default(''),
   leaderUserId: TeamFields.leaderUserId.default(null),
+  kind: TeamFields.kind.default('points'),
 });
 const UpdateTeam = z.object(TeamFields).partial().extend({ version: z.number().int() });
 
@@ -48,7 +51,7 @@ export function publicTeam(r: Record<string, unknown>) {
   return {
     id: r.id, eventId: r.event_id, name: r.name, color: r.color, description: r.description, instructions: r.instructions,
     leaderUserId: r.leader_user_id, leaderName: r.leader_name ?? null, status: r.status, disabled: !!r.disabled_at,
-    leaderCanInvite: !!r.leader_can_invite, members: r.member_count ?? 0, pendingAdmissions: r.pending_count ?? 0,
+    leaderCanInvite: !!r.leader_can_invite, kind: r.kind, members: r.member_count ?? 0, pendingAdmissions: r.pending_count ?? 0,
     version: r.version, missions: r.missions ?? [],
   };
 }
@@ -94,8 +97,8 @@ export async function teamRoutes(app: FastifyInstance) {
       await checkLeader(c, eventId, b.leaderUserId);
       try {
         const r = await c.query(
-          'INSERT INTO teams(event_id, name, color, description, instructions, leader_user_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
-          [eventId, b.name, b.color, b.description, b.instructions, b.leaderUserId],
+          'INSERT INTO teams(event_id, name, color, description, instructions, leader_user_id, kind) VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id',
+          [eventId, b.name, b.color, b.description, b.instructions, b.leaderUserId, b.kind],
         );
         await audit(c, { actorId: u.id, eventId, entity: 'team', entityId: r.rows[0].id, action: 'creation', details: { name: b.name } });
         // Statut seulement : la réponse part après la validation de la transaction.
@@ -121,9 +124,10 @@ export async function teamRoutes(app: FastifyInstance) {
         `UPDATE teams SET name = coalesce($2, name), color = coalesce($3, color), description = coalesce($4, description),
                 instructions = coalesce($5, instructions),
                 leader_user_id = CASE WHEN $6::boolean THEN $7::bigint ELSE leader_user_id END,
-                status = coalesce($8, status), leader_can_invite = coalesce($9, leader_can_invite), version = version + 1
+                status = coalesce($8, status), leader_can_invite = coalesce($9, leader_can_invite), kind = coalesce($10, kind),
+                version = version + 1
           WHERE id = $1`,
-        [id, b.name ?? null, b.color ?? null, b.description ?? null, b.instructions ?? null, b.leaderUserId !== undefined, b.leaderUserId ?? null, b.status ?? null, b.leaderCanInvite ?? null],
+        [id, b.name ?? null, b.color ?? null, b.description ?? null, b.instructions ?? null, b.leaderUserId !== undefined, b.leaderUserId ?? null, b.status ?? null, b.leaderCanInvite ?? null, b.kind ?? null],
       );
       await audit(c, { actorId: u.id, eventId, entity: 'team', entityId: id, action: 'modification', details: { ...b, version: undefined } });
       return loadTeam(c, id);

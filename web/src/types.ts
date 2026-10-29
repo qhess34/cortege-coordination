@@ -1,4 +1,5 @@
 export type Position = [number, number];
+export type TeamKind = 'points' | 'volante' | 'ouverture' | 'fermeture';
 
 export interface Me {
   id: number; login: string | null; displayName: string; globalRole: 'admin' | 'organisateur' | 'aucun';
@@ -41,6 +42,7 @@ export interface Team {
   id: number; name: string; color: string; description: string; instructions: string; leaderUserId: number | null;
   leaderName: string | null; status: string; disabled: boolean; version: number; missions: TeamMission[];
   leaderCanInvite: boolean; members: number; pendingAdmissions: number;
+  kind: TeamKind;
 }
 
 export interface Invitation {

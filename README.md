@@ -217,8 +217,16 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
   affiché : un signalement ne prévient pas les secours (15, 17, 18, 112).
 - **Messages** : annonces à toutes les équipes ou à une équipe, éventuellement urgentes (bandeau sur les téléphones),
   réponses du terrain, accusés de lecture (« lu 3/5 »).
-- **Progression déclarée** de la tête du cortège (km parcourus) par l'organisation ou un responsable : chaque membre
-  voit à quelle distance de son point elle se trouve. Ce n'est jamais une position GPS.
+- **Types d'équipe** (onglet Équipes) :
+  - *Points fixes* : tiennent les points de leur liste ;
+  - *Volante* : sans point fixe, elle voit les incidents de toute la manifestation, s'y rend (*J'y vais*, bouton GPS
+    vers la position signalée) et peut les clore ; sa carte montre tous les points tenus ;
+  - *Ouverture* : déclare la position de la **tête** du cortège (*📍 La tête est ici* ou km parcourus) ;
+  - *Fermeture* : déclare la **queue** ; un point dépassé par la queue est signalé à son équipe (« vous pourrez le
+    lever sur instruction ») et apparaît « à lever » dans la coordination.
+- **Progression déclarée** de la tête et de la queue (par l'organisation, l'ouverture/les responsables pour la tête,
+  la fermeture pour la queue ; « ici » = position du téléphone ramenée sur le parcours, à moins de 150 m) : chaque
+  membre voit à quelle distance de son point se trouve la tête. Ce n'est jamais un suivi GPS.
 - **Itinéraire à pied** vers le point : par un serveur compatible OSRM si `ROUTING_URL` est configuré (par exemple
   `https://routing.openstreetmap.de/routed-foot`, à utiliser selon ses conditions, ou une instance auto-hébergée),
   sinon lien vers la carte OpenStreetMap. Indicatif : accès et sécurité à vérifier sur place.
