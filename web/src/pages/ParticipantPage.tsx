@@ -54,7 +54,14 @@ export function ParticipantPage({ onLogout }: { onLogout: () => void }) {
 
       {moi.team && <TeamSpace event={moi.event} team={moi.team} missions={moi.missions} />}
       <p className="muted small">L’application de terrain (navigation, confirmations, messages) arrive dans une prochaine version.</p>
-      <button onClick={() => void load()}>Actualiser</button>
+      <div className="row">
+        <button onClick={() => void load()}>Actualiser</button>
+        <button onClick={async () => {
+          if (!window.confirm('Fermer l’accès participant sur cet appareil ? Pour revenir dans l’équipe, il faudra un nouveau lien (lien de récupération donné par un responsable).')) return;
+          await api.post('/api/auth/logout').catch(() => undefined);
+          onLogout();
+        }}>Se connecter avec un compte d’organisation</button>
+      </div>
     </main>
   );
 }

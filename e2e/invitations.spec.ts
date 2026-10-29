@@ -101,3 +101,22 @@ test('un organisateur membre d’une équipe a aussi l’onglet « Mon équipe �
   await page.getByRole('tab', { name: /Synthèse/ }).click();
   await expect(page.getByTestId('acces-manifestation')).toBeVisible();
 });
+
+test('depuis l’espace participant, on peut revenir à la connexion d’un compte', async ({ page }) => {
+  await page.request.post('/api/auth/login', { data: { login: 'admin', password: 'admin-e2e-motdepasse' }, headers: H });
+  const ev = await (await page.request.post('/api/events', { data: { name: 'Retour orga' }, headers: H })).json();
+  const team = await (await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Ouest', color: '#8ac926' }, headers: H })).json();
+  const inv = await (await page.request.post('/api/teams/' + team.id + '/invitations', { data: { kind: 'equipe', admission: 'immediate' }, headers: H })).json();
+  await page.request.post('/api/auth/logout', { headers: H });
+  await page.goto(inv.path);
+  await page.getByLabel('Votre nom ou pseudonyme').fill('Test');
+  await page.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
+  await expect(page.getByTestId('espace-participant')).toBeVisible();
+  page.once('dialog', (d) => void d.accept());
+  await page.getByRole('button', { name: 'Se connecter avec un compte d’organisation' }).click();
+  await page.getByLabel('Identifiant').fill('admin');
+  await page.getByLabel('Mot de passe').fill('admin-e2e-motdepasse');
+  await page.getByRole('button', { name: 'Se connecter' }).click();
+  await page.goto('/#/evenements/' + ev.id);
+  await expect(page.getByRole('tab', { name: /Équipes/ })).toBeVisible();
+});
