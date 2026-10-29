@@ -20,7 +20,7 @@ export async function authRoutes(app: FastifyInstance) {
     if (f && f.count >= MAX_FAILURES && f.until > Date.now()) {
       throw new HttpError(429, 'Trop de tentatives. Réessayez dans quelques minutes.');
     }
-    const r = await app.db.query('SELECT id, password_hash, disabled_at FROM users WHERE login = $1', [body.login]);
+    const r = await app.db.query("SELECT id, password_hash, disabled_at FROM users WHERE login = $1 AND account_type = 'compte'", [body.login]);
     const u = r.rows[0];
     const ok = await verifyPassword(body.password, u?.password_hash ?? null);
     if (!u || !ok || u.disabled_at) {
@@ -52,7 +52,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/api/auth/me', async (req) => {
     const u = requireUser(req);
-    return { id: u.id, login: u.login, displayName: u.displayName, globalRole: u.globalRole };
+    return { id: u.id, login: u.login, displayName: u.displayName, globalRole: u.globalRole, accountType: u.accountType, eventId: u.eventId };
   });
 }
 

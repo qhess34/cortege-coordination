@@ -39,6 +39,8 @@ export async function eventRoutes(app: FastifyInstance) {
   // Seuls les événements auxquels le compte a accès sont listés.
   app.get('/api/events', async (req) => {
     const u = requireUser(req);
+    // Un participant voit son équipe par /api/moi, pas la liste des manifestations.
+    if (u.accountType === 'participant') return [];
     const r = u.globalRole === 'admin'
       ? await app.db.query("SELECT e.*, 'organisateur' AS role FROM events e ORDER BY coalesce(starts_at, created_at) DESC")
       : await app.db.query(

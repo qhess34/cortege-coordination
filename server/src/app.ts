@@ -11,6 +11,7 @@ import type { OsmFetcher } from './services/overpass.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { eventRoutes } from './routes/events.js';
+import { invitationRoutes } from './routes/invitations.js';
 import { pointRoutes } from './routes/points.js';
 import { roadbookRoutes } from './routes/roadbook.js';
 import { suggestionRoutes } from './routes/suggestions.js';
@@ -33,15 +34,18 @@ export interface AppDeps {
   config: Config;
   osm: OsmFetcher;
   logger?: boolean;
+  /** Flux de journal (tests : vérifier qu'aucun jeton n'y apparaît). */
+  logStream?: NodeJS.WritableStream;
 }
 
 /** Chemins dont l'URL ne doit jamais apparaître dans les journaux (jetons d'invitation). */
-const SENSITIVE_PATH = /^\/(rejoindre|api\/invitations)\//;
+const SENSITIVE_PATH = /^\/(rejoindre|api\/rejoindre)\//;
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
-    logger: deps.logger
+    logger: deps.logger || deps.logStream
       ? {
+          ...(deps.logStream ? { stream: deps.logStream } : {}),
           serializers: {
             req: (req) => ({ method: req.method, url: SENSITIVE_PATH.test(req.url) ? '[masqué]' : req.url.split('?')[0] }),
           },
@@ -100,6 +104,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(pointRoutes);
   await app.register(teamRoutes);
   await app.register(roadbookRoutes);
+  await app.register(invitationRoutes);
   return app;
 }
 

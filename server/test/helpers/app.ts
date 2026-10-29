@@ -18,7 +18,7 @@ export interface TestContext {
   close: () => Promise<void>;
 }
 
-export async function setup(): Promise<TestContext> {
+export async function setup(opts: { logStream?: NodeJS.WritableStream } = {}): Promise<TestContext> {
   const db = createPool(TEST_DB);
   await db.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
@@ -31,6 +31,7 @@ export async function setup(): Promise<TestContext> {
   const app = await buildApp({
     db,
     config,
+    logStream: opts.logStream,
     osm: async (q) => {
       osm.queries.push(q);
       if (osm.fail) throw osm.fail;
@@ -51,6 +52,15 @@ export async function createUser(db: Db, login: string, globalRole: 'admin' | 'o
 export class Agent {
   cookie: string | null = null;
   constructor(private app: FastifyInstance) {}
+
+  /** Rejoindre une équipe par invitation : la réponse pose le cookie de session du participant. */
+  async join(token: string, pseudonym?: string): Promise<LightMyRequestResponse> {
+    const res = await this.request('POST', '/api/rejoindre/' + token, pseudonym === undefined ? {} : { pseudonym });
+    const set = res.headers['set-cookie'];
+    const raw = Array.isArray(set) ? set[0] : set;
+    if (raw) this.cookie = raw.split(';')[0]!;
+    return res;
+  }
 
   async login(login: string, password = 'mot-de-passe-solide'): Promise<LightMyRequestResponse> {
     const res = await this.request('POST', '/api/auth/login', { login, password });

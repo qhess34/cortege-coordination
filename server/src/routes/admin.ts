@@ -5,7 +5,7 @@ import { idParam, requireUser } from '../app.js';
 import { hashPassword, revokeUserSessions } from '../auth.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
-import { conflict, notFound } from '../errors.js';
+import { conflict, forbidden, notFound } from '../errors.js';
 import { requireAdmin } from '../permissions.js';
 
 const Role = z.enum(['admin', 'organisateur', 'aucun']);
@@ -29,7 +29,7 @@ const publicUser = (r: Record<string, unknown>) => ({
 export async function adminRoutes(app: FastifyInstance) {
   app.get('/api/admin/users', async (req) => {
     requireAdmin(requireUser(req));
-    const r = await app.db.query('SELECT * FROM users ORDER BY login');
+    const r = await app.db.query("SELECT * FROM users WHERE account_type = 'compte' ORDER BY login");
     return r.rows.map(publicUser);
   });
 
@@ -57,7 +57,7 @@ export async function adminRoutes(app: FastifyInstance) {
     const id = idParam(req);
     const b = UpdateUser.parse(req.body);
     return tx(app.db, async (c) => {
-      const cur = (await c.query('SELECT * FROM users WHERE id = $1 FOR UPDATE', [id])).rows[0];
+      const cur = (await c.query("SELECT * FROM users WHERE id = $1 AND account_type = 'compte' FOR UPDATE", [id])).rows[0];
       if (!cur) throw notFound('Compte');
       if (id === me.id && (b.disabled || (b.globalRole && b.globalRole !== 'admin'))) {
         throw conflict('Un administrateur ne peut pas se désactiver ni se retirer ses propres droits.');
@@ -78,6 +78,22 @@ export async function adminRoutes(app: FastifyInstance) {
       });
       return publicUser(r.rows[0]);
     });
+  });
+
+  // Annuaire des comptes actifs, pour qu'un organisateur donne accès à sa manifestation à un compte existant.
+  // Il ne permet ni de créer ni de modifier un compte.
+  app.get('/api/annuaire', async (req) => {
+    const me = requireUser(req);
+    if (me.globalRole !== 'admin' && me.globalRole !== 'organisateur') throw forbidden();
+    const q = z.object({ q: z.string().trim().max(60).default('') }).parse(req.query);
+    const like = '%' + q.q.replace(/[%_\\]/g, '\\$&') + '%';
+    const r = await app.db.query(
+      `SELECT id, login, display_name FROM users
+        WHERE account_type = 'compte' AND disabled_at IS NULL AND (login ILIKE $1 OR display_name ILIKE $1)
+        ORDER BY display_name LIMIT 50`,
+      [like],
+    );
+    return r.rows.map((x) => ({ id: x.id, login: x.login, displayName: x.display_name }));
   });
 
   app.post('/api/admin/users/:id/revoke-sessions', async (req) => {
