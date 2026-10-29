@@ -12,6 +12,8 @@ export interface Config {
   userAgent: string;
   maxGpxBytes: number;
   webDist: string | null;
+  /** Ouvertures de lien d'invitation autorisées par minute et par adresse IP. */
+  joinRateLimit: number;
 }
 
 function bool(v: string | undefined, def: boolean): boolean {
@@ -34,5 +36,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     userAgent: env.OSM_USER_AGENT ?? 'cortege-coordination (auto-hébergé)',
     maxGpxBytes: Number(env.MAX_GPX_BYTES ?? 10 * 1024 * 1024),
     webDist: env.WEB_DIST ?? null,
+    joinRateLimit: Number(env.JOIN_RATE_LIMIT ?? 30),
   };
 }

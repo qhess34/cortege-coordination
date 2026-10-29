@@ -163,7 +163,9 @@ export async function suggestionRoutes(app: FastifyInstance) {
       await c.query("UPDATE map_suggestions SET status = 'validee', decided_at = now(), decided_by = $2 WHERE id = $1", [id, u.id]);
       await audit(c, { actorId: u.id, eventId, entity: 'map_suggestion', entityId: id, action: 'validation', details: { pointId: p.id, position: b.position } });
       await audit(c, { actorId: u.id, eventId, entity: 'mission_point', entityId: p.id, action: 'creation', details: { origin: 'suggestion', suggestionId: id, name } });
-      return reply.status(201).send({ pointId: p.id });
+      // Statut seulement : la réponse part après la validation de la transaction.
+      reply.status(201);
+      return { pointId: p.id };
     });
   });
 

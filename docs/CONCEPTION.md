@@ -228,8 +228,9 @@ pour le participant existant (rattaché au même participant, l'ancienne session
 9. Interface organisateur : carte MapLibre et panneaux. ✔
 10. Documentation et test de bout en bout du parcours MVP organisateur. ✔
 
-**Phase 2** — administration des comptes, rôles par événement, participants, invitations QR et magic link, admission
-immédiate ou validée, sessions participants, révocation.
+**Phase 2** ✔ — administration des comptes, rôles par événement, participants, invitations QR et magic link, admission
+immédiate ou validée, sessions participants, révocation. Les participants sont des lignes `users` de type
+`participant` (sans identifiant ni mot de passe, rattachées à un événement) plutôt qu'une table séparée.
 
 **Phase 3** — PWA, vue de mission, transitions de mission par les membres, routage piéton, WebSocket, tableau de bord
 partagé, messages, incidents, progression déclarée du cortège.

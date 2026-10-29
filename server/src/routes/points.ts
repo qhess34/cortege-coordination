@@ -83,7 +83,9 @@ export async function pointRoutes(app: FastifyInstance) {
       const id = r.rows[0].id;
       await audit(c, { actorId: u.id, eventId, entity: 'mission_point', entityId: id, action: 'creation', details: { origin: 'manuel', name: b.name, position: b.position } });
       const p = (await c.query(POINT_SELECT + ' WHERE p.id = $1', [id])).rows[0];
-      return reply.status(201).send(publicPoint(p));
+      // Statut seulement : la réponse part après la validation de la transaction.
+      reply.status(201);
+      return publicPoint(p);
     });
   });
 

@@ -96,7 +96,7 @@ const CreateInvitation = z.object({
 
 export async function invitationRoutes(app: FastifyInstance) {
   // --- Côté participant : ouvrir une invitation, la valider -------------------------------------------------------
-  const joinLimit = { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } };
+  const joinLimit = { config: { rateLimit: { max: app.config.joinRateLimit, timeWindow: '1 minute' } } };
 
   app.get('/api/rejoindre/:token', joinLimit, async (req) => {
     const token = String((req.params as Record<string, string>).token);
@@ -241,7 +241,9 @@ export async function invitationRoutes(app: FastifyInstance) {
         details: { teamId, kind: b.kind, admission: b.admission, role: b.role, maxUses, expiresAt },
       });
       // Le jeton d'un lien individuel n'est renvoyé qu'ici, une seule fois.
-      return reply.status(201).send({ ...publicInvitation(r.rows[0]), token, path: '/rejoindre/' + token });
+      // Statut seulement : la réponse part après la validation de la transaction.
+      reply.status(201);
+      return { ...publicInvitation(r.rows[0]), token, path: '/rejoindre/' + token };
     });
   });
 
@@ -369,7 +371,9 @@ export async function invitationRoutes(app: FastifyInstance) {
         [eventId, teamId, hashToken(token), userId, u.id],
       );
       await audit(c, { actorId: u.id, eventId, entity: 'invitation', entityId: r.rows[0].id, action: 'creation_recuperation', details: { teamId, participantId: userId } });
-      return reply.status(201).send({ ...publicInvitation(r.rows[0]), token, path: '/rejoindre/' + token });
+      // Statut seulement : la réponse part après la validation de la transaction.
+      reply.status(201);
+      return { ...publicInvitation(r.rows[0]), token, path: '/rejoindre/' + token };
     });
   });
 }

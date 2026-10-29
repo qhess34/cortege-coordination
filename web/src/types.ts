@@ -1,6 +1,9 @@
 export type Position = [number, number];
 
-export interface Me { id: number; login: string; displayName: string; globalRole: 'admin' | 'organisateur' | 'aucun' }
+export interface Me {
+  id: number; login: string | null; displayName: string; globalRole: 'admin' | 'organisateur' | 'aucun';
+  accountType: 'compte' | 'participant'; eventId: number | null;
+}
 
 export interface EventInfo {
   id: number; name: string; description: string; startsAt: string | null; endsAt: string | null; areaName: string;
@@ -37,7 +40,17 @@ export interface TeamMission {
 export interface Team {
   id: number; name: string; color: string; description: string; instructions: string; leaderUserId: number | null;
   leaderName: string | null; status: string; disabled: boolean; version: number; missions: TeamMission[];
+  leaderCanInvite: boolean; members: number; pendingAdmissions: number;
 }
+
+export interface Invitation {
+  id: number; teamId: number; kind: 'equipe' | 'individuelle'; admission: 'immediate' | 'validation'; role: 'membre' | 'responsable';
+  label: string; maxUses: number | null; uses: number; expiresAt: string | null; suspended: boolean; revokedAt: string | null;
+  createdAt: string; participantId: number | null; token: string | null; path?: string;
+  state: 'valide' | 'revoquee' | 'suspendue' | 'expiree' | 'utilisee' | 'complete' | 'equipe_fermee';
+}
+
+export interface TeamMember { id: number; displayName: string; accountType: 'compte' | 'participant'; role: 'membre' | 'responsable'; joinedAt: string; lastSeen: string | null; disabled: boolean }
 
 export interface Summary {
   suggestions: Record<string, number>; points: Record<string, number>; teams: { active: number; total: number };

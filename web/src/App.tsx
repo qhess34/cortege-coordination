@@ -2,7 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from './api';
 import { EventSwitcher } from './components/EventSwitcher';
 import { EventPage } from './pages/EventPage';
+import { AdminPage } from './pages/AdminPage';
 import { EventsPage } from './pages/EventsPage';
+import { JoinPage } from './pages/JoinPage';
+import { ParticipantPage } from './pages/ParticipantPage';
 import { RoadbookPage } from './pages/RoadbookPage';
 import { LoginPage } from './pages/LoginPage';
 import type { Me } from './types';
@@ -32,8 +35,14 @@ export function App() {
   }, []);
   useEffect(() => { void loadMe(); }, [loadMe]);
 
+  // Lien d'invitation (/rejoindre/<jeton>) : accessible sans connexion.
+  const joinToken = window.location.pathname.match(/^\/rejoindre\/([A-Za-z0-9_-]+)$/)?.[1];
+  if (joinToken) return <JoinPage token={joinToken} onJoined={loadMe} />;
+
   if (me === undefined) return <div className="center">Chargement…</div>;
   if (me === null) return <LoginPage onLogin={loadMe} />;
+  // Participant (sans compte classique) : seulement son espace d'équipe.
+  if (me.accountType === 'participant') return <div className="app"><ParticipantPage onLogout={() => setMe(null)} /></div>;
 
   const logout = async () => {
     await api.post('/api/auth/logout');
@@ -48,11 +57,14 @@ export function App() {
         <a href="#/" className="brand">Coordination de cortège</a>
         <EventSwitcher me={me} currentId={m ? Number(m[1]) : null} />
         <span className="spacer" />
+        {me.globalRole === 'admin' && <a href="#/admin">Comptes</a>}
         <span className="muted">{me.displayName}{me.globalRole === 'admin' ? ' (administrateur)' : ''}</span>
         <button className="link" onClick={logout}>Se déconnecter</button>
       </header>
       {rb ? <RoadbookPage key={route} eventId={Number(rb[1])} teamId={rb[3] ? Number(rb[3]) : null} />
-        : m ? <EventPage key={m[1]} eventId={Number(m[1])} /> : <EventsPage me={me} />}
+        : m ? <EventPage key={m[1]} eventId={Number(m[1])} />
+        : route === '/admin' && me.globalRole === 'admin' ? <AdminPage meId={me.id} />
+        : <EventsPage me={me} />}
     </div>
   );
 }

@@ -20,7 +20,7 @@ sous le tracé.*
 | Phase | Contenu | État |
 |---|---|---|
 | 1 — Prototype cartographique | Événements, GPX, carte, analyse OSM, suggestions, points, nouvelle analyse non destructive, équipes, missions ordonnées | **Fait** |
-| 2 — Comptes et invitations | Administration des comptes (API faite, écran à faire), QR code, magic link, admission, sessions des participants | À faire |
+| 2 — Comptes et invitations | Écran d'administration des comptes, accès par manifestation, QR code d'équipe, liens individuels, admission immédiate ou validée, sessions des participants, récupération d'accès | **Fait** |
 | 3 — Coordination mobile | PWA, vue de mission, routage piéton, temps réel, messages, incidents | À faire |
 | 4 — Fonctions avancées | Partage GPS facultatif, hors ligne, relèves avancées, exports | À faire |
 
@@ -30,7 +30,7 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
 ## Ce que fait la phase 1
 
 - **Comptes administrés** : pas d'inscription publique. Le premier administrateur est créé en ligne de commande ;
-  les administrateurs créent les autres comptes (`POST /api/admin/users`, écran prévu en phase 2).
+  les administrateurs créent les autres comptes (écran « Comptes », réservé aux administrateurs).
 - **Événements** isolés : chaque compte ne voit que ceux auxquels il a accès ; un administrateur voit tout.
   La barre du haut permet de basculer d'une manifestation à l'autre et d'en créer une nouvelle ; un organisateur
   peut supprimer définitivement une manifestation depuis sa synthèse (nom à retaper, impossible pendant
@@ -149,6 +149,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `PORT`, `HOST` | Écoute du serveur | `3000`, `127.0.0.1` |
 | `COOKIE_SECURE` | Cookies réservés à HTTPS | `true` en production |
 | `SESSION_TTL_HOURS` | Durée des sessions (glissante) | `12` |
+| `JOIN_RATE_LIMIT` | Ouvertures de lien d'invitation par minute et par adresse IP | `30` |
 | `OVERPASS_URL` | Serveurs Overpass, séparés par des virgules, essayés dans l'ordre | `overpass-api.de`, puis `overpass.private.coffee` |
 | `OSM_USER_AGENT` | Identification envoyée à Overpass | `cortege-coordination (auto-hébergé)` |
 | `MAX_GPX_BYTES` | Taille maximale d'un GPX | 10 Mo |
@@ -183,7 +184,25 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - **Routage piéton** (phase 3) : OSRM ou Valhalla auto-hébergés ; les serveurs de démonstration ne sont pas faits
   pour la production.
 
-## Sécurité (phase 1)
+## Ce que fait la phase 2
+
+- **Écran « Comptes »** (administrateurs) : création, rôle global, désactivation, révocation des sessions,
+  réinitialisation du mot de passe.
+- **Accès des comptes** à une manifestation (onglet Synthèse) : recherche dans l'annuaire, rôle organisateur,
+  responsable ou membre.
+- **Membres et invitations** par équipe (onglet Équipes) :
+  - QR code d'équipe imprimable, admission immédiate ou après validation, nombre maximal de personnes, expiration,
+    suspension, régénération (l'ancien QR cesse de fonctionner) ; il ne donne que le rôle de membre ;
+  - liens individuels à usage unique (24 h à 30 jours), affichés une seule fois, révocables ; seul un organisateur
+    peut inviter un responsable ;
+  - demandes à valider, liste des membres, retrait (accès coupé immédiatement), lien de récupération d'accès pour un
+    nouveau téléphone (les autres appareils sont déconnectés) ;
+  - option « les responsables peuvent inviter et valider des membres ».
+- **Participants sans compte** : la page `/rejoindre/<jeton>` demande seulement un pseudonyme ; la session (cookie
+  `HttpOnly`) dure jusqu'au lendemain de la manifestation, 30 jours au plus. Le participant ne voit que la page de son
+  équipe (consignes, missions) — la vraie vue mobile de mission arrive en phase 3.
+
+## Sécurité (phases 1 et 2)
 
 - Aucune route d'inscription ; création et rôles des comptes réservés aux administrateurs.
 - Mots de passe hachés avec scrypt ; sessions par cookie `HttpOnly`, `SameSite=Lax`, `Secure` en production ;
@@ -194,6 +213,9 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - Limitation des tentatives de connexion (par adresse et par identifiant).
 - Verrou optimiste (`version`) sur les événements, points, équipes et missions : pas d'écrasement silencieux.
 - Journal d'audit des modifications importantes, sans secret.
+- Invitations : seul le hash SHA-256 d'un lien individuel est stocké ; les URL `/rejoindre/*` sont masquées dans les
+  journaux et servies avec `Referrer-Policy: no-referrer` ; ouvertures de lien limitées par adresse
+  (`JOIN_RATE_LIMIT`, 30 par minute par défaut). Un participant n'a jamais accès à l'organisation de la manifestation.
 
 ## Structure du dépôt
 
@@ -215,6 +237,4 @@ docs/              conception et captures
   dépend de la qualité du tracé GPX et des données OSM locales). Les seuils (15 m, 35°, 25 m) sont réglables.
 - Les grands carrefours à chaussées séparées peuvent produire plusieurs suggestions voisines ; le regroupement se
   fait à 25 m.
-- Pas encore d'écran d'administration des comptes, ni de membres d'équipe (phase 2) : le responsable d'équipe est
-  choisi parmi les comptes ayant accès à l'événement.
 - Le compteur de tentatives de connexion est en mémoire (une seule instance du serveur).

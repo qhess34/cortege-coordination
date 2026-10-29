@@ -245,3 +245,13 @@ a.button:hover { border-color: var(--primary); }
 .team-picker .check { font-size: .85rem; color: var(--text); }
 .rb-subpoint { border-left: 3px solid var(--border); padding-left: .6rem; margin-bottom: .6rem; }
 .rb-subpoint h4 { margin: .2rem 0; }
+
+/* Lot 2 : invitations, page participant, administration */
+.team-access { border-top: 1px solid var(--border); padding-top: .5rem; margin: .25rem 0 .5rem; }
+.team-access h4 { margin: .5rem 0 .25rem; font-size: .95rem; }
+.qr-card { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
+.qr-card img { border: 1px solid var(--border); border-radius: 6px; background: #fff; }
+.qr-card input { width: 100%; font-size: .8rem; }
+button.big { font-size: 1.1rem; padding: .7rem 1.2rem; width: 100%; }
+.page.participant { max-width: 40rem; margin: 0 auto; padding: 1rem; }
+.page.participant .missions li { padding: .4rem 0; }

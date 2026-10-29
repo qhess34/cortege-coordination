@@ -1,4 +1,4 @@
-import { Fragment, useState, type FormEvent } from 'react';
+import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../../api';
 import { notifyEventsChanged } from '../../components/EventSwitcher';
 import { EVENT_STATUS, MISSION_STATUS, POINT_STATUS, SUGGESTION_STATUS, dateTime, km } from '../../labels';
@@ -94,7 +94,79 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
         </dl>
         {s.lastAnalysis && <p className="muted">Dernière analyse OSM : {dateTime(s.lastAnalysis.at)} (données OSM du {dateTime(s.lastAnalysis.osmTimestamp)}).</p>}
       </div>
+      {canEdit && <EventAccess eventId={ev.id} />}
       {canEdit && <DeleteEvent id={ev.id} name={ev.name} running={ev.status === 'en_cours'} />}
+    </div>
+  );
+}
+
+const ROLE: Record<string, string> = { organisateur: 'Organisateur', responsable: 'Responsable', membre: 'Membre' };
+interface Account { id: number; login: string | null; displayName: string }
+
+/** Comptes ayant accès à la manifestation. Les participants invités par QR code ou lien n'y figurent pas. */
+function EventAccess({ eventId }: { eventId: number }) {
+  const [members, setMembers] = useState<(Account & { role: string })[]>([]);
+  const [q, setQ] = useState('');
+  const [found, setFound] = useState<Account[]>([]);
+  const [role, setRole] = useState('membre');
+  const [message, setMessage] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
+  const base = '/api/events/' + eventId + '/members';
+  const load = useCallback(() => api.get<(Account & { role: string })[]>(base).then(setMembers), [base]);
+  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    if (q.trim().length < 2) { setFound([]); return; }
+    const t = setTimeout(() => {
+      api.get<Account[]>('/api/annuaire?q=' + encodeURIComponent(q.trim())).then(setFound, (e) => setMessage({ kind: 'error', text: e instanceof ApiError ? e.message : 'Recherche impossible.' }));
+    }, 250);
+    return () => clearTimeout(t);
+  }, [q]);
+
+  const act = async (fn: () => Promise<unknown>, ok: string) => {
+    try {
+      await fn();
+      setMessage({ kind: 'ok', text: ok });
+      await load();
+    } catch (e) {
+      setMessage({ kind: 'error', text: e instanceof ApiError ? e.message : 'Erreur inattendue.' });
+    }
+  };
+  const has = new Set(members.map((m) => m.id));
+
+  return (
+    <div className="card" data-testid="acces-manifestation">
+      <h3>Accès des comptes</h3>
+      <p className="muted small">Les comptes sont créés par un administrateur. Les membres d’équipe sans compte rejoignent par QR code ou lien (onglet Équipes).</p>
+      {message && <p className={message.kind === 'ok' ? 'muted small' : 'error small'} role="status">{message.text}</p>}
+      <ul className="plain small">
+        {members.map((m) => (
+          <li key={m.id} className="row">
+            <span className="grow">{m.displayName} <span className="muted">{m.login}</span></span>
+            <select value={m.role} aria-label={'Rôle de ' + m.displayName}
+              onChange={(e) => act(() => api.put(base, { userId: m.id, role: e.target.value }), 'Rôle modifié.')}>
+              {Object.entries(ROLE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+            </select>
+            <button className="danger" onClick={() => {
+              if (window.confirm('Retirer l’accès de ' + m.displayName + ' ?')) void act(() => api.delete(base + '/' + m.id), 'Accès retiré.');
+            }}>Retirer</button>
+          </li>
+        ))}
+      </ul>
+      <div className="row small">
+        <input className="grow" placeholder="Rechercher un compte (nom ou identifiant)" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Rechercher un compte" />
+        <select value={role} onChange={(e) => setRole(e.target.value)} aria-label="Rôle à donner">
+          {Object.entries(ROLE).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        </select>
+      </div>
+      {found.filter((f) => !has.has(f.id)).length > 0 && (
+        <ul className="plain small">
+          {found.filter((f) => !has.has(f.id)).map((f) => (
+            <li key={f.id} className="row">
+              <span className="grow">{f.displayName} <span className="muted">{f.login}</span></span>
+              <button onClick={() => act(() => api.put(base, { userId: f.id, role }), f.displayName + ' a désormais accès.')}>Donner accès</button>
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }

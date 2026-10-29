@@ -120,7 +120,9 @@ export async function trackRoutes(app: FastifyInstance) {
         actorId: u.id, eventId, entity: 'gpx_track', entityId: t.id, action: ev.current_track_id ? 'remplacement' : 'import',
         details: { version, filename, length: Math.round(g.length), previousTrackId: ev.current_track_id, impacted: impact.map((i) => [i.kind, i.id]) },
       });
-      return reply.status(201).send({ id: t.id, version, track: summary(g), impact });
+      // Statut seulement : la réponse part après la validation de la transaction.
+      reply.status(201);
+      return { id: t.id, version, track: summary(g), impact };
     });
   });
 

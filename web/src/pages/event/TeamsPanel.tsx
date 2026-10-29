@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../api';
 import { MISSION_STATUS, MISSION_TRANSITIONS, km } from '../../labels';
+import { TeamAccess } from '../../components/TeamAccess';
 import type { Team } from '../../types';
 import type { PanelProps } from '../EventPage';
 
@@ -33,15 +34,17 @@ export function TeamsPanel(props: PanelProps) {
       )}
       {data.teams.length === 0 && <p className="muted">Aucune équipe.</p>}
       {data.teams.map((t) => <TeamCard key={t.id + ':' + t.version + ':' + t.missions.map((m) => m.id + '-' + m.version).join()} team={t} members={members} {...props} />)}
-      <p className="muted">Les membres des équipes rejoindront par QR code ou lien d’invitation (phase 2).</p>
     </div>
   );
 }
 
-function TeamCard({ team: t, members, data, canEdit, run, select }: PanelProps & { team: Team; members: Member[] }) {
+function TeamCard({ team: t, members, data, canEdit, run, select, reload }: PanelProps & { team: Team; members: Member[] }) {
   const [editing, setEditing] = useState(false);
-  const [form, setForm] = useState({ name: t.name, color: t.color, description: t.description, instructions: t.instructions, leaderUserId: t.leaderUserId });
+  const [form, setForm] = useState({ name: t.name, color: t.color, description: t.description, instructions: t.instructions, leaderUserId: t.leaderUserId, leaderCanInvite: t.leaderCanInvite });
   const [toAdd, setToAdd] = useState('');
+  const [access, setAccess] = useState(false);
+  // Le serveur reste seul juge : un responsable n'a accès à cette section que si l'organisateur l'a permis.
+  const canManage = canEdit || (data.event.role === 'responsable' && t.leaderCanInvite);
   const others = data.teams.filter((x) => x.id !== t.id && !x.disabled);
   const inTeam = new Set(t.missions.map((m) => m.pointId));
   // Points proposés à l'affectation : d'abord ceux qui n'ont aucune équipe.
@@ -69,7 +72,18 @@ function TeamCard({ team: t, members, data, canEdit, run, select }: PanelProps &
         {!t.disabled && <a className="button" href={'#/evenements/' + data.event.id + '/roadbook/equipe/' + t.id} aria-label={'Roadbook de l’équipe ' + t.name}>📄 Roadbook</a>}
         {canEdit && <button onClick={() => setEditing(!editing)}>{editing ? 'Fermer' : 'Modifier'}</button>}
       </div>
-      <p className="muted">Responsable : {t.leaderName ?? 'non désigné'}{t.description ? ' · ' + t.description : ''}</p>
+      <p className="muted">
+        Responsable : {t.leaderName ?? 'non désigné'} · {t.members} membre(s){t.description ? ' · ' + t.description : ''}
+        {t.pendingAdmissions > 0 && <span className="badge warn"> {t.pendingAdmissions} demande(s) à valider</span>}
+      </p>
+      {canManage && !t.disabled && (
+        <button className="link" onClick={() => setAccess(!access)} aria-expanded={access}>
+          {access ? '▾' : '▸'} Membres et invitations
+        </button>
+      )}
+      {access && canManage && !t.disabled && (
+        <TeamAccess team={t} eventName={data.event.name} organizer={canEdit} accounts={members} onChanged={reload} />
+      )}
       {editing && (
         <form className="stack" onSubmit={save}>
           <div className="row">
@@ -82,6 +96,8 @@ function TeamCard({ team: t, members, data, canEdit, run, select }: PanelProps &
               {members.map((m) => <option key={m.id} value={m.id}>{m.displayName} ({m.role})</option>)}
             </select>
           </label>
+          <label className="check"><input type="checkbox" checked={form.leaderCanInvite} onChange={(e) => setForm({ ...form, leaderCanInvite: e.target.checked })} />
+            Les responsables de l’équipe peuvent inviter et valider des membres</label>
           <label>Description<input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
           <label>Consignes de l’équipe<textarea rows={3} value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} /></label>
           <div className="row">

@@ -98,7 +98,9 @@ export async function teamRoutes(app: FastifyInstance) {
           [eventId, b.name, b.color, b.description, b.instructions, b.leaderUserId],
         );
         await audit(c, { actorId: u.id, eventId, entity: 'team', entityId: r.rows[0].id, action: 'creation', details: { name: b.name } });
-        return reply.status(201).send(await loadTeam(c, r.rows[0].id));
+        // Statut seulement : la réponse part après la validation de la transaction.
+        reply.status(201);
+        return await loadTeam(c, r.rows[0].id);
       } catch (e) {
         if ((e as { code?: string }).code === '23505') throw conflict('Une équipe porte déjà ce nom.');
         throw e;
@@ -164,7 +166,9 @@ export async function teamRoutes(app: FastifyInstance) {
         [eventId, teamId, b.pointId, position, b.instructions],
       );
       await audit(c, { actorId: u.id, eventId, entity: 'mission', entityId: r.rows[0].id, action: 'affectation', details: { teamId, pointId: b.pointId, position } });
-      return reply.status(201).send(await loadTeam(c, teamId));
+      // Statut seulement : la réponse part après la validation de la transaction.
+      reply.status(201);
+      return await loadTeam(c, teamId);
     });
   });
 
