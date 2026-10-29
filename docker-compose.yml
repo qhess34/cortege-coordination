@@ -34,6 +34,8 @@ services:
       OSM_USER_AGENT: ${OSM_USER_AGENT:-cortege-coordination}
       ROUTING_URL: ${ROUTING_URL:-}
       PUBLIC_URL: ${PUBLIC_URL:-}
+      SMTP_URL: ${SMTP_URL:-}
+      MAIL_FROM: ${MAIL_FROM:-}
     ports:
       - "127.0.0.1:3000:3000"
 

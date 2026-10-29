@@ -14,16 +14,20 @@ const CreateUser = z.object({
   displayName: z.string().trim().min(1).max(120),
   password: z.string().min(12, 'Mot de passe : 12 caractères minimum.').max(200),
   globalRole: Role.default('aucun'),
+  email: z.string().trim().toLowerCase().email().max(200).nullable().default(null),
 });
 const UpdateUser = z.object({
   displayName: z.string().trim().min(1).max(120).optional(),
   password: z.string().min(12).max(200).optional(),
   globalRole: Role.optional(),
   disabled: z.boolean().optional(),
+  /** Adresse e-mail (liens de connexion) ; null pour l'effacer. */
+  email: z.string().trim().toLowerCase().email().max(200).nullable().optional(),
 });
 
 const publicUser = (r: Record<string, unknown>) => ({
   id: r.id, login: r.login, displayName: r.display_name, globalRole: r.global_role, disabledAt: r.disabled_at, createdAt: r.created_at,
+  email: r.email ?? null,
 });
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -40,13 +44,13 @@ export async function adminRoutes(app: FastifyInstance) {
     const hash = await hashPassword(b.password);
     try {
       const r = await app.db.query(
-        'INSERT INTO users(login, display_name, password_hash, global_role, created_by) VALUES ($1, $2, $3, $4, $5) RETURNING *',
-        [b.login, b.displayName, hash, b.globalRole, me.id],
+        'INSERT INTO users(login, display_name, password_hash, global_role, created_by, email) VALUES ($1, $2, $3, $4, $5, $6) RETURNING *',
+        [b.login, b.displayName, hash, b.globalRole, me.id, b.email],
       );
       await audit(app.db, { actorId: me.id, eventId: null, entity: 'user', entityId: r.rows[0].id, action: 'creation', details: { login: b.login, globalRole: b.globalRole } });
       return reply.status(201).send(publicUser(r.rows[0]));
     } catch (e) {
-      if ((e as { code?: string }).code === '23505') throw conflict('Cet identifiant existe déjà.');
+      if ((e as { code?: string }).code === '23505') throw conflict('Cet identifiant ou cette adresse e-mail existe déjà.');
       throw e;
     }
   });
@@ -66,15 +70,20 @@ export async function adminRoutes(app: FastifyInstance) {
       const r = await c.query(
         `UPDATE users SET display_name = coalesce($2, display_name), password_hash = coalesce($3, password_hash),
                 global_role = coalesce($4, global_role),
-                disabled_at = CASE WHEN $5::boolean IS NULL THEN disabled_at WHEN $5 THEN coalesce(disabled_at, now()) ELSE NULL END
+                disabled_at = CASE WHEN $5::boolean IS NULL THEN disabled_at WHEN $5 THEN coalesce(disabled_at, now()) ELSE NULL END,
+                email = CASE WHEN $6::boolean THEN $7 ELSE email END
           WHERE id = $1 RETURNING *`,
-        [id, b.displayName ?? null, hash, b.globalRole ?? null, b.disabled ?? null],
-      );
+        [id, b.displayName ?? null, hash, b.globalRole ?? null, b.disabled ?? null, b.email !== undefined, b.email ?? null],
+      ).catch((e: { code?: string }) => { if (e.code === '23505') throw conflict('Cette adresse e-mail est déjà utilisée.'); throw e; });
       // Désactivation ou changement de mot de passe : les sessions ouvertes sont révoquées immédiatement.
-      if (b.disabled || b.password) await revokeUserSessions(c, id);
+      if (b.disabled || b.password) {
+        await revokeUserSessions(c, id);
+        // Les liens de connexion encore valides ne servent plus non plus.
+        await c.query('UPDATE login_links SET used_at = coalesce(used_at, now()) WHERE user_id = $1', [id]);
+      }
       await audit(c, {
         actorId: me.id, eventId: null, entity: 'user', entityId: id, action: 'modification',
-        details: { displayName: b.displayName, globalRole: b.globalRole, disabled: b.disabled, passwordChanged: !!b.password },
+        details: { displayName: b.displayName, globalRole: b.globalRole, disabled: b.disabled, passwordChanged: !!b.password, emailChanged: b.email !== undefined },
       });
       return publicUser(r.rows[0]);
     });

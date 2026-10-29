@@ -20,6 +20,10 @@ export interface Config {
   routingUrl: string | null;
   /** Adresse publique du site (https://…), utilisée dans la configuration envoyée à OwnTracks. */
   publicUrl: string | null;
+  /** Serveur d'envoi d'e-mails (smtp[s]://utilisateur:motdepasse@hôte:port), pour les liens de connexion. */
+  smtpUrl: string | null;
+  /** Expéditeur des e-mails. */
+  mailFrom: string;
 }
 
 function bool(v: string | undefined, def: boolean): boolean {
@@ -46,5 +50,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     loginRateLimit: Number(env.LOGIN_RATE_LIMIT ?? 20),
     routingUrl: env.ROUTING_URL || null,
     publicUrl: env.PUBLIC_URL ? env.PUBLIC_URL.replace(/\/+$/, '') : null,
+    smtpUrl: env.SMTP_URL || null,
+    mailFrom: env.MAIL_FROM || 'Coordination de cortège <no-reply@localhost>',
   };
 }

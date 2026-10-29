@@ -36,7 +36,7 @@ test('créer, basculer, supprimer une manifestation', async ({ page }) => {
   await expect(confirm).toBeDisabled();
   await page.getByLabel('Nom de la manifestation à supprimer').fill('Marche B');
   await confirm.click();
-  await expect(page.getByRole('heading', { name: 'Événements' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Manifestations' })).toBeVisible();
   await expect(switcher.locator('option', { hasText: 'Marche B' })).toHaveCount(0);
   expect((await page.request.get('/api/events/' + idB)).status()).toBe(404);
 });

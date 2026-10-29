@@ -406,6 +406,7 @@ export function EventPage({ eventId }: { eventId: number }) {
         <div className="event-title">
           <h1>{data.event.name}</h1>
           {!canEdit && <span className="badge">lecture seule</span>}
+          <a className="small live-link" href={'#/direct/' + eventId} title="Suivi du jour J, adapté au téléphone">📱 Coordination en direct</a>
           <span className={'sync ' + (live.connected ? 'on' : 'off')} title={live.connected ? 'Mises à jour en direct' : 'Direct indisponible : rechargement régulier'}>{live.connected ? '● direct' : '○ hors direct'}</span>
         </div>
         <nav className="tabs" role="tablist">
@@ -423,7 +424,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           {tab === 'points' && <PointsPanel {...props} />}
           {tab === 'equipes' && <TeamsPanel {...props} />}
           {tab === 'historique' && <HistoryPanel {...props} />}
-          {tab === 'coordination' && <CoordinationPanel {...props} liveTick={liveTick} members={showMembers ? members : null} />}
+          {tab === 'coordination' && <CoordinationPanel event={data.event} canEdit={canEdit} liveTick={liveTick} members={showMembers ? members : null} />}
           {tab === 'mon_equipe' && myTeams && (
             <div className="stack" data-testid="mon-equipe">
               {myTeams.teams.length === 0 && <p className="muted">Vous ne faites plus partie d’aucune équipe.</p>}

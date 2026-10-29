@@ -16,6 +16,34 @@ Ce guide accompagne les personnes qui préparent la manifestation et coordonnent
 7. **Imprimer les roadbooks** et vérifier les points sur place.
 8. Le jour J, suivre tout depuis l'onglet **Coordination**.
 
+## Se connecter et installer l'application
+
+- **Identifiant et mot de passe**, ou **lien de connexion** (onglet *Lien de connexion* de la première page) :
+  - **depuis un appareil déjà connecté** : menu **📱 Connecter un appareil**, puis scannez le QR code avec votre téléphone.
+    Il est connecté sans mot de passe. Le QR code vaut 10 minutes et ne sert qu'une fois ;
+  - **lien créé par un administrateur** (page *Comptes* → *Lien de connexion*), valable 72 h et une seule fois, à
+    transmettre par un canal sûr ;
+  - **par e-mail** (« Recevoir un lien par e-mail »), si le serveur d'envoi est configuré et que le compte a une adresse
+    e-mail. Le lien vaut 15 minutes.
+- **Installer l'application** sur le téléphone : bouton *Installer* (Android, Chrome) ; sur iPhone, dans Safari, bouton
+  Partager → *Sur l'écran d'accueil*. L'application s'ouvre alors en plein écran depuis l'écran d'accueil.
+
+## Deux interfaces
+
+Chaque manifestation de la liste propose deux boutons :
+
+- **🗺 Planifier** : l'interface complète, pensée pour un **ordinateur**. Elle sert à préparer la manifestation :
+  parcours, suggestions, points, équipes, invitations, roadbooks.
+- **📱 Coordination en direct** : l'interface du jour J, pensée pour le **téléphone**. Une barre d'onglets en bas
+  d'écran donne accès à :
+  - *Direct* : compteurs et progression du cortège ;
+  - *Incidents*, avec un badge du nombre d'incidents ouverts ;
+  - *Équipes* : statut de chaque point ;
+  - *Messages* ;
+  - *Carte* : points colorés selon leur statut, incidents et membres suivis.
+
+  Tout se met à jour en direct. Le lien *🗺 Planification* ramène à l'interface complète.
+
 ## Comptes et accès
 
 - Il n'y a **pas d'inscription en ligne**. Les comptes d'organisation sont créés par un administrateur (lien *Comptes*
@@ -127,7 +155,8 @@ Dans la section **Membres** d'une équipe :
 
 ## Le jour J : onglet Coordination
 
-Tout s'y met à jour **en direct**. L'indicateur **● direct** à côté du nom de la manifestation le confirme ; en cas de
+Sur téléphone, préférez **📱 Coordination en direct** : mêmes informations, mêmes actions, en onglets. Sur ordinateur,
+tout s'y met à jour **en direct**. L'indicateur **● direct** à côté du nom de la manifestation le confirme ; en cas de
 coupure, l'écran se recharge toutes les 30 secondes.
 
 - **Compteurs** : points en position, en route, incidents ouverts, tête et queue du cortège, **points à lever**.

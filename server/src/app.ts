@@ -11,10 +11,12 @@ import { HttpError } from './errors.js';
 import { LiveHub, runWithTracking } from './services/live.js';
 import type { OsmFetcher } from './services/overpass.js';
 import type { WalkRouter } from './services/routing.js';
+import type { Mailer } from './services/mailer.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { eventRoutes } from './routes/events.js';
 import { invitationRoutes } from './routes/invitations.js';
+import { loginLinkRoutes } from './routes/login-links.js';
 import { owntracksRoutes } from './routes/owntracks.js';
 import { pointRoutes } from './routes/points.js';
 import { roadbookRoutes } from './routes/roadbook.js';
@@ -34,6 +36,7 @@ declare module 'fastify' {
     config: Config;
     osm: OsmFetcher;
     router: WalkRouter | null;
+    mailer: Mailer | null;
     live: LiveHub;
   }
 }
@@ -44,13 +47,15 @@ export interface AppDeps {
   osm: OsmFetcher;
   /** Itinéraires piétons (facultatif : sans lui, l'application propose un lien vers une carte externe). */
   router?: WalkRouter | null;
+  /** Envoi d'e-mails (liens de connexion), facultatif. */
+  mailer?: Mailer | null;
   logger?: boolean;
   /** Flux de journal (tests : vérifier qu'aucun jeton n'y apparaît). */
   logStream?: NodeJS.WritableStream;
 }
 
 /** Chemins dont l'URL ne doit jamais apparaître dans les journaux (jetons d'invitation). */
-const SENSITIVE_PATH = /^\/(rejoindre|api\/rejoindre)\//;
+const SENSITIVE_PATH = /^\/(rejoindre|api\/rejoindre|connexion|api\/auth\/lien)\//;
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
@@ -69,6 +74,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorate('config', deps.config);
   app.decorate('osm', deps.osm);
   app.decorate('router', deps.router ?? null);
+  app.decorate('mailer', deps.mailer ?? null);
   app.decorate('live', new LiveHub());
   app.decorateRequest('user', null);
   app.decorateRequest('touched', null);
@@ -134,6 +140,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(invitationRoutes);
   await app.register(terrainRoutes);
   await app.register(owntracksRoutes);
+  await app.register(loginLinkRoutes);
   return app;
 }
 

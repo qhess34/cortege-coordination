@@ -6,7 +6,6 @@ import { MISSION_STATUS, TEAM_KIND, TEAM_KIND_SHORT, km } from '../../labels';
 import type { Position } from '../../types';
 import { ago } from '../../useLive';
 import type { MemberPosition } from '../../components/MapView';
-import type { PanelProps } from '../EventPage';
 
 export interface Tableau {
   teams: {
@@ -28,10 +27,20 @@ interface OrgMessage { id: number; teamId: number | null; teamName: string | nul
 /** Ordre d'affichage des statuts (du plus urgent au plus calme). */
 const STATUS_ORDER = ['incident', 'releve_necessaire', 'en_deplacement', 'affectee', 'a_preparer', 'en_position', 'terminee'];
 
-export function CoordinationPanel({ data, canEdit, liveTick, members }: PanelProps & { liveTick: number; members: MemberPosition[] | null }) {
+/** Sections du tableau de bord : toutes sur ordinateur, une par onglet sur la vue mobile. */
+export type CoordSection = 'synthese' | 'incidents' | 'equipes' | 'messages';
+const ALL: CoordSection[] = ['synthese', 'incidents', 'equipes', 'messages'];
+
+export function CoordinationPanel({ event, canEdit, liveTick, members, sections = ALL, onCounts }: {
+  event: { id: number; locationSharing: boolean }; canEdit: boolean;
+  liveTick: number; members: MemberPosition[] | null; sections?: CoordSection[];
+  /** Compteurs pour les badges d'onglets de la vue mobile. */
+  onCounts?: (c: { incidents: number; messages: number }) => void;
+}) {
+  const show = (s: CoordSection) => sections.includes(s);
   // Partage de position : compté sur les positions reçues en direct (plus à jour que le tableau).
   const sharingOf = (teamId: number, fallback: number) => (members ? members.filter((m) => m.teamId === teamId).length : fallback);
-  const eventId = data.event.id;
+  const eventId = event.id;
   const [t, setT] = useState<Tableau | null>(null);
   const [messages, setMessages] = useState<OrgMessage[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -46,11 +55,12 @@ export function CoordinationPanel({ data, canEdit, liveTick, members }: PanelPro
       ]);
       setT(tab);
       setMessages(msgs);
+      onCounts?.({ incidents: tab.incidents.length, messages: msgs.filter((m) => !m.fromOrganisation && Date.now() - new Date(m.createdAt).getTime() < 3600_000).length });
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Chargement impossible.');
     }
-  }, [eventId]);
+  }, [eventId]); // eslint-disable-line react-hooks/exhaustive-deps
   // Recharge à chaque signal du direct (géré par la page) et à l'ouverture.
   useEffect(() => { void load(); }, [load, liveTick]);
   useEffect(() => { const i = setInterval(() => tick((n) => n + 1), 30_000); return () => clearInterval(i); }, []);
@@ -78,6 +88,7 @@ export function CoordinationPanel({ data, canEdit, liveTick, members }: PanelPro
     <div className="stack" data-testid="coordination">
       {message && <p className={message.kind === 'ok' ? 'muted small' : 'error small'} role="status">{message.text}</p>}
 
+      {show('synthese') && <>
       <div className="grid-stats">
         <div className="stat"><b>{count('en_position')}/{all.length}</b><span>En position</span></div>
         <div className="stat"><b>{count('en_deplacement')}</b><span>En route</span></div>
@@ -88,8 +99,9 @@ export function CoordinationPanel({ data, canEdit, liveTick, members }: PanelPro
       </div>
 
       <ProgressCard eventId={eventId} t={t} act={act} />
+      </>}
 
-      <div className="card">
+      {show('incidents') && <div className="card">
         <h3>Incidents ouverts ({t.incidents.length})</h3>
         {t.incidents.length === 0 ? <p className="muted">Aucun incident en cours.</p> : (
           <ul className="plain">
@@ -110,9 +122,9 @@ export function CoordinationPanel({ data, canEdit, liveTick, members }: PanelPro
             ))}
           </ul>
         )}
-      </div>
+      </div>}
 
-      <div className="card">
+      {show('equipes') && <div className="card">
         <h3>Équipes</h3>
         {t.teams.filter((x) => !x.disabled).map((team) => (
           <div key={team.id} className="coord-team" data-testid={'coord-equipe-' + team.id}>
@@ -135,13 +147,13 @@ export function CoordinationPanel({ data, canEdit, liveTick, members }: PanelPro
             )}
           </div>
         ))}
-        <p className="muted small">L’ordre des missions et les affectations se règlent dans l’onglet Équipes.</p>
-      </div>
+        <p className="muted small">L’ordre des missions et les affectations se règlent dans l’onglet Équipes (planification).</p>
+      </div>}
 
-      {canEdit && data.event.locationSharing && <TrackersCard eventId={eventId} liveTick={liveTick} members={members} />}
+      {show('equipes') && canEdit && event.locationSharing && <TrackersCard eventId={eventId} liveTick={liveTick} members={members} />}
 
-      <MessagesCard eventId={eventId} teams={t.teams} messages={messages} canEdit={canEdit} act={act} />
-      <p className="muted small">{t.live} écran(s) connecté(s) en direct à cette manifestation.</p>
+      {show('messages') && <MessagesCard eventId={eventId} teams={t.teams} messages={messages} canEdit={canEdit} act={act} />}
+      {show('synthese') && <p className="muted small">{t.live} écran(s) connecté(s) en direct à cette manifestation.</p>}
     </div>
   );
 }

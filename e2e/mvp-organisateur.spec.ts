@@ -23,7 +23,7 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   // Panoramax est testé à part (e2e/panoramax.spec.ts) : vue désactivée ici.
   await page.addInitScript(() => { localStorage.setItem('cortege.panoramax', 'non'); localStorage.setItem('cortege.fond', 'osm'); });
   await page.goto('/');
-  await expect(page.getByText("Il n'y a pas d'inscription en ligne")).toBeVisible();
+  await expect(page.getByText('il n’y a pas d’inscription en ligne')).toBeVisible();
   await page.getByLabel('Identifiant').fill('orga');
   await page.getByLabel('Mot de passe').fill('orga-e2e-motdepasse');
   await page.getByRole('button', { name: 'Se connecter' }).click();

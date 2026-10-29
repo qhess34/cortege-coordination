@@ -159,6 +159,8 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `LOGIN_RATE_LIMIT` | Tentatives de connexion par minute et par adresse IP | `20` |
 | `ROUTING_URL` | Serveur d'itinéraires compatible OSRM (profil piéton), facultatif | — (lien vers la carte OSM) |
 | `PUBLIC_URL` | Adresse publique du site (`https://…`), pour la configuration OwnTracks | déduite de la requête |
+| `SMTP_URL` | Serveur d'envoi d'e-mails (`smtps://utilisateur:motdepasse@hôte:465`) pour les liens de connexion, facultatif | — |
+| `MAIL_FROM` | Expéditeur des e-mails | `Coordination de cortège <no-reply@localhost>` |
 | `JOIN_RATE_LIMIT` | Ouvertures de lien d'invitation par minute et par adresse IP | `30` |
 | `OVERPASS_URL` | Serveurs Overpass, séparés par des virgules, essayés dans l'ordre | `overpass-api.de`, puis `overpass.private.coffee` |
 | `OSM_USER_AGENT` | Identification envoyée à Overpass | `cortege-coordination (auto-hébergé)` |
@@ -211,6 +213,20 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - **Participants sans compte** : la page `/rejoindre/<jeton>` demande seulement un pseudonyme ; la session (cookie
   `HttpOnly`) dure jusqu'au lendemain de la manifestation, 30 jours au plus. Le participant ne voit que la page de son
   équipe (consignes, missions) — la vraie vue mobile de mission arrive en phase 3.
+
+## Connexion, installation et interfaces
+
+- **Première page** : connexion par identifiant et mot de passe, ou par **lien de connexion** à usage unique :
+  - QR code « 📱 Connecter un appareil » affiché par un appareil déjà connecté (10 min) ;
+  - lien créé par un administrateur (72 h) ;
+  - lien envoyé par e-mail (15 min), si `SMTP_URL` est configuré et que le compte a une adresse e-mail.
+
+  Seul le hash du jeton est stocké. L'adresse `/connexion/<jeton>` est masquée dans les journaux et servie sans
+  Referer. La connexion n'est faite qu'au clic sur *Se connecter* : un logiciel qui pré-ouvre les liens d'un e-mail ne
+  la déclenche pas. La désactivation du compte ou un nouveau mot de passe invalident les liens en cours.
+- **Application installable** (PWA) : bouton *Installer* quand le navigateur le permet, mode d'emploi pour iPhone.
+- **Deux interfaces pour l'organisation** : *🗺 Planifier* (ordinateur : parcours, suggestions, points, équipes) et
+  *📱 Coordination en direct* (`#/direct/<id>`, téléphone : direct, incidents, équipes, messages, carte, en onglets).
 
 ## Ce que fait la phase 3 (le jour J)
 

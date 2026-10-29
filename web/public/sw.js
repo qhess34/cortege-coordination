@@ -2,7 +2,7 @@
 // Les données (/api) ne sont jamais mises en cache : elles viennent toujours du serveur (le mode hors ligne avec
 // file d'actions relève d'une phase ultérieure). Les pages passent d'abord par le réseau, le cache ne sert qu'en
 // secours ; les fichiers compilés (/assets, noms versionnés) sont servis depuis le cache.
-const CACHE = 'cortege-v1';
+const CACHE = 'cortege-v2';
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(['/', '/manifest.webmanifest', '/icone.svg'])).then(() => self.skipWaiting()));
@@ -16,8 +16,8 @@ self.addEventListener('fetch', (e) => {
   const req = e.request;
   const url = new URL(req.url);
   if (req.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
-  // Liens d'invitation : jamais en cache (le jeton est dans l'adresse).
-  if (url.pathname.startsWith('/rejoindre/')) return;
+  // Liens d'invitation et de connexion : jamais en cache (le jeton est dans l'adresse).
+  if (url.pathname.startsWith('/rejoindre/') || url.pathname.startsWith('/connexion/')) return;
   if (req.mode === 'navigate') {
     e.respondWith(fetch(req).then((res) => {
       const copy = res.clone();

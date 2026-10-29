@@ -7,6 +7,9 @@ import { AdminPage } from './pages/AdminPage';
 import { HelpPage } from './pages/HelpPage';
 import { EventsPage } from './pages/EventsPage';
 import { JoinPage } from './pages/JoinPage';
+import { LinkLoginPage } from './pages/LinkLoginPage';
+import { LiveCoordPage } from './pages/LiveCoordPage';
+import { ConnectDevice } from './components/ConnectDevice';
 import { ParticipantPage } from './pages/ParticipantPage';
 import { RoadbookPage } from './pages/RoadbookPage';
 import { LoginPage } from './pages/LoginPage';
@@ -56,6 +59,9 @@ export function App() {
   // Lien d'invitation (/rejoindre/<jeton>) : accessible sans connexion.
   const joinToken = window.location.pathname.match(/^\/rejoindre\/([A-Za-z0-9_-]+)$/)?.[1];
   if (joinToken) return <JoinPage token={joinToken} />;
+  // Lien de connexion d'un compte (/connexion/<jeton>).
+  const linkToken = window.location.pathname.match(/^\/connexion\/([A-Za-z0-9_-]+)$/)?.[1];
+  if (linkToken) return <LinkLoginPage token={linkToken} />;
 
   if (me === undefined) return <div className="center">Chargement…</div>;
   if (me === null) return <LoginPage onLogin={loadMe} />;
@@ -75,6 +81,9 @@ export function App() {
       </div>
     );
   }
+  // Coordination en direct, pensée pour le téléphone (#/direct/<manifestation>).
+  const direct = route.match(/^\/direct\/(\d+)$/);
+  if (direct) return <div className="app"><LiveCoordPage key={direct[1]} eventId={Number(direct[1])} /></div>;
   const m = route.match(/^\/evenements\/(\d+)/);
   // #/evenements/<id>/roadbook (manifestation) ou #/evenements/<id>/roadbook/equipe/<id>
   const rb = route.match(/^\/evenements\/(\d+)\/roadbook(\/equipe\/(\d+))?$/);
@@ -84,9 +93,10 @@ export function App() {
         <a href="#/" className="brand">Coordination de cortège</a>
         <EventSwitcher me={me} currentId={m ? Number(m[1]) : null} />
         <span className="spacer" />
+        <ConnectDevice />
         <a href="#/aide">Aide</a>
         {me.globalRole === 'admin' && <a href="#/admin">Comptes</a>}
-        <span className="muted">{me.displayName}{me.globalRole === 'admin' ? ' (administrateur)' : ''}</span>
+        <span className="muted topbar-name">{me.displayName}{me.globalRole === 'admin' ? ' (administrateur)' : ''}</span>
         <button className="link" onClick={logout}>Se déconnecter</button>
       </header>
       {rb ? <RoadbookPage key={route} eventId={Number(rb[1])} teamId={rb[3] ? Number(rb[3]) : null} />

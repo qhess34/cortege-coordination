@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../api';
 import { EVENT_STATUS, dateTime } from '../labels';
+import { InstallCard } from '../components/InstallCard';
 import type { EventInfo, Me } from '../types';
 
 export function EventsPage({ me }: { me: Me }) {
@@ -25,21 +26,23 @@ export function EventsPage({ me }: { me: Me }) {
 
   return (
     <main className="page">
-      <h1>Événements</h1>
+      <h1>Manifestations</h1>
+      <InstallCard compact dismissible />
       {events === null ? <p>Chargement…</p> : events.length === 0 ? <p className="muted">Aucun événement accessible.</p> : (
-        <table className="table">
-          <thead><tr><th>Nom</th><th>Début</th><th>Statut</th><th>Votre rôle</th></tr></thead>
-          <tbody>
-            {events.map((ev) => (
-              <tr key={ev.id}>
-                <td><a href={'#/evenements/' + ev.id}>{ev.name}</a></td>
-                <td>{dateTime(ev.startsAt)}</td>
-                <td>{EVENT_STATUS[ev.status]}</td>
-                <td>{ev.role}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <ul className="plain event-cards">
+          {events.map((ev) => (
+            <li key={ev.id} className="card event-card" data-testid={'manifestation-' + ev.id}>
+              <div className="grow">
+                <h2>{ev.name}</h2>
+                <p className="muted small">{dateTime(ev.startsAt)} · {EVENT_STATUS[ev.status]}{ev.role ? ' · ' + ev.role : ''}</p>
+              </div>
+              <div className="event-actions">
+                <a className="button" href={'#/evenements/' + ev.id} title="Parcours, suggestions, points, équipes (ordinateur)">🗺 Planifier</a>
+                <a className={'button' + (ev.status === 'en_cours' ? ' primary' : '')} href={'#/direct/' + ev.id} title="Suivi du jour J, adapté au téléphone">📱 Coordination en direct</a>
+              </div>
+            </li>
+          ))}
+        </ul>
       )}
       {canCreate && (
         <form className="card inline-form" onSubmit={create}>
