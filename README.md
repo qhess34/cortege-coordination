@@ -21,7 +21,7 @@ sous le tracé.*
 |---|---|---|
 | 1 — Prototype cartographique | Événements, GPX, carte, analyse OSM, suggestions, points, nouvelle analyse non destructive, équipes, missions ordonnées | **Fait** |
 | 2 — Comptes et invitations | Écran d'administration des comptes, accès par manifestation, QR code d'équipe, liens individuels, admission immédiate ou validée, sessions des participants, récupération d'accès | **Fait** |
-| 3 — Coordination mobile | PWA, vue de mission, routage piéton, temps réel, messages, incidents | À faire |
+| 3 — Coordination mobile | Application terrain installable (PWA), vue de mission, statuts posés par les membres, itinéraire piéton, direct (WebSocket), tableau de coordination, messages, incidents, progression déclarée | **Fait** |
 | 4 — Fonctions avancées | Partage GPS facultatif, hors ligne, relèves avancées, exports | À faire |
 
 La conception complète (architecture, modèle de données, écrans, flux d'invitation, risques) est dans
@@ -150,6 +150,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `COOKIE_SECURE` | Cookies réservés à HTTPS | `true` en production |
 | `SESSION_TTL_HOURS` | Durée des sessions (glissante) | `12` |
 | `LOGIN_RATE_LIMIT` | Tentatives de connexion par minute et par adresse IP | `20` |
+| `ROUTING_URL` | Serveur d'itinéraires compatible OSRM (profil piéton), facultatif | — (lien vers la carte OSM) |
 | `JOIN_RATE_LIMIT` | Ouvertures de lien d'invitation par minute et par adresse IP | `30` |
 | `OVERPASS_URL` | Serveurs Overpass, séparés par des virgules, essayés dans l'ordre | `overpass-api.de`, puis `overpass.private.coffee` |
 | `OSM_USER_AGENT` | Identification envoyée à Overpass | `cortege-coordination (auto-hébergé)` |
@@ -203,7 +204,36 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
   `HttpOnly`) dure jusqu'au lendemain de la manifestation, 30 jours au plus. Le participant ne voit que la page de son
   équipe (consignes, missions) — la vraie vue mobile de mission arrive en phase 3.
 
-## Sécurité (phases 1 et 2)
+## Ce que fait la phase 3 (le jour J)
+
+- **Vue terrain** (téléphone, installable sur l'écran d'accueil) pour chaque membre d'équipe : mission en cours,
+  consignes, carte du point et du parcours, grands boutons *En route*, *Arrivé*, *Terminé*, *Relève nécessaire*,
+  *Aide* et *Signaler un incident*, point suivant, liste des missions, indicateur « ● direct ». Les participants y
+  arrivent directement ; un compte membre d'une équipe l'ouvre depuis l'onglet « Mon équipe ».
+- **Statuts depuis le terrain** : un membre ne peut qu'avancer sa mission (revenir en arrière ou réaffecter reste
+  une décision de l'organisation) ; qui a changé le statut, et quand, est affiché.
+- **Incidents** (aide, sécurité, santé, circulation, matériel…) liés à la mission et, si la personne le choisit, à sa
+  position du moment ; suivis par l'organisation ou le responsable d'équipe (*Je m'en occupe*, *Résolu*). Rappel
+  affiché : un signalement ne prévient pas les secours (15, 17, 18, 112).
+- **Messages** : annonces à toutes les équipes ou à une équipe, éventuellement urgentes (bandeau sur les téléphones),
+  réponses du terrain, accusés de lecture (« lu 3/5 »).
+- **Progression déclarée** de la tête du cortège (km parcourus) par l'organisation ou un responsable : chaque membre
+  voit à quelle distance de son point elle se trouve. Ce n'est jamais une position GPS.
+- **Itinéraire à pied** vers le point : par un serveur compatible OSRM si `ROUTING_URL` est configuré (par exemple
+  `https://routing.openstreetmap.de/routed-foot`, à utiliser selon ses conditions, ou une instance auto-hébergée),
+  sinon lien vers la carte OpenStreetMap. Indicatif : accès et sécurité à vérifier sur place.
+- **Onglet « Coordination »** de l'organisation : compteurs, incidents ouverts, état de chaque mission par équipe,
+  membres actifs, messages, progression — tout se met à jour **en direct**.
+- **Direct** : WebSocket `/api/direct?event=<id>` qui envoie un simple signal « mise à jour » après chaque modification
+  validée ; l'écran recharge ce que ses droits lui permettent de voir (le signal ne contient aucune donnée). En cas de
+  coupure : reconnexion automatique et rechargement toutes les 30 s.
+- **Position** : demandée seulement à la demande (*Ma position*), elle reste sur le téléphone ; elle n'est envoyée que
+  pour calculer un itinéraire ou si on la joint à un incident, et n'est jamais suivie en continu.
+
+Derrière un proxy HTTPS, autorisez la mise à niveau WebSocket sur `/api/direct` (nginx : `proxy_http_version 1.1;`
+`proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` — Caddy le fait d'office).
+
+## Sécurité (phases 1 à 3)
 
 - Aucune route d'inscription ; création et rôles des comptes réservés aux administrateurs.
 - Mots de passe hachés avec scrypt ; sessions par cookie `HttpOnly`, `SameSite=Lax`, `Secure` en production ;
@@ -238,4 +268,7 @@ docs/              conception et captures
   dépend de la qualité du tracé GPX et des données OSM locales). Les seuils (15 m, 35°, 25 m) sont réglables.
 - Les grands carrefours à chaussées séparées peuvent produire plusieurs suggestions voisines ; le regroupement se
   fait à 25 m.
-- Le compteur de tentatives de connexion est en mémoire (une seule instance du serveur).
+- Le compteur de tentatives de connexion et le direct (abonnés WebSocket) sont en mémoire : une seule instance du
+  serveur.
+- Pas encore de mode hors ligne : sans réseau, la vue terrain affiche les dernières informations reçues et le moment
+  de la dernière synchronisation, mais les actions échouent (file d'actions prévue en phase 4).

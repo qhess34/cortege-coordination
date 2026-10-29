@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from './api';
 import { EventSwitcher } from './components/EventSwitcher';
+import { FieldView } from './components/FieldView';
 import { EventPage } from './pages/EventPage';
 import { AdminPage } from './pages/AdminPage';
 import { EventsPage } from './pages/EventsPage';
@@ -64,6 +65,15 @@ export function App() {
     await api.post('/api/auth/logout');
     setMe(null);
   };
+  // Vue terrain d'une équipe dont le compte fait partie (#/terrain/<équipe>), plein écran comme sur téléphone.
+  const field = route.match(/^\/terrain\/(\d+)$/);
+  if (field) {
+    return (
+      <div className="app">
+        <FieldView key={field[1]} teamId={Number(field[1])} header={<button className="link small" onClick={() => (history.length > 1 ? history.back() : (location.hash = '#/'))}>← Retour à l’organisation</button>} />
+      </div>
+    );
+  }
   const m = route.match(/^\/evenements\/(\d+)/);
   // #/evenements/<id>/roadbook (manifestation) ou #/evenements/<id>/roadbook/equipe/<id>
   const rb = route.match(/^\/evenements\/(\d+)\/roadbook(\/equipe\/(\d+))?$/);

@@ -43,7 +43,7 @@ test('QR code avec validation : le participant attend, le responsable accepte, i
   await expect(page.getByText('Camille a rejoint l’équipe.')).toBeVisible();
 
   await p.getByRole('button', { name: 'Actualiser' }).click();
-  await expect(p.getByTestId('espace-participant').locator('h1')).toContainText('Équipe Nord');
+  await expect(p.getByTestId('vue-terrain').locator('h1')).toContainText('Équipe Nord');
   // Le participant n'a aucun accès à l'organisation de la manifestation.
   expect((await p.request.get('/api/events/' + ev.id)).status()).toBe(404);
   await phone.close();
@@ -65,7 +65,7 @@ test('lien individuel : affiché une seule fois, utilisable une seule fois', asy
   await p.goto(url);
   await p.getByLabel('Votre nom ou pseudonyme').fill('Dominique');
   await p.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
-  await expect(p.getByTestId('espace-participant').locator('h1')).toContainText('Équipe Sud');
+  await expect(p.getByTestId('vue-terrain').locator('h1')).toContainText('Équipe Sud');
 
   // Second appareil : le lien est déjà utilisé.
   const other = await browser.newContext({ locale: 'fr-FR' });
@@ -111,7 +111,7 @@ test('depuis l’espace participant, on peut revenir à la connexion d’un comp
   await page.goto(inv.path);
   await page.getByLabel('Votre nom ou pseudonyme').fill('Test');
   await page.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
-  await expect(page.getByTestId('espace-participant')).toBeVisible();
+  await expect(page.getByTestId('vue-terrain')).toBeVisible();
   page.once('dialog', (d) => void d.accept());
   await page.getByRole('button', { name: 'Se connecter avec un compte d’organisation' }).click();
   await page.getByLabel('Identifiant').fill('admin');

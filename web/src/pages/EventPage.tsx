@@ -3,6 +3,8 @@ import { Route } from '../../../server/src/geo/route';
 import { ApiError, api } from '../api';
 import { MapView, type PointEdit, type Selection } from '../components/MapView';
 import { MapMenu } from '../components/MapMenu';
+import { useLive } from '../useLive';
+import { CoordinationPanel } from './event/CoordinationPanel';
 import { TeamSpace, type SpaceEvent, type SpaceMission, type SpaceTeam } from '../components/TeamSpace';
 import { PointEditor } from '../components/PointEditor';
 import { SuggestionPopup } from '../components/SuggestionPopup';
@@ -41,7 +43,7 @@ export interface PanelProps {
   startDraft: (p: Position) => void;
 }
 
-type Tab = 'synthese' | 'parcours' | 'suggestions' | 'points' | 'equipes' | 'mon_equipe' | 'historique';
+type Tab = 'synthese' | 'coordination' | 'parcours' | 'suggestions' | 'points' | 'equipes' | 'mon_equipe' | 'historique';
 /** Préférence locale (simple confort d'affichage) : couverture des photos Panoramax sur la carte. */
 const PNX_PREF = 'cortege.panoramax';
 function readPanoramaxPref(): boolean {
@@ -64,7 +66,7 @@ function readBasemapPref(): string {
 interface MyTeams { event: SpaceEvent; teams: (SpaceTeam & { missions: SpaceMission[] })[] }
 
 const TABS: [Tab, string][] = [
-  ['synthese', 'Synthèse'], ['parcours', 'Parcours'], ['suggestions', 'Suggestions'], ['points', 'Points'], ['equipes', 'Équipes'], ['historique', 'Historique'],
+  ['synthese', 'Synthèse'], ['coordination', 'Coordination'], ['parcours', 'Parcours'], ['suggestions', 'Suggestions'], ['points', 'Points'], ['equipes', 'Équipes'], ['historique', 'Historique'],
 ];
 
 export function EventPage({ eventId }: { eventId: number }) {
@@ -147,6 +149,17 @@ export function EventPage({ eventId }: { eventId: number }) {
     }
   }, [base]);
   useEffect(() => { void reload(); }, [reload]);
+
+  // Direct : à chaque signal, on rafraîchit ce qui bouge le jour J (missions, points, synthèse) et le tableau de bord.
+  const [liveTick, setLiveTick] = useState(0);
+  const refreshLive = useCallback(async () => {
+    const [points, teams, summary] = await Promise.all([
+      api.get<MissionPoint[]>(base + '/points'), api.get<Team[]>(base + '/teams'), api.get<Summary>(base + '/summary'),
+    ]);
+    setData((d) => (d ? { ...d, points, teams, summary } : d));
+    setLiveTick((n) => n + 1);
+  }, [base]);
+  const live = useLive(eventId, refreshLive);
 
   const run = useCallback(async (fn: () => Promise<unknown>, success?: string) => {
     try {
@@ -380,9 +393,10 @@ export function EventPage({ eventId }: { eventId: number }) {
         <div className="event-title">
           <h1>{data.event.name}</h1>
           {!canEdit && <span className="badge">lecture seule</span>}
+          <span className={'sync ' + (live.connected ? 'on' : 'off')} title={live.connected ? 'Mises à jour en direct' : 'Direct indisponible : rechargement régulier'}>{live.connected ? '● direct' : '○ hors direct'}</span>
         </div>
         <nav className="tabs" role="tablist">
-          {(myTeams?.teams.length ? [...TABS.slice(0, 5), ['mon_equipe', myTeams.teams.length > 1 ? 'Mes équipes' : 'Mon équipe'] as [Tab, string], ...TABS.slice(5)] : TABS).map(([id, label]) => (
+          {(myTeams?.teams.length ? [...TABS.slice(0, 6), ['mon_equipe', myTeams.teams.length > 1 ? 'Mes équipes' : 'Mon équipe'] as [Tab, string], ...TABS.slice(6)] : TABS).map(([id, label]) => (
             <button key={id} role="tab" aria-selected={tab === id} className={tab === id ? 'active' : ''} onClick={() => setTab(id)}>
               {label}
               {id === 'suggestions' && data.summary.suggestions.a_examiner ? <span className="count">{data.summary.suggestions.a_examiner}</span> : null}
@@ -396,12 +410,14 @@ export function EventPage({ eventId }: { eventId: number }) {
           {tab === 'points' && <PointsPanel {...props} />}
           {tab === 'equipes' && <TeamsPanel {...props} />}
           {tab === 'historique' && <HistoryPanel {...props} />}
+          {tab === 'coordination' && <CoordinationPanel {...props} liveTick={liveTick} />}
           {tab === 'mon_equipe' && myTeams && (
             <div className="stack" data-testid="mon-equipe">
               {myTeams.teams.length === 0 && <p className="muted">Vous ne faites plus partie d’aucune équipe.</p>}
               {myTeams.teams.map((t) => (
                 <div key={t.id} className="stack">
                   <h2><span className="dot" style={{ background: t.color }} /> {t.name}{t.role === 'responsable' ? ' (responsable)' : ''}</h2>
+                  <a className="button primary" href={'#/terrain/' + t.id}>Ouvrir la vue terrain (téléphone)</a>
                   <TeamSpace event={myTeams.event} team={t} missions={t.missions} />
                 </div>
               ))}

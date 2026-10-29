@@ -232,8 +232,10 @@ pour le participant existant (rattaché au même participant, l'ancienne session
 immédiate ou validée, sessions participants, révocation. Les participants sont des lignes `users` de type
 `participant` (sans identifiant ni mot de passe, rattachées à un événement) plutôt qu'une table séparée.
 
-**Phase 3** — PWA, vue de mission, transitions de mission par les membres, routage piéton, WebSocket, tableau de bord
-partagé, messages, incidents, progression déclarée du cortège.
+**Phase 3** ✔ — PWA, vue de mission, transitions de mission par les membres, routage piéton, WebSocket, tableau de bord
+partagé, messages, incidents, progression déclarée du cortège. Le temps réel est un simple signal d'invalidation (aucune donnée dans le
+WebSocket) émis après validation de la transaction, à partir des écritures du journal d'audit ; le routage piéton passe
+par un serveur compatible OSRM configurable, avec repli sur un lien vers la carte OpenStreetMap.
 
 **Phase 4** — partage GPS facultatif, mode hors ligne avec file d'actions et résolution de conflits, relèves avancées,
 export des fiches de mission, outils de diagnostic.

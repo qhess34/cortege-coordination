@@ -9,7 +9,7 @@ export default defineConfig({
   optimizeDeps: { exclude: ['@panoramax/web-viewer'] },
   server: {
     port: 5173,
-    proxy: { '/api': 'http://127.0.0.1:3000' },
+    proxy: { '/api': { target: 'http://127.0.0.1:3000', ws: true } },
   },
   worker: { format: 'es' },
   test: { environment: 'jsdom' },

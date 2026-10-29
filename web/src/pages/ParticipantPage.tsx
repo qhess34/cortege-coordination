@@ -1,7 +1,8 @@
 // Espace du participant (en attendant l'application de terrain du lot 3) : son équipe, ses consignes, ses missions.
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
-import { TeamSpace, type SpaceEvent, type SpaceMission, type SpaceTeam } from '../components/TeamSpace';
+import { FieldView } from '../components/FieldView';
+import type { SpaceEvent, SpaceMission, SpaceTeam } from '../components/TeamSpace';
 import { dateTime } from '../labels';
 
 interface Moi {
@@ -34,14 +35,28 @@ export function ParticipantPage({ onLogout }: { onLogout: () => void }) {
     return () => clearInterval(t);
   }, [load]);
 
+  const leave = async () => {
+    if (!window.confirm('Fermer l’accès participant sur cet appareil ? Pour revenir dans l’équipe, il faudra un nouveau lien (lien de récupération donné par un responsable).')) return;
+    await api.post('/api/auth/logout').catch(() => undefined);
+    onLogout();
+  };
+
   if (!moi) return <div className="center">{error ?? 'Chargement…'}</div>;
+  // Membre admis : la vue terrain (mission, messages, incidents).
+  if (moi.team) {
+    return (
+      <>
+        <FieldView teamId={moi.team.id} onUnauthorized={() => void load()} />
+        <footer className="field-footer"><button className="link small" onClick={() => void leave()}>Se connecter avec un compte d’organisation</button></footer>
+      </>
+    );
+  }
   return (
     <main className="page participant" data-testid="espace-participant">
       <header>
         <p className="muted">{moi.event.name}{moi.event.startsAt ? ' — ' + dateTime(moi.event.startsAt) : ''}</p>
-        <h1>{moi.team ? <><span className="dot" style={{ background: moi.team.color }} /> {moi.team.name}</> : 'Bienvenue ' + moi.participant.displayName}</h1>
+        <h1>Bienvenue {moi.participant.displayName}</h1>
         <p className="muted small">
-          {moi.participant.displayName}{moi.team?.role === 'responsable' ? ' (responsable)' : ''}
           {syncedAt ? ' · mis à jour à ' + syncedAt.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) : ''}
         </p>
         {error && <p className="warning" role="alert">{error}</p>}
@@ -52,15 +67,10 @@ export function ParticipantPage({ onLogout }: { onLogout: () => void }) {
       )}
       {!moi.team && !moi.pendingTeam && <p className="warning">Vous n’êtes plus membre d’aucune équipe.</p>}
 
-      {moi.team && <TeamSpace event={moi.event} team={moi.team} missions={moi.missions} />}
       <p className="muted small">L’application de terrain (navigation, confirmations, messages) arrive dans une prochaine version.</p>
       <div className="row">
         <button onClick={() => void load()}>Actualiser</button>
-        <button onClick={async () => {
-          if (!window.confirm('Fermer l’accès participant sur cet appareil ? Pour revenir dans l’équipe, il faudra un nouveau lien (lien de récupération donné par un responsable).')) return;
-          await api.post('/api/auth/logout').catch(() => undefined);
-          onLogout();
-        }}>Se connecter avec un compte d’organisation</button>
+        <button onClick={() => void leave()}>Se connecter avec un compte d’organisation</button>
       </div>
     </main>
   );

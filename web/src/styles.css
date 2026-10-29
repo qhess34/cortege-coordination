@@ -255,3 +255,42 @@ a.button:hover { border-color: var(--primary); }
 button.big { font-size: 1.1rem; padding: .7rem 1.2rem; width: 100%; }
 .page.participant { max-width: 40rem; margin: 0 auto; padding: 1rem; }
 .page.participant .missions li { padding: .4rem 0; }
+
+/* Lot 3 : vue terrain (téléphone) et coordination */
+.field { max-width: 40rem; margin: 0 auto; padding: .75rem .75rem 4rem; }
+.field h1 { font-size: 1.3rem; margin: 0; }
+.field h2 { font-size: 1.2rem; margin: .2rem 0 .4rem; }
+.field-header { margin-bottom: .5rem; }
+.field-tabs { display: flex; gap: .25rem; position: sticky; top: 0; z-index: 5; background: var(--bg, #f4f6f8); padding: .35rem 0; margin-bottom: .5rem; }
+.field-tabs button { flex: 1; font-size: 1rem; padding: .6rem .3rem; }
+.field-tabs button[aria-selected='true'] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
+.field-tabs .count { display: inline-block; min-width: 1.3em; margin-left: .3rem; padding: 0 .35rem; border-radius: 999px; background: var(--danger); color: #fff; font-size: .8rem; }
+.field-footer { text-align: center; padding: 1rem; }
+.sync { font-size: .8rem; white-space: nowrap; }
+.sync.on { color: #2a7d3f; }
+.sync.off { color: var(--muted); }
+.mission-card { border-left: 6px solid var(--team, var(--primary)); }
+.big-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr)); gap: .5rem; margin: .75rem 0; }
+.field button.big { min-height: 3.2rem; font-weight: 600; }
+.field .row > button.big { flex: 1; width: auto; }
+.urgent-banner { width: 100%; background: var(--danger); color: #fff; border-color: var(--danger); font-weight: 600; padding: .8rem; }
+.status-badge { display: inline-block; padding: .1rem .5rem; border-radius: 999px; font-size: .8rem; background: #e9ecef; white-space: nowrap; }
+.status-badge.s-en_deplacement { background: #dbeafe; }
+.status-badge.s-en_position { background: #d1f2dc; }
+.status-badge.s-terminee { background: #e9ecef; color: var(--muted); }
+.status-badge.s-releve_necessaire { background: var(--warn-bg); }
+.status-badge.s-incident { background: var(--danger); color: #fff; }
+.field-map { height: 16rem; border-radius: 6px; overflow: hidden; margin-bottom: .5rem; }
+.messages-list .message { border-left: 4px solid var(--border); padding: .3rem .6rem; margin: .4rem 0; background: var(--surface); }
+.messages-list .message.orga { border-left-color: var(--primary); }
+.messages-list .message.urgent { border-left-color: var(--danger); background: #fdecee; }
+.messages-list .message.unread { font-weight: 600; }
+.messages-list .message p { margin: .15rem 0; }
+.incident { border-left: 4px solid var(--border); padding: .3rem .6rem; margin: .4rem 0; }
+.incident.p-haute { border-left-color: var(--danger); }
+.incident.st-resolu { opacity: .65; }
+.incident p { margin: .15rem 0; }
+.coord-team { border-top: 1px solid var(--border); padding: .35rem 0; }
+.coord-team p { margin: .2rem 0; }
+.stat b.alert { color: var(--danger); }
+.event-title .sync { margin-left: .5rem; }
