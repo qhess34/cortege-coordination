@@ -1,0 +1,36 @@
+# Développement et auto-hébergement. Les secrets viennent du fichier .env (non versionné).
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: cortege
+      POSTGRES_USER: cortege
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U cortege -d cortege"]
+      interval: 5s
+      retries: 20
+    # Port exposé en local uniquement (développement, sauvegardes).
+    ports:
+      - "127.0.0.1:5432:5432"
+
+  app:
+    build:
+      context: .
+      args:
+        VITE_TILE_URL: ${VITE_TILE_URL:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://cortege:${POSTGRES_PASSWORD}@db:5432/cortege
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
+      OSM_USER_AGENT: ${OSM_USER_AGENT:-cortege-coordination}
+    ports:
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  db-data:

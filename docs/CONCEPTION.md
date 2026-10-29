@@ -210,7 +210,7 @@ pour le participant existant (rattaché au même participant, l'ancienne session
 
 ## 6. Plan de développement
 
-**Phase 1 — prototype cartographique** (ce dépôt, en cours)
+**Phase 1 — prototype cartographique** (terminée ; ✔ = implémenté et testé)
 1. Socle : monorepo npm (`server`, `web`), Docker Compose PostGIS, migrations, configuration par variables
    d'environnement. ✔
 2. Connexion des comptes administrés (minimale, pour ne jamais exposer l'API sans authentification). ✔
@@ -220,9 +220,10 @@ pour le participant existant (rattaché au même participant, l'ancienne session
 5. Analyse OSM : client Overpass, algorithme pur testé sur jeux de données, enregistrement non destructif. ✔
 6. Suggestions : liste, filtres, validation, exclusion. ✔
 7. Points : ajout (clic, coordonnées), déplacement, modification, suppression avec conséquences, historique. ✔
-8. Équipes et missions : création, désactivation, affectation, ordre, réaffectation. ✔
+8. Équipes et missions : création, désactivation, affectation, ordre, réaffectation. ✔ (les membres d'équipe
+   arrivent avec les invitations, en phase 2)
 9. Interface organisateur : carte MapLibre et panneaux. ✔
-10. Documentation et tests de bout en bout du parcours MVP organisateur.
+10. Documentation et test de bout en bout du parcours MVP organisateur. ✔
 
 **Phase 2** — administration des comptes, rôles par événement, participants, invitations QR et magic link, admission
 immédiate ou validée, sessions participants, révocation.

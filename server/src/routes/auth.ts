@@ -24,7 +24,10 @@ export async function authRoutes(app: FastifyInstance) {
     const u = r.rows[0];
     const ok = await verifyPassword(body.password, u?.password_hash ?? null);
     if (!u || !ok || u.disabled_at) {
-      const cur = failures.get(body.login) ?? { count: 0, until: 0 };
+      // Purge des entrées expirées pour que des identifiants inventés ne remplissent pas la mémoire.
+      if (failures.size > 10000) for (const [k, v] of failures) if (v.until <= Date.now()) failures.delete(k);
+      const prev = failures.get(body.login);
+      const cur = prev && prev.until > Date.now() ? prev : { count: 0, until: 0 };
       failures.set(body.login, { count: cur.count + 1, until: Date.now() + LOCK_MS });
       throw new HttpError(401, 'Identifiant ou mot de passe incorrect.');
     }
