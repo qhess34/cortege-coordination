@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Route } from '../../../server/src/geo/route';
+import { BASEMAPS, DEFAULT_BASEMAP } from '../basemaps';
 import type { MissionPoint, Position, Suggestion, Track } from '../types';
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -22,12 +23,12 @@ interface Props {
   onPointMove: (id: number, p: Position) => void;
   /** Clic hors mode ajout : position à inspecter (vue Panoramax). */
   onInspect?: (p: Position) => void;
+  /** Identifiant du fond de carte (voir basemaps.ts). */
+  basemap?: string;
   /** Affiche la couverture Panoramax et les repères d'inspection. */
   panoramax?: { enabled: boolean; tilesUrl: string; clicked: Position | null; photo: Position | null };
 }
 
-// `||` et non `??` : Docker transmet une chaîne vide quand la variable n'est pas définie.
-const TILE_URL = import.meta.env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export const TYPE_COLORS: Record<string, string> = {
   carrefour: '#d62828',
@@ -74,13 +75,19 @@ export function MapView(props: Props) {
       container: container.current,
       style: {
         version: 8,
-        sources: {
-          osm: { type: 'raster', tiles: [TILE_URL], tileSize: 256, maxzoom: 19, attribution: '© contributeurs <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>' },
-        },
-        layers: [{ id: 'osm', type: 'raster', source: 'osm' }],
+        // Un seul fond visible à la fois ; les tuiles des fonds masqués ne sont pas téléchargées.
+        sources: Object.fromEntries(BASEMAPS.map((b) => [
+          'fond-' + b.id,
+          { type: 'raster' as const, tiles: [b.tiles], tileSize: 256, maxzoom: b.maxzoom, attribution: b.attribution },
+        ])),
+        layers: BASEMAPS.map((b) => ({
+          id: 'fond-' + b.id, type: 'raster' as const, source: 'fond-' + b.id,
+          layout: { visibility: b.id === (props.basemap ?? DEFAULT_BASEMAP) ? 'visible' as const : 'none' as const },
+        })),
       },
       center: [2.35, 48.85],
       zoom: 12,
+      maxZoom: 20,
       attributionControl: { compact: false },
     });
     m.addControl(new maplibregl.NavigationControl(), 'top-left');
@@ -163,6 +170,13 @@ export function MapView(props: Props) {
   useEffect(() => {
     if (map.current) map.current.getCanvas().style.cursor = props.addMode ? 'crosshair' : '';
   }, [props.addMode]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    const wanted = BASEMAPS.some((b) => b.id === props.basemap) ? props.basemap : DEFAULT_BASEMAP;
+    for (const b of BASEMAPS) m.setLayoutProperty('fond-' + b.id, 'visibility', b.id === wanted ? 'visible' : 'none');
+  }, [props.basemap, ready]);
 
   const pnx = props.panoramax;
   useEffect(() => {

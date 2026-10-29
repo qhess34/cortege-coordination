@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
 import { MapView, type Selection } from '../components/MapView';
 import { PanoramaxPanel } from '../components/PanoramaxPanel';
+import { BASEMAPS, DEFAULT_BASEMAP } from '../basemaps';
 import { PANORAMAX_API } from '../panoramax';
 import type { EventInfo, MissionPoint, Position, Suggestion, Summary, Team, Track, Waypoint } from '../types';
 import { HistoryPanel } from './event/HistoryPanel';
@@ -43,6 +44,15 @@ function readPanoramaxPref(): boolean {
   }
 }
 
+const BASEMAP_PREF = 'cortege.fond';
+function readBasemapPref(): string {
+  try {
+    return localStorage.getItem(BASEMAP_PREF) ?? DEFAULT_BASEMAP;
+  } catch {
+    return DEFAULT_BASEMAP;
+  }
+}
+
 const TABS: [Tab, string][] = [
   ['synthese', 'Synthèse'], ['parcours', 'Parcours'], ['suggestions', 'Suggestions'], ['points', 'Points'], ['equipes', 'Équipes'], ['historique', 'Historique'],
 ];
@@ -58,6 +68,11 @@ export function EventPage({ eventId }: { eventId: number }) {
   const [panoramax, setPanoramax] = useState(readPanoramaxPref);
   const [inspectAt, setInspectAt] = useState<Position | null>(null);
   const [photoAt, setPhotoAt] = useState<Position | null>(null);
+  const [basemap, setBasemap] = useState(readBasemapPref);
+  const chooseBasemap = (id: string) => {
+    setBasemap(id);
+    try { localStorage.setItem(BASEMAP_PREF, id); } catch { /* stockage indisponible : préférence non mémorisée */ }
+  };
   const togglePanoramax = (on: boolean) => {
     setPanoramax(on);
     if (!on) { setInspectAt(null); setPhotoAt(null); }
@@ -141,6 +156,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           onSelect={select}
           onMapClick={addPointAt}
           onPointMove={movePoint}
+          basemap={basemap}
           onInspect={panoramax ? (p) => { setInspectAt(p); setPhotoAt(null); } : undefined}
           panoramax={{ enabled: panoramax, tilesUrl: PANORAMAX_API + '/map/{z}/{x}/{y}.mvt', clicked: inspectAt, photo: photoAt }}
         />
@@ -151,6 +167,9 @@ export function EventPage({ eventId }: { eventId: number }) {
             </button>
           )}
           <label className="check"><input type="checkbox" checked={showDismissed} onChange={(e) => setShowDismissed(e.target.checked)} /> Afficher les suggestions écartées</label>
+          <select className="basemap" value={basemap} onChange={(e) => chooseBasemap(e.target.value)} aria-label="Fond de carte">
+            {BASEMAPS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
+          </select>
           <label className="check" title="Affiche la photo de rue Panoramax la plus proche de l’endroit cliqué"><input type="checkbox" checked={panoramax} onChange={(e) => togglePanoramax(e.target.checked)} /> Photos Panoramax au clic</label>
         </div>
         {panoramax && inspectAt && !addMode && (

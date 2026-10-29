@@ -22,6 +22,8 @@ services:
       args:
         VITE_TILE_URL: ${VITE_TILE_URL:-}
         VITE_PANORAMAX_URL: ${VITE_PANORAMAX_URL:-}
+        VITE_SATELLITE_URL: ${VITE_SATELLITE_URL:-}
+        VITE_SATELLITE_ATTRIBUTION: ${VITE_SATELLITE_ATTRIBUTION:-}
     depends_on:
       db:
         condition: service_healthy

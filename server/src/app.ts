@@ -60,7 +60,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
 
   app.addHook('onRequest', async (req, reply) => {
     reply.header('x-content-type-options', 'nosniff');
-    reply.header('referrer-policy', 'no-referrer');
+    // Les serveurs de tuiles OSM refusent (403) les requêtes sans Referer : on n'envoie que l'origine du site
+    // aux tiers. Les pages dont l'URL porte un jeton (invitations) n'envoient aucun Referer.
+    reply.header('referrer-policy', SENSITIVE_PATH.test(req.url) ? 'no-referrer' : 'strict-origin-when-cross-origin');
     reply.header('x-frame-options', 'DENY');
     if (!req.url.startsWith('/api/')) return;
     reply.header('cache-control', 'no-store');

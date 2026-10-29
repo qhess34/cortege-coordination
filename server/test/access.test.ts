@@ -124,3 +124,12 @@ describe('isolation des événements', () => {
     expect((await m.get('/api/events/' + eventId + '/history')).statusCode).toBe(403);
   });
 });
+
+describe('en-têtes de sécurité', () => {
+  it("envoie l'origine du site aux serveurs de tuiles, mais rien depuis une page d'invitation", async () => {
+    const page = await ctx.app.inject({ method: 'GET', url: '/' });
+    expect(page.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
+    const invitation = await ctx.app.inject({ method: 'GET', url: '/rejoindre/jeton-secret' });
+    expect(invitation.headers['referrer-policy']).toBe('no-referrer');
+  });
+});

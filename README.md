@@ -49,6 +49,8 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
 - **Équipes et missions** : création, couleur, responsable, consignes, désactivation ; affectation ordonnée,
   réordonnancement, réaffectation, statuts de mission avec transitions contrôlées (la fin d'une mission ne libère
   pas le point).
+- **Fonds de carte** au choix (mémorisé dans le navigateur) : plan OpenStreetMap, plan IGN, photo aérienne IGN
+  (France), satellite Esri (monde).
 - **Photos de rue Panoramax** : un clic sur la carte (hors mode ajout) ouvre la photo
   [Panoramax](https://panoramax.fr) la plus proche (à moins de 50 m) dans le viewer officiel, pour vérifier un
   carrefour ou un accès sans se déplacer ; un clic sur un point ou une suggestion montre la photo la plus proche de
@@ -123,6 +125,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `MAX_GPX_BYTES` | Taille maximale d'un GPX | 10 Mo |
 | `WEB_DIST` | Dossier de l'interface compilée servie par l'API | — |
 | `VITE_TILE_URL` | Modèle d'URL des tuiles (à la compilation de l'interface) | tuiles OSM |
+| `VITE_SATELLITE_URL`, `VITE_SATELLITE_ATTRIBUTION` | Autre fournisseur pour le fond « Satellite » | Esri World Imagery |
 | `VITE_PANORAMAX_URL` | API Panoramax (recherche, tuiles de couverture, viewer) | `https://api.panoramax.xyz/api` |
 
 ## OpenStreetMap : licences et limites d'usage
@@ -136,6 +139,12 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - **Tuiles** `tile.openstreetmap.org` : soumises à la [politique d'usage](https://operations.osmfoundation.org/policies/tiles/)
   de la fondation OSM (usage modéré, pas de téléchargement massif). Pour un usage soutenu : fournisseur commercial
   ou tuiles auto-hébergées (Protomaps/PMTiles, OpenMapTiles), puis `VITE_TILE_URL`.
+  Ces serveurs refusent (403) les requêtes sans en-tête `Referer` : l'application envoie donc l'origine du site
+  (`Referrer-Policy: strict-origin-when-cross-origin`). Si le plan OSM reste bloqué, choisissez le plan IGN.
+- **IGN Géoplateforme** (plan IGN, photo aérienne) : service public sans clé, données sous Licence Ouverte Etalab,
+  couverture France ; attribution « © IGN » affichée.
+- **Esri World Imagery** (satellite) : soumis aux [conditions d'Esri](https://www.esri.com/en-us/legal/terms/full-master-agreement)
+  (attribution obligatoire, usage à vérifier selon votre contexte). Remplaçable par `VITE_SATELLITE_URL`.
 - **Panoramax** : photos de rue libres (licences indiquées par le viewer, le plus souvent CC-BY-SA). Le navigateur
   interroge directement l'instance configurée (`VITE_PANORAMAX_URL`) : la position cliquée lui est donc transmise.
   Une instance Panoramax auto-hébergée peut être utilisée.
