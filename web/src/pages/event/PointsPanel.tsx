@@ -1,13 +1,13 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { ApiError, api } from '../../api';
+import { api } from '../../api';
+import { POINT_TYPES as TYPES } from '../../components/PointEditor';
 import { MISSION_STATUS, POINT_STATUS, SUGGESTION_TYPES, coords, dateTime, km } from '../../labels';
 import type { HistoryEntry, MissionPoint } from '../../types';
 import type { PanelProps } from '../EventPage';
 
-const TYPES = ['carrefour', 'rue_laterale', 'acces_vehicule_entrant', 'acces_pieton_cycle', 'voie_privee', 'verification', 'point_fixe', 'autre'];
 const ORIGIN: Record<string, string> = { suggestion: 'suggestion OSM', manuel: 'création manuelle', import: 'import externe' };
 
-export function PointsPanel({ data, canEdit, run, selection, select }: PanelProps) {
+export function PointsPanel({ data, canEdit, selection, select, startDraft }: PanelProps) {
   const [q, setQ] = useState('');
   const [status, setStatus] = useState('');
   const [type, setType] = useState('');
@@ -21,7 +21,7 @@ export function PointsPanel({ data, canEdit, run, selection, select }: PanelProp
 
   return (
     <div className="stack">
-      {canEdit && <AddByCoordinates eventId={data.event.id} run={run} select={select} />}
+      {canEdit && <AddByCoordinates startDraft={startDraft} />}
       <div className="filters">
         <input type="search" placeholder="Rechercher un point" value={q} onChange={(e) => setQ(e.target.value)} />
         <select value={status} onChange={(e) => setStatus(e.target.value)} aria-label="Statut">
@@ -37,7 +37,7 @@ export function PointsPanel({ data, canEdit, run, selection, select }: PanelProp
           {Object.entries(ORIGIN).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
         </select>
       </div>
-      {current && <PointDetail key={current.id + ':' + current.version} p={current} canEdit={canEdit} run={run} select={select} />}
+      {current && <PointDetail p={current} canEdit={canEdit} />}
       <ul className="items">
         {list.map((p) => (
           <li key={p.id} className={current?.id === p.id ? 'selected' : ''} onClick={() => select({ kind: 'point', id: p.id })}>
@@ -54,104 +54,46 @@ export function PointsPanel({ data, canEdit, run, selection, select }: PanelProp
   );
 }
 
-function AddByCoordinates({ eventId, run, select }: { eventId: number; run: PanelProps['run']; select: PanelProps['select'] }) {
+function AddByCoordinates({ startDraft }: { startDraft: PanelProps['startDraft'] }) {
   const [open, setOpen] = useState(false);
-  const [name, setName] = useState('');
   const [lat, setLat] = useState('');
   const [lon, setLon] = useState('');
-  const submit = async (e: FormEvent) => {
+  const submit = (e: FormEvent) => {
     e.preventDefault();
-    const ok = await run(async () => {
-      const p = await api.post<MissionPoint>('/api/events/' + eventId + '/points', { name, position: [Number(lon), Number(lat)], type: 'autre' });
-      select({ kind: 'point', id: p.id });
-    }, 'Point ajouté.');
-    if (ok) { setName(''); setLat(''); setLon(''); }
+    startDraft([Number(lon), Number(lat)]);
+    setLat('');
+    setLon('');
+    setOpen(false);
   };
-  if (!open) return <button onClick={() => setOpen(true)}>+ Ajouter un point par coordonnées</button>;
+  if (!open) return <button onClick={() => setOpen(true)}>+ Placer un point par coordonnées</button>;
   return (
     <form className="card stack" onSubmit={submit}>
-      <label>Nom<input value={name} onChange={(e) => setName(e.target.value)} required /></label>
       <div className="row">
         <label>Latitude<input inputMode="decimal" value={lat} onChange={(e) => setLat(e.target.value.replace(',', '.'))} required pattern="-?\d+(\.\d+)?" /></label>
         <label>Longitude<input inputMode="decimal" value={lon} onChange={(e) => setLon(e.target.value.replace(',', '.'))} required pattern="-?\d+(\.\d+)?" /></label>
       </div>
-      <div className="row"><button className="primary">Ajouter</button><button type="button" onClick={() => setOpen(false)}>Fermer</button></div>
+      <p className="muted">Le point apparaît sur la carte, où vous complétez sa fiche.</p>
+      <div className="row"><button className="primary">Placer sur la carte</button><button type="button" onClick={() => setOpen(false)}>Fermer</button></div>
     </form>
   );
 }
 
-function PointDetail({ p, canEdit, run, select }: { p: MissionPoint; canEdit: boolean; run: PanelProps['run']; select: PanelProps['select'] }) {
-  const [form, setForm] = useState({
-    name: p.name, description: p.description, type: p.type, lat: String(p.position[1]), lon: String(p.position[0]),
-    distance: p.distance === null ? '' : String(Math.round(p.distance)),
-  });
-  const [confirmDelete, setConfirmDelete] = useState<{ missions: { team: string; status: string }[] } | null>(null);
+/** Fiche en lecture : la modification se fait sur la carte, dans la bulle du point. */
+function PointDetail({ p, canEdit }: { p: MissionPoint; canEdit: boolean }) {
   const [history, setHistory] = useState<HistoryEntry[] | null>(null);
   useEffect(() => { setHistory(null); }, [p.id]);
-
-  const save = async (e: FormEvent) => {
-    e.preventDefault();
-    const body: Record<string, unknown> = { version: p.version, name: form.name, description: form.description, type: form.type };
-    const lat = Number(form.lat), lon = Number(form.lon);
-    if (lat !== p.position[1] || lon !== p.position[0]) body.position = [lon, lat];
-    const d = form.distance === '' ? null : Number(form.distance);
-    if (d !== null && (p.distance === null || Math.round(p.distance) !== d)) body.distance = d;
-    if (d === null && p.distanceLocked) body.distance = null;
-    await run(() => api.patch('/api/points/' + p.id, body), 'Point enregistré.');
-  };
-
-  const remove = async (confirmed: boolean) => {
-    try {
-      await api.delete('/api/points/' + p.id + (confirmed ? '?confirm=1' : ''));
-      select(null);
-      await run(async () => undefined, 'Point supprimé.');
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 409 && e.details) setConfirmDelete(e.details as { missions: { team: string; status: string }[] });
-      else await run(() => Promise.reject(e));
-    }
-  };
-
   return (
     <div className="card detail">
       <h3>{p.name} <span className="muted">#{p.id}</span></h3>
-      <p className="muted">Origine : {ORIGIN[p.origin]} · {POINT_STATUS[p.status]} · {coords(p.position)}</p>
+      <p className="muted">
+        {SUGGESTION_TYPES[p.type] ?? p.type} · origine : {ORIGIN[p.origin]} · {POINT_STATUS[p.status]}<br />
+        {coords(p.position)} · {km(p.distance)}{p.distanceLocked ? ' (fixée)' : ''}
+      </p>
+      {p.description && <p className="pre">{p.description}</p>}
       {p.missions.length > 0 && (
         <ul className="plain">{p.missions.map((m) => <li key={m.missionId}><span className="dot" style={{ background: m.color }} /> {m.teamName} — mission n° {m.position}, {MISSION_STATUS[m.status]}</li>)}</ul>
       )}
-      {canEdit ? (
-        <form className="stack" onSubmit={save}>
-          <label>Nom<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required maxLength={200} /></label>
-          <label>Type
-            <select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })}>
-              {TYPES.map((k) => <option key={k} value={k}>{SUGGESTION_TYPES[k]}</option>)}
-            </select>
-          </label>
-          <label>Description<textarea rows={4} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
-          <div className="row">
-            <label>Latitude<input value={form.lat} onChange={(e) => setForm({ ...form, lat: e.target.value.replace(',', '.') })} /></label>
-            <label>Longitude<input value={form.lon} onChange={(e) => setForm({ ...form, lon: e.target.value.replace(',', '.') })} /></label>
-          </div>
-          <label>Distance cumulée (m){p.distanceLocked ? ' — fixée manuellement (videz pour recalculer)' : ' — calculée'}
-            <input inputMode="numeric" value={form.distance} onChange={(e) => setForm({ ...form, distance: e.target.value })} />
-          </label>
-          <p className="muted">Astuce : le point sélectionné peut aussi être glissé sur la carte.</p>
-          <div className="row">
-            <button className="primary">Enregistrer</button>
-            <button type="button" className="danger" onClick={() => remove(false)}>Supprimer</button>
-          </div>
-        </form>
-      ) : <p className="pre">{p.description}</p>}
-      {confirmDelete && (
-        <div className="warning">
-          <b>Ce point est affecté :</b>
-          <ul>{confirmDelete.missions.map((m, i) => <li key={i}>{m.team} ({MISSION_STATUS[m.status] ?? m.status})</li>)}</ul>
-          La suppression annulera ces missions (elles restent dans l’historique){p.suggestionId ? ' et la suggestion d’origine sera écartée' : ''}.
-          <div className="row">
-            <button className="danger" onClick={() => remove(true)}>Confirmer la suppression</button>
-            <button onClick={() => setConfirmDelete(null)}>Annuler</button>
-          </div>
-        </div>
-      )}
+      {canEdit && <p className="muted">Modifier, déplacer ou supprimer : dans la bulle du point, sur la carte.</p>}
       <details onToggle={(e) => { if ((e.target as HTMLDetailsElement).open && !history) void api.get<HistoryEntry[]>('/api/points/' + p.id + '/history').then(setHistory); }}>
         <summary>Historique</summary>
         {history ? <ul className="history">{history.map((h) => <li key={h.id}><span className="muted">{dateTime(h.at)}</span> {h.entity === 'mission' ? 'mission : ' : ''}{h.action.replace(/_/g, ' ')} {h.actor ? '(' + h.actor + ')' : ''}</li>)}</ul> : <p>Chargement…</p>}

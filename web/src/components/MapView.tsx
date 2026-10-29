@@ -3,7 +3,8 @@ import type { GeoJSONSource, Map as MlMap, MapMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 // MapLibre 6 charge son worker depuis un fichier séparé : on le fait empaqueter par Vite.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { Route } from '../../../server/src/geo/route';
 import { BASEMAPS, DEFAULT_BASEMAP } from '../basemaps';
 import type { MissionPoint, Position, Suggestion, Track } from '../types';
@@ -11,6 +12,17 @@ import type { MissionPoint, Position, Suggestion, Track } from '../types';
 maplibregl.setWorkerUrl(workerUrl);
 
 export type Selection = { kind: 'suggestion' | 'point'; id: number } | null;
+
+/** Point en cours d'édition sur la carte : nouveau (brouillon) ou existant, avec ses valeurs non enregistrées. */
+export interface PointEdit {
+  kind: 'new' | 'existing';
+  id?: number;
+  version?: number;
+  position: Position;
+  name: string;
+  type: string;
+  description: string;
+}
 
 interface Props {
   track: Track | null;
@@ -20,7 +32,13 @@ interface Props {
   addMode: boolean;
   onSelect: (s: Selection) => void;
   onMapClick: (p: Position) => void;
-  onPointMove: (id: number, p: Position) => void;
+  /** Le point en cours d'édition a été glissé à une nouvelle position (non enregistrée). */
+  onEditMove: (p: Position) => void;
+  /** Édition en cours : le marqueur reflète les valeurs saisies, la bulle contient le formulaire. */
+  edit: PointEdit | null;
+  editor: ReactNode;
+  /** Demande de centrage (n change à chaque demande). */
+  focus?: { position: Position; n: number } | null;
   /** Clic hors mode ajout : position à inspecter (vue Panoramax). */
   onInspect?: (p: Position) => void;
   /** Identifiant du fond de carte (voir basemaps.ts). */
@@ -63,7 +81,6 @@ export function MapView(props: Props) {
   const map = useRef<MlMap | null>(null);
   const [ready, setReady] = useState(false);
   const kmMarkers = useRef<maplibregl.Marker[]>([]);
-  const dragMarker = useRef<maplibregl.Marker | null>(null);
   // Les gestionnaires d'événements MapLibre lisent toujours les dernières props.
   const latest = useRef(props);
   latest.current = props;
@@ -96,7 +113,6 @@ export function MapView(props: Props) {
       m.addImage('arrow', arrowImage());
       m.addSource('track', { type: 'geojson', data: empty });
       m.addSource('suggestions', { type: 'geojson', data: empty });
-      m.addSource('points', { type: 'geojson', data: empty });
       m.addLayer({ id: 'track-casing', type: 'line', source: 'track', paint: { 'line-color': '#ffffff', 'line-width': 9 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
       m.addLayer({ id: 'track', type: 'line', source: 'track', paint: { 'line-color': '#1d3557', 'line-width': 5 }, layout: { 'line-cap': 'round', 'line-join': 'round' } });
       m.addLayer({ id: 'track-arrows', type: 'symbol', source: 'track', layout: { 'symbol-placement': 'line', 'symbol-spacing': 90, 'icon-image': 'arrow', 'icon-size': 0.8, 'icon-allow-overlap': true } });
@@ -108,15 +124,6 @@ export function MapView(props: Props) {
           'circle-opacity': ['match', ['get', 'status'], 'ecartee', 0.35, 'validee', 0.5, 0.95],
           'circle-stroke-color': ['case', ['get', 'selected'], '#000000', '#ffffff'],
           'circle-stroke-width': ['case', ['get', 'selected'], 3, 1.5],
-        },
-      });
-      m.addLayer({
-        id: 'points', type: 'circle', source: 'points',
-        paint: {
-          'circle-radius': 9,
-          'circle-color': ['get', 'color'],
-          'circle-stroke-color': ['case', ['get', 'selected'], '#000000', '#ffffff'],
-          'circle-stroke-width': ['case', ['get', 'selected'], 4, 2.5],
         },
       });
       // Couverture Panoramax (séquences de photos), sous le tracé.
@@ -142,7 +149,7 @@ export function MapView(props: Props) {
       setReady(true);
     });
     m.on('click', (e: MapMouseEvent) => {
-      const hits = m.queryRenderedFeatures(e.point, { layers: ['points', 'suggestions'] });
+      const hits = m.queryRenderedFeatures(e.point, { layers: ['suggestions'] });
       const f = hits[0];
       const clicked: Position = [e.lngLat.lng, e.lngLat.lat];
       if (latest.current.addMode) {
@@ -150,7 +157,7 @@ export function MapView(props: Props) {
         return;
       }
       if (f) {
-        latest.current.onSelect({ kind: f.layer.id === 'points' ? 'point' : 'suggestion', id: Number(f.properties.id) });
+        latest.current.onSelect({ kind: 'suggestion', id: Number(f.properties.id) });
         // Pour un point ou une suggestion, on inspecte l'élément lui-même plutôt que l'endroit exact du clic.
         const g = f.geometry;
         latest.current.onInspect?.(g.type === 'Point' ? [g.coordinates[0]!, g.coordinates[1]!] : clicked);
@@ -159,10 +166,8 @@ export function MapView(props: Props) {
         latest.current.onInspect?.(clicked);
       }
     });
-    for (const layer of ['points', 'suggestions']) {
-      m.on('mouseenter', layer, () => { m.getCanvas().style.cursor = 'pointer'; });
-      m.on('mouseleave', layer, () => { m.getCanvas().style.cursor = ''; });
-    }
+    m.on('mouseenter', 'suggestions', () => { m.getCanvas().style.cursor = 'pointer'; });
+    m.on('mouseleave', 'suggestions', () => { m.getCanvas().style.cursor = latest.current.addMode ? 'crosshair' : ''; });
     map.current = m;
     return () => { m.remove(); map.current = null; };
   }, []);
@@ -231,33 +236,107 @@ export function MapView(props: Props) {
         properties: { id: s.id, type: s.type, status: s.status, pertinence: s.pertinence, selected: sel?.kind === 'suggestion' && sel.id === s.id },
       })),
     });
-    (m.getSource('points') as GeoJSONSource).setData({
-      type: 'FeatureCollection',
-      features: props.points.map((p) => ({
-        type: 'Feature', geometry: { type: 'Point', coordinates: p.position },
-        properties: { id: p.id, color: p.missions[0]?.color ?? '#495057', selected: sel?.kind === 'point' && sel.id === p.id },
-      })),
-    });
-  }, [props.suggestions, props.points, props.selection, ready]);
+  }, [props.suggestions, props.selection, ready]);
 
-  // Le point sélectionné peut être déplacé à la souris.
+  // Points de mission : marqueurs HTML (étiquette du nom, glisser-déposer). Le point en cours d'édition
+  // affiche les valeurs saisies, avant enregistrement : ce qu'on voit est ce qui sera enregistré.
+  const markers = useRef(new Map<string, { marker: maplibregl.Marker; el: HTMLDivElement }>());
   useEffect(() => {
     const m = map.current;
-    dragMarker.current?.remove();
-    dragMarker.current = null;
-    if (!m || !ready || props.selection?.kind !== 'point') return;
-    const p = props.points.find((x) => x.id === props.selection!.id);
-    if (!p) return;
-    const el = document.createElement('div');
-    el.className = 'drag-handle';
-    el.title = 'Glisser pour déplacer le point';
-    const marker = new maplibregl.Marker({ element: el, draggable: true }).setLngLat(p.position).addTo(m);
-    marker.on('dragend', () => {
-      const ll = marker.getLngLat();
-      latest.current.onPointMove(p.id, [ll.lng, ll.lat]);
-    });
-    dragMarker.current = marker;
-  }, [props.selection, props.points, ready]);
+    if (!m || !ready) return;
+    const edit = props.edit;
+    const wanted = new Map<string, { position: Position; name: string; color: string; selected: boolean; draggable: boolean; draft: boolean; id: number | null }>();
+    for (const p of props.points) {
+      const editing = edit?.kind === 'existing' && edit.id === p.id;
+      wanted.set('p' + p.id, {
+        position: editing ? edit.position : p.position,
+        name: editing ? edit.name : p.name,
+        color: p.missions[0]?.color ?? '#495057',
+        selected: editing || (props.selection?.kind === 'point' && props.selection.id === p.id),
+        draggable: editing,
+        draft: false,
+        id: p.id,
+      });
+    }
+    if (edit?.kind === 'new') {
+      wanted.set('draft', { position: edit.position, name: edit.name, color: '#ffffff', selected: true, draggable: true, draft: true, id: null });
+    }
+    for (const [key, { marker }] of markers.current) {
+      if (!wanted.has(key)) {
+        marker.remove();
+        markers.current.delete(key);
+      }
+    }
+    for (const [key, w] of wanted) {
+      let entry = markers.current.get(key);
+      if (!entry) {
+        const el = document.createElement('div');
+        el.innerHTML = '<span class="point-dot"></span><span class="point-label"></span>';
+        const marker = new maplibregl.Marker({ element: el }).setLngLat(w.position).addTo(m);
+        // Un clic sur un marqueur ne doit pas être traité comme un clic sur la carte.
+        el.addEventListener('click', (ev) => {
+          ev.stopPropagation();
+          const id = Number(el.dataset.id);
+          if (!el.dataset.id || latest.current.addMode) return;
+          latest.current.onSelect({ kind: 'point', id });
+          const ll = marker.getLngLat();
+          latest.current.onInspect?.([ll.lng, ll.lat]);
+        });
+        marker.on('drag', () => {
+          const ll = marker.getLngLat();
+          popup.current?.setLngLat(ll);
+        });
+        marker.on('dragend', () => {
+          const ll = marker.getLngLat();
+          latest.current.onEditMove([ll.lng, ll.lat]);
+        });
+        entry = { marker, el };
+        markers.current.set(key, entry);
+      }
+      const { marker, el } = entry;
+      // classList et non className : MapLibre pose ses propres classes (positionnement) sur l'élément.
+      el.classList.add('point-marker');
+      el.classList.toggle('selected', w.selected);
+      el.classList.toggle('draft', w.draft);
+      el.classList.toggle('draggable', w.draggable);
+      el.dataset.id = w.id === null ? '' : String(w.id);
+      el.title = w.draggable ? 'Glisser pour déplacer le point' : w.name;
+      (el.firstChild as HTMLElement).style.background = w.color;
+      (el.lastChild as HTMLElement).textContent = w.name;
+      marker.setLngLat(w.position);
+      marker.setDraggable(w.draggable);
+    }
+  }, [props.points, props.edit, props.selection, ready]);
+
+  // Bulle d'édition ancrée au point, dont le contenu est rendu par React.
+  const popup = useRef<maplibregl.Popup | null>(null);
+  const [popupNode, setPopupNode] = useState<HTMLDivElement | null>(null);
+  const editKey = props.edit ? props.edit.kind + ':' + (props.edit.id ?? 'nouveau') : null;
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready || !editKey) return;
+    const node = document.createElement('div');
+    const p = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 18, maxWidth: '340px', className: 'point-popup' })
+      .setDOMContent(node)
+      .setLngLat(latest.current.edit!.position)
+      .addTo(m);
+    popup.current = p;
+    setPopupNode(node);
+    return () => {
+      p.remove();
+      popup.current = null;
+      setPopupNode(null);
+    };
+  }, [editKey, ready]);
+  useEffect(() => {
+    if (props.edit) popup.current?.setLngLat(props.edit.position);
+  }, [props.edit?.position]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready || !props.focus) return;
+    m.easeTo({ center: props.focus.position, zoom: Math.max(m.getZoom(), 17) });
+  }, [props.focus?.n, ready]);
 
   // Centre la carte sur l'élément sélectionné depuis la liste.
   useEffect(() => {
@@ -268,5 +347,10 @@ export function MapView(props: Props) {
     if (pos && !m.getBounds().contains(pos)) m.easeTo({ center: pos, zoom: Math.max(m.getZoom(), 16) });
   }, [props.selection, ready]);
 
-  return <div ref={container} className="map" data-testid="map" />;
+  return (
+    <>
+      <div ref={container} className="map" data-testid="map" />
+      {popupNode && props.editor ? createPortal(props.editor, popupNode) : null}
+    </>
+  );
 }

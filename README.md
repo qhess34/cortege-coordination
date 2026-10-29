@@ -43,9 +43,11 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
 - **Nouvelle analyse non destructive** : identifiant stable par nœud OSM (avec repli sur la voie et la position),
   suggestions écartées mémorisées, modifications OSM présentées à part et appliquées seulement sur décision,
   doublons possibles avec des points existants signalés, suggestions disparues conservées et signalées.
-- **Points de mission** : ajout par clic (plusieurs à la suite) ou par coordonnées, déplacement à la souris,
-  modification, distance cumulée calculée ou fixée à la main, suppression avec présentation des conséquences,
-  recherche, filtres, historique.
+- **Points de mission, édités directement sur la carte** : en mode ajout, un clic place un point provisoire et ouvre
+  sa bulle (nom, type, description) ; il n'est créé qu'à la validation, et un nouveau clic le déplace. Un clic sur un
+  point existant ouvre la même bulle : renommer, changer le type, glisser le marqueur pour le déplacer, enregistrer,
+  annuler ou supprimer (conséquences présentées si le point est affecté). Le nom affiché sur la carte suit la saisie.
+  Le panneau latéral garde la liste, la recherche, les filtres, l'historique et le placement par coordonnées.
 - **Équipes et missions** : création, couleur, responsable, consignes, désactivation ; affectation ordonnée,
   réordonnancement, réaffectation, statuts de mission avec transitions contrôlées (la fin d'une mission ne libère
   pas le point).

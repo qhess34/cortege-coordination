@@ -42,7 +42,7 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   });
   await expect(page.getByText(/0,50 km, 1 segment/)).toBeVisible();
   await page.getByRole('button', { name: 'Importer' }).click();
-  await expect(page.getByText('Parcours importé.')).toBeVisible();
+  await expect(page.getByText('Parcours importé.', { exact: true })).toBeVisible();
   await expect(page.locator('.km-marker', { hasText: 'Départ' })).toBeVisible();
 
   // 3-4. Analyse OSM et examen des suggestions.
@@ -63,16 +63,56 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   await page.getByRole('button', { name: 'Écarter' }).click();
   await expect(page.locator('ul.items li')).toHaveCount(4);
 
-  // 6. Ajouter manuellement deux points en cliquant sur la carte.
+  // 6. Ajouter manuellement deux points sur la carte : un clic place le point, sa bulle permet de le compléter.
   await page.getByRole('button', { name: '+ Ajouter des points' }).click();
   const map = page.getByTestId('map');
   const box = (await map.boundingBox())!;
+  const editor = page.getByTestId('point-editor');
   await map.click({ position: { x: box.width * 0.3, y: box.height * 0.3 } });
+  await expect(editor.getByLabel('Nom')).toHaveValue('Point 1');
+  // Rien n'est enregistré tant que la bulle n'est pas validée ; un nouveau clic déplace le point provisoire.
+  expect((await (await page.request.get('/api/events/' + /evenements\/(\d+)/.exec(page.url())![1] + '/points')).json()).length).toBe(1);
+  await map.click({ position: { x: box.width * 0.35, y: box.height * 0.3 } });
+  await editor.getByLabel('Type').selectOption('point_fixe');
+  await editor.getByRole('button', { name: 'Ajouter' }).click();
   await expect(page.getByText('Point ajouté.')).toBeVisible();
+  await expect(page.locator('.point-marker', { hasText: 'Point 1' })).toBeVisible();
+
   await map.click({ position: { x: box.width * 0.6, y: box.height * 0.3 } });
+  await editor.getByLabel('Nom').fill('Angle nord');
+  // Ce qu'on voit sur la carte suit la saisie, avant même l'enregistrement.
+  await expect(page.locator('.point-marker.draft .point-label')).toHaveText('Angle nord');
+  await editor.getByRole('button', { name: 'Ajouter' }).click();
+  await expect(page.locator('.point-marker', { hasText: 'Angle nord' })).toBeVisible();
   await page.getByRole('button', { name: 'Terminer l’ajout' }).click();
+
+  // Modifier un point sur la carte : clic sur le marqueur, renommage, glisser-déposer, enregistrement.
+  const marker = page.locator('.point-marker', { hasText: 'Angle nord' });
+  await marker.click();
+  await expect(editor.getByLabel('Nom')).toHaveValue('Angle nord');
+  await editor.getByLabel('Nom').fill('Angle nord-est');
+  await expect(marker.locator('.point-label')).toHaveText('Angle nord-est');
+  const before = await page.locator('.point-marker.selected .point-dot').boundingBox();
+  await page.mouse.move(before!.x + before!.width / 2, before!.y + before!.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(before!.x + 60, before!.y + 40, { steps: 8 });
+  await page.mouse.up();
+  await expect(editor).toContainText('position modifiée');
+  await editor.getByRole('button', { name: 'Enregistrer' }).click();
+  await expect(page.getByText('Point enregistré.')).toBeVisible();
+  await expect(editor).toHaveCount(0);
+  const after = await page.locator('.point-marker', { hasText: 'Angle nord-est' }).locator('.point-dot').boundingBox();
+  expect(Math.abs(after!.x - before!.x - 60 + before!.width / 2)).toBeLessThan(15);
+
+  // Annuler une modification : rien n'est enregistré, le marqueur reprend son nom.
+  await page.locator('.point-marker', { hasText: 'Point 1' }).click();
+  await editor.getByLabel('Nom').fill('Brouillon');
+  await editor.getByRole('button', { name: 'Annuler' }).click();
+  await expect(page.locator('.point-marker', { hasText: 'Point 1' })).toBeVisible();
+
   await page.getByRole('tab', { name: 'Points' }).click();
   await expect(page.locator('ul.items li')).toHaveCount(3);
+  await expect(page.locator('ul.items')).toContainText('Angle nord-est');
 
   // 7. Relancer l'analyse sans perdre les modifications.
   await page.getByRole('tab', { name: /Suggestions/ }).click();

@@ -111,7 +111,6 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 
 .km-marker { background: #fff; border: 2px solid var(--primary); border-radius: 4px; font-size: 11px; font-weight: 600; padding: 0 4px; color: var(--primary); white-space: nowrap; }
 .km-marker.km-end { background: var(--primary); color: #fff; }
-.drag-handle { width: 26px; height: 26px; border-radius: 50%; border: 3px dashed #000; background: rgba(255,255,255,.35); cursor: grab; }
 
 @media (max-width: 800px) {
   .event-layout { grid-template-columns: 1fr; grid-template-rows: 50vh auto; height: auto; }
@@ -145,3 +144,23 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 .panoramax-host pnx-widget-legend,
 .panoramax-host pnx-picture-legend,
 .panoramax-host pnx-time-travel { display: none !important; }
+
+/* Points de mission sur la carte : pastille + nom, édition dans une bulle. */
+/* Pas de « position » ici : MapLibre positionne le marqueur en absolu (.maplibregl-marker). */
+.point-marker { width: 20px; height: 20px; cursor: pointer; }
+.point-marker .point-dot { position: absolute; inset: 0; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
+.point-marker .point-label {
+  position: absolute; left: 24px; top: 50%; transform: translateY(-50%); white-space: nowrap; max-width: 220px;
+  overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 600; color: #1b1f24;
+  background: rgba(255,255,255,.88); padding: 0 4px; border-radius: 3px; pointer-events: none;
+}
+.point-marker.selected .point-dot { border-color: #000; box-shadow: 0 0 0 3px rgba(255,255,255,.9); }
+.point-marker.draggable { cursor: grab; }
+.point-marker.draggable:active { cursor: grabbing; }
+.point-marker.draft .point-dot { border: 3px dashed #1d3557; background: rgba(255,255,255,.7) !important; }
+.point-popup .maplibregl-popup-content { padding: .6rem .7rem; background: var(--surface); color: var(--text); border-radius: 8px; }
+.point-popup .maplibregl-popup-tip { border-top-color: var(--surface); border-bottom-color: var(--surface); }
+.point-editor { display: flex; flex-direction: column; gap: .45rem; width: 300px; max-width: 100%; font-size: .9rem; }
+.point-editor .row { align-items: center; }
+.point-editor p { margin: 0; }
+.small { font-size: .8rem; }

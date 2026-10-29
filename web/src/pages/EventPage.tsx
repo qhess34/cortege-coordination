@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
-import { MapView, type Selection } from '../components/MapView';
+import { MapView, type PointEdit, type Selection } from '../components/MapView';
+import { PointEditor } from '../components/PointEditor';
 import { PanoramaxPanel } from '../components/PanoramaxPanel';
 import { BASEMAPS, DEFAULT_BASEMAP } from '../basemaps';
 import { PANORAMAX_API } from '../panoramax';
@@ -31,6 +32,8 @@ export interface PanelProps {
   run: (fn: () => Promise<unknown>, success?: string) => Promise<boolean>;
   selection: Selection;
   select: (s: Selection) => void;
+  /** Ouvre la bulle de création d'un point à cette position, sur la carte. */
+  startDraft: (p: Position) => void;
 }
 
 type Tab = 'synthese' | 'parcours' | 'suggestions' | 'points' | 'equipes' | 'historique';
@@ -69,6 +72,10 @@ export function EventPage({ eventId }: { eventId: number }) {
   const [inspectAt, setInspectAt] = useState<Position | null>(null);
   const [photoAt, setPhotoAt] = useState<Position | null>(null);
   const [basemap, setBasemap] = useState(readBasemapPref);
+  // Point en cours d'ajout ou de modification sur la carte (valeurs non enregistrées).
+  const [edit, setEdit] = useState<PointEdit | null>(null);
+  const [focus, setFocus] = useState<{ position: Position; n: number } | null>(null);
+  const closeEdit = useCallback(() => setEdit(null), []);
   const chooseBasemap = (id: string) => {
     setBasemap(id);
     try { localStorage.setItem(BASEMAP_PREF, id); } catch { /* stockage indisponible : préférence non mémorisée */ }
@@ -120,28 +127,66 @@ export function EventPage({ eventId }: { eventId: number }) {
   if (!data) return <div className="center">Chargement…</div>;
   const canEdit = data.event.role === 'organisateur';
 
+  // Sélectionner un point (sur la carte ou dans la liste) ouvre sa bulle d'édition sur la carte.
   const select = (s: Selection) => {
     setSelection(s);
     if (s?.kind === 'suggestion') setTab('suggestions');
     if (s?.kind === 'point') setTab('points');
+    const p = s?.kind === 'point' ? data.points.find((x) => x.id === s.id) : undefined;
+    if (p && canEdit) {
+      setEdit({ kind: 'existing', id: p.id, version: p.version, position: p.position, name: p.name, type: p.type, description: p.description });
+    } else {
+      setEdit(null);
+    }
   };
 
-  const addPointAt = async (p: Position) => {
-    // Création successive de points : le mode ajout reste actif jusqu'à ce qu'on le quitte.
-    const n = data.points.filter((x) => x.origin === 'manuel').length + 1;
-    await run(async () => {
-      const created = await api.post<MissionPoint>(base + '/points', { name: 'Point ' + n, position: p, type: 'autre' });
-      setSelection({ kind: 'point', id: created.id });
-    }, 'Point ajouté.');
+  const newDraft = (p: Position): PointEdit => ({
+    kind: 'new', position: p, type: 'autre', description: '',
+    name: 'Point ' + (data.points.filter((x) => x.origin === 'manuel').length + 1),
+  });
+
+  // Mode ajout : un clic place le point provisoire (ou le déplace s'il existe déjà) ; il n'est créé qu'à
+  // la validation de sa bulle. Le mode reste actif pour enchaîner plusieurs points.
+  const placeDraft = (p: Position) => {
+    setSelection(null);
+    setEdit((prev) => (prev?.kind === 'new' ? { ...prev, position: p } : newDraft(p)));
   };
 
-  const movePoint = async (id: number, p: Position) => {
-    const point = data.points.find((x) => x.id === id);
-    if (!point || !canEdit) return;
-    await run(() => api.patch('/api/points/' + id, { version: point.version, position: p }), 'Point déplacé.');
+  const startDraft = (p: Position) => {
+    setSelection(null);
+    setEdit(newDraft(p));
+    setFocus((f) => ({ position: p, n: (f?.n ?? 0) + 1 }));
   };
 
-  const props: PanelProps = { data, canEdit, reload, run, selection, select };
+  const toggleAddMode = () => {
+    if (addMode && edit?.kind === 'new') setEdit(null);
+    setAddMode(!addMode);
+  };
+
+  const editingPoint = edit?.kind === 'existing' ? data.points.find((p) => p.id === edit.id) ?? null : null;
+  const editor = edit && canEdit ? (
+    <PointEditor
+      eventId={eventId}
+      edit={edit}
+      point={editingPoint}
+      onChange={setEdit}
+      onClose={closeEdit}
+      onSaved={async (id, message) => {
+        setEdit(null);
+        setSelection({ kind: 'point', id });
+        setToast({ kind: 'ok', text: message });
+        await reload();
+      }}
+      onDeleted={async () => {
+        setEdit(null);
+        setSelection(null);
+        setToast({ kind: 'ok', text: 'Point supprimé.' });
+        await reload();
+      }}
+    />
+  ) : null;
+
+  const props: PanelProps = { data, canEdit, reload, run, selection, select, startDraft };
   const visibleSuggestions = data.suggestions.filter((s) => s.status === 'a_examiner' || (showDismissed && s.status === 'ecartee'));
 
   return (
@@ -154,15 +199,18 @@ export function EventPage({ eventId }: { eventId: number }) {
           selection={selection}
           addMode={addMode && canEdit}
           onSelect={select}
-          onMapClick={addPointAt}
-          onPointMove={movePoint}
+          onMapClick={placeDraft}
+          onEditMove={(p) => setEdit((prev) => (prev ? { ...prev, position: p } : prev))}
+          edit={canEdit ? edit : null}
+          editor={editor}
+          focus={focus}
           basemap={basemap}
           onInspect={panoramax ? (p) => { setInspectAt(p); setPhotoAt(null); } : undefined}
           panoramax={{ enabled: panoramax, tilesUrl: PANORAMAX_API + '/map/{z}/{x}/{y}.mvt', clicked: inspectAt, photo: photoAt }}
         />
         <div className="map-toolbar">
           {canEdit && (
-            <button className={addMode ? 'primary' : ''} onClick={() => setAddMode(!addMode)} aria-pressed={addMode}>
+            <button className={addMode ? 'primary' : ''} onClick={toggleAddMode} aria-pressed={addMode}>
               {addMode ? 'Terminer l’ajout' : '+ Ajouter des points'}
             </button>
           )}
@@ -175,7 +223,7 @@ export function EventPage({ eventId }: { eventId: number }) {
         {panoramax && inspectAt && !addMode && (
           <PanoramaxPanel position={inspectAt} onPicture={(p) => setPhotoAt(p?.position ?? null)} onClose={() => { setInspectAt(null); setPhotoAt(null); }} />
         )}
-        {addMode && <div className="map-hint">Cliquez sur la carte pour créer un point (plusieurs clics = plusieurs points).</div>}
+        {addMode && <div className="map-hint">Cliquez sur la carte pour placer un point, complétez sa fiche puis « Ajouter ». Recommencez pour le suivant.</div>}
         <div className="disclaimer">
           Suggestions issues d’OpenStreetMap, à vérifier sur le terrain. Elles ne garantissent rien en matière de sécurité
           et ne remplacent ni les autorisations ni les décisions des autorités compétentes.
