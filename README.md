@@ -51,8 +51,9 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
   doublons possibles avec des points existants signalés, suggestions disparues conservées et signalées.
 - **Points de mission, édités directement sur la carte** : en mode ajout, un clic place un point provisoire et ouvre
   sa bulle (nom, type, description) ; il n'est créé qu'à la validation, et un nouveau clic le déplace. Un clic sur un
-  point existant ouvre la même bulle : renommer, changer le type, glisser le marqueur pour le déplacer, enregistrer,
-  annuler ou supprimer (conséquences présentées si le point est affecté). Le nom affiché sur la carte suit la saisie.
+  point existant ouvre la même bulle : renommer, changer le type, enregistrer, annuler ou supprimer. Pour
+  **déplacer** un point, faites-le glisser directement : sa bulle s'ouvre avec « position modifiée », puis
+  « Enregistrer » (ou « Annuler » pour le remettre en place) (conséquences présentées si le point est affecté). Le nom affiché sur la carte suit la saisie.
   Le panneau latéral garde la liste, la recherche, les filtres, l'historique et le placement par coordonnées.
 - **Équipes et missions** : création, couleur, responsable, consignes, désactivation ; affectation ordonnée,
   réordonnancement, réaffectation, statuts de mission avec transitions contrôlées (la fin d'une mission ne libère

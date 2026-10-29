@@ -162,8 +162,6 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 .point-marker.draggable { cursor: grab; }
 .point-marker.draggable:active { cursor: grabbing; }
 .point-marker.draft .point-dot { border: 3px dashed #1d3557; background: rgba(255,255,255,.7) !important; }
-.point-popup .maplibregl-popup-content { padding: .6rem .7rem; background: var(--surface); color: var(--text); border-radius: 8px; }
-.point-popup .maplibregl-popup-tip { border-top-color: var(--surface); border-bottom-color: var(--surface); }
 .point-editor { display: flex; flex-direction: column; gap: .45rem; width: 300px; max-width: 100%; font-size: .9rem; }
 .point-editor .row { align-items: center; }
 .point-editor p { margin: 0; }
@@ -182,3 +180,10 @@ ul.compact { margin: 0; padding-left: 1.1rem; }
 .dialog::backdrop { background: rgba(0,0,0,.4); }
 .danger-zone { border-color: var(--danger); }
 @media (max-width: 800px) { .event-switcher select { max-width: 160px; } }
+
+/* Bulle posée sur la carte (hors du conteneur MapLibre, voir MapView) */
+.map-bubble {
+  position: absolute; top: 0; left: 0; z-index: 4; max-width: min(340px, calc(100% - 8px));
+  background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
+  box-shadow: 0 3px 12px rgba(0,0,0,.3); padding: .6rem .7rem; will-change: transform;
+}

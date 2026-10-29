@@ -3,8 +3,7 @@ import type { GeoJSONSource, Map as MlMap, MapMouseEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 // MapLibre 6 charge son worker depuis un fichier séparé : on le fait empaqueter par Vite.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { Route } from '../../../server/src/geo/route';
 import { BASEMAPS, DEFAULT_BASEMAP, FALLBACK_BASEMAP } from '../basemaps';
 import { loadVectorBasemap } from './vectorBasemap';
@@ -35,6 +34,8 @@ interface Props {
   onMapClick: (p: Position) => void;
   /** Le point en cours d'édition a été glissé à une nouvelle position (non enregistrée). */
   onEditMove: (p: Position) => void;
+  /** Droits de modification : les points se déplacent alors directement en les faisant glisser. */
+  canEdit: boolean;
   /** Édition en cours : le marqueur reflète les valeurs saisies avant enregistrement. */
   edit: PointEdit | null;
   /** Bulle affichée sur la carte (menu, fiche de suggestion, édition d'un point). */
@@ -253,6 +254,8 @@ export function MapView(props: Props) {
   // Points de mission : marqueurs HTML (étiquette du nom, glisser-déposer). Le point en cours d'édition
   // affiche les valeurs saisies, avant enregistrement : ce qu'on voit est ce qui sera enregistré.
   const markers = useRef(new Map<string, { marker: maplibregl.Marker; el: HTMLDivElement }>());
+  const dragging = useRef<string | null>(null);
+  const lastDragEnd = useRef(0);
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
@@ -265,7 +268,8 @@ export function MapView(props: Props) {
         name: editing ? edit.name : p.name,
         color: p.missions[0]?.color ?? '#495057',
         selected: editing || (props.selection?.kind === 'point' && props.selection.id === p.id),
-        draggable: editing,
+        // Organisateur : tout point se glisse directement (hors mode ajout) ; sa bulle s'ouvre alors.
+        draggable: editing || (props.canEdit && !props.addMode),
         draft: false,
         id: p.id,
       });
@@ -288,15 +292,28 @@ export function MapView(props: Props) {
         // Un clic sur un marqueur ne doit pas être traité comme un clic sur la carte.
         el.addEventListener('click', (ev) => {
           ev.stopPropagation();
+          // Le relâchement d'un glisser-déposer produit aussi un clic : il ne doit pas rouvrir la bulle
+          // (ce qui annulerait le déplacement).
+          if (Date.now() - lastDragEnd.current < 400) return;
           const id = Number(el.dataset.id);
           if (!el.dataset.id || latest.current.addMode) return;
           latest.current.onSelect({ kind: 'point', id });
         });
+        marker.on('dragstart', () => {
+          dragging.current = key;
+          const id = Number(el.dataset.id);
+          const edit = latest.current.edit;
+          // Glisser un point qui n'est pas en cours d'édition ouvre sa bulle.
+          if (el.dataset.id && !(edit?.kind === 'existing' && edit.id === id)) latest.current.onSelect({ kind: 'point', id });
+        });
         marker.on('drag', () => {
           const ll = marker.getLngLat();
-          popup.current?.setLngLat(ll);
+          bubbleAt.current = [ll.lng, ll.lat];
+          placeBubble();
         });
         marker.on('dragend', () => {
+          dragging.current = null;
+          lastDragEnd.current = Date.now();
           const ll = marker.getLngLat();
           latest.current.onEditMove([ll.lng, ll.lat]);
         });
@@ -313,34 +330,49 @@ export function MapView(props: Props) {
       el.title = w.draggable ? 'Glisser pour déplacer le point' : w.name;
       (el.firstChild as HTMLElement).style.background = w.color;
       (el.lastChild as HTMLElement).textContent = w.name;
-      marker.setLngLat(w.position);
+      // Pendant un glisser-déposer, le marqueur suit la souris : on ne le replace pas.
+      if (dragging.current !== key) marker.setLngLat(w.position);
       marker.setDraggable(w.draggable);
     }
-  }, [props.points, props.edit, props.selection, ready]);
+  }, [props.points, props.edit, props.selection, props.canEdit, props.addMode, ready]);
 
-  // Bulle d'édition ancrée au point, dont le contenu est rendu par React.
-  const popup = useRef<maplibregl.Popup | null>(null);
-  const [popupNode, setPopupNode] = useState<HTMLDivElement | null>(null);
-  const popupKey = props.popup?.key ?? null;
+  // Bulle (menu, suggestion, édition) : rendue À CÔTÉ de la carte, en superposition placée sur le point.
+  // Si elle était dans le conteneur de la carte, MapLibre intercepterait souris et toucher (déplacement de la
+  // carte) et certains navigateurs ne transmettraient plus les clics aux boutons.
+  const bubble = useRef<HTMLDivElement>(null);
+  const bubbleAt = useRef<Position | null>(null);
+  const placeBubble = useCallback(() => {
+    const m = map.current;
+    const el = bubble.current;
+    const at = bubbleAt.current;
+    if (!m || !el || !at) return;
+    const p = m.project(at);
+    const pane = m.getContainer();
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const gap = 16;
+    // Au-dessus du point s'il y a la place, sinon en dessous ; toujours dans les limites de la carte.
+    const above = p.y - h - gap >= 4;
+    const top = above ? p.y - h - gap : Math.min(p.y + gap, pane.clientHeight - h - 4);
+    const left = Math.max(4, Math.min(p.x - w / 2, pane.clientWidth - w - 4));
+    el.style.transform = 'translate(' + Math.round(left) + 'px, ' + Math.round(Math.max(4, top)) + 'px)';
+    el.dataset.side = above ? 'dessus' : 'dessous';
+    el.style.visibility = p.x < -20 || p.y < -20 || p.x > pane.clientWidth + 20 || p.y > pane.clientHeight + 20 ? 'hidden' : 'visible';
+  }, []);
+  useEffect(() => {
+    bubbleAt.current = props.popup?.position ?? null;
+    placeBubble();
+  });
   useEffect(() => {
     const m = map.current;
-    if (!m || !ready || !popupKey) return;
-    const node = document.createElement('div');
-    const p = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 18, maxWidth: '340px', className: 'point-popup' })
-      .setDOMContent(node)
-      .setLngLat(latest.current.popup!.position)
-      .addTo(m);
-    popup.current = p;
-    setPopupNode(node);
-    return () => {
-      p.remove();
-      popup.current = null;
-      setPopupNode(null);
-    };
-  }, [popupKey, ready]);
-  useEffect(() => {
-    if (props.popup) popup.current?.setLngLat(props.popup.position);
-  }, [props.popup?.position]);
+    if (!m || !ready) return;
+    m.on('move', placeBubble);
+    m.on('resize', placeBubble);
+    // Le contenu peut changer de taille (message d'erreur, confirmation…).
+    const ro = bubble.current ? new ResizeObserver(placeBubble) : null;
+    if (ro && bubble.current) ro.observe(bubble.current);
+    return () => { m.off('move', placeBubble); m.off('resize', placeBubble); ro?.disconnect(); };
+  }, [ready, placeBubble, props.popup?.key]);
 
   useEffect(() => {
     const m = map.current;
@@ -360,7 +392,9 @@ export function MapView(props: Props) {
   return (
     <>
       <div ref={container} className="map" data-testid="map" />
-      {popupNode && props.popup ? createPortal(props.popup.content, popupNode) : null}
+      {props.popup && ready ? (
+        <div ref={bubble} key={props.popup.key} className="map-bubble" data-testid="map-bubble">{props.popup.content}</div>
+      ) : null}
     </>
   );
 }

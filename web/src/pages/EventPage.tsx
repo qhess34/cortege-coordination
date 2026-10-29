@@ -280,6 +280,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           onMapClick={mapClick}
           onEditMove={(p) => setEdit((prev) => (prev ? { ...prev, position: p } : prev))}
           edit={canEdit ? edit : null}
+          canEdit={canEdit}
           popup={popup}
           onBasemapError={(text) => setToast({ kind: 'error', text })}
           focus={focus}

@@ -61,6 +61,13 @@ test('clic sur la carte : menu, photo la plus proche, fermeture', async ({ page 
   // Le viewer ne modifie pas l'adresse de la page.
   expect(new URL(page.url()).hash).toMatch(/^#\/evenements\/\d+$/);
 
+  // Régression : le viewer injecte des styles globaux (pointer-events: none sur les popups MapLibre) qui
+  // rendaient le menu de la carte inutilisable une fois la visionneuse ouverte.
+  await map.click({ position: { x: box.width * 0.25, y: box.height * 0.7 } });
+  await menu.getByRole('menuitem', { name: /Ajouter un point ici/ }).click();
+  await expect(page.getByTestId('point-editor')).toBeVisible();
+  await page.getByTestId('point-editor').getByRole('button', { name: 'Annuler' }).click();
+
   await page.getByRole('button', { name: 'Fermer la vue Panoramax' }).click();
   await expect(panel).toHaveCount(0);
 
