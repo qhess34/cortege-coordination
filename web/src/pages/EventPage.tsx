@@ -74,6 +74,7 @@ export function EventPage({ eventId }: { eventId: number }) {
   const [panoramax, setPanoramax] = useState(readPanoramaxPref);
   const [inspectAt, setInspectAt] = useState<Position | null>(null);
   const [photoAt, setPhotoAt] = useState<Position | null>(null);
+  const [photoView, setPhotoView] = useState<{ position: Position; heading: number } | null>(null);
   const [basemap, setBasemap] = useState(readBasemapPref);
   // Point en cours d'ajout ou de modification sur la carte (valeurs non enregistrées).
   const [edit, setEdit] = useState<PointEdit | null>(null);
@@ -190,6 +191,7 @@ export function EventPage({ eventId }: { eventId: number }) {
   const openPhotos = (p: Position) => {
     setInspectAt(p);
     setPhotoAt(null);
+    setPhotoView(null);
   };
 
   const editingPoint = edit?.kind === 'existing' ? data.points.find((p) => p.id === edit.id) ?? null : null;
@@ -295,7 +297,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           onBasemapError={(text) => setToast({ kind: 'error', text })}
           focus={focus}
           basemap={basemap}
-          panoramax={{ enabled: panoramax, tilesUrl: PANORAMAX_API + '/map/{z}/{x}/{y}.mvt', clicked: inspectAt, photo: photoAt }}
+          panoramax={{ enabled: panoramax, tilesUrl: PANORAMAX_API + '/map/{z}/{x}/{y}.mvt', clicked: inspectAt, photo: photoView ? null : photoAt, view: photoView }}
         />
         <div className="map-toolbar">
           {canEdit && (
@@ -310,7 +312,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           <label className="check" title="Rues couvertes par des photos Panoramax (à partir du zoom 13)"><input type="checkbox" checked={panoramax} onChange={(e) => togglePanoramax(e.target.checked)} /> Couverture photos</label>
         </div>
         {inspectAt && (
-          <PanoramaxPanel position={inspectAt} onPicture={(p) => setPhotoAt(p?.position ?? null)} onClose={() => { setInspectAt(null); setPhotoAt(null); }} />
+          <PanoramaxPanel position={inspectAt} onPicture={(p) => setPhotoAt(p?.position ?? null)} onView={setPhotoView} onClose={() => { setInspectAt(null); setPhotoAt(null); setPhotoView(null); }} />
         )}
         {addMode && <div className="map-hint">Cliquez sur la carte pour placer un point, complétez sa fiche puis « Ajouter ». Recommencez pour le suivant.</div>}
         <div className="disclaimer">

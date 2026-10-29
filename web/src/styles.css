@@ -229,3 +229,10 @@ a.button:hover { border-color: var(--primary); }
   .rb-point-body { grid-template-columns: 1fr 75mm; }
   a { color: #000; }
 }
+
+/* Boussole Panoramax : cercle orienté au nord, cône = direction regardée dans la visionneuse */
+.pnx-compass { width: 96px; height: 96px; pointer-events: none; }
+.pnx-compass .cone path { fill: rgba(255, 111, 0, .35); stroke: #ff6f00; stroke-width: 2; }
+.pnx-compass .ring { fill: none; stroke: rgba(29, 53, 87, .7); stroke-width: 2; stroke-dasharray: 3 3; }
+.pnx-compass .north { font: bold 11px system-ui, sans-serif; fill: #d62828; text-anchor: middle; }
+.pnx-compass .center { fill: #ff6f00; stroke: #fff; stroke-width: 2; }

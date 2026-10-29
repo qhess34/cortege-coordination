@@ -51,7 +51,11 @@ interface Props {
   /** Identifiant du fond de carte (voir basemaps.ts). */
   basemap?: string;
   /** Affiche la couverture Panoramax et les repères d'inspection. */
-  panoramax?: { enabled: boolean; tilesUrl: string; clicked: Position | null; photo: Position | null };
+  panoramax?: {
+    enabled: boolean; tilesUrl: string; clicked: Position | null; photo: Position | null;
+    /** Boussole : position de la photo affichée et direction regardée (0° = nord). */
+    view?: { position: Position; heading: number } | null;
+  };
 }
 
 
@@ -246,6 +250,34 @@ export function MapView(props: Props) {
       void showVector(false);
     }
   }, [props.basemap, ready, vectorFailed]);
+
+  // Boussole Panoramax : cercle orienté au nord (suit la rotation de la carte) et cône de vision tourné vers la
+  // direction regardée dans la visionneuse.
+  const compass = useRef<{ marker: maplibregl.Marker; cone: HTMLElement } | null>(null);
+  const view = props.panoramax?.view ?? null;
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    if (!view) {
+      compass.current?.marker.remove();
+      compass.current = null;
+      return;
+    }
+    if (!compass.current) {
+      const el = document.createElement('div');
+      el.className = 'pnx-compass';
+      el.setAttribute('data-testid', 'boussole');
+      el.innerHTML =
+        '<svg viewBox="-50 -50 100 100" width="96" height="96" aria-hidden="true">' +
+        '<g class="cone"><path d="M0 0 L-24 -44 A50 50 0 0 1 24 -44 Z"/></g>' +
+        '<circle r="30" class="ring"/><text y="-33" class="north">N</text><circle r="5" class="center"/></svg>';
+      const marker = new maplibregl.Marker({ element: el, rotationAlignment: 'map', pitchAlignment: 'map' }).setLngLat(view.position).addTo(m);
+      compass.current = { marker, cone: el.querySelector('.cone') as HTMLElement };
+    }
+    compass.current.marker.setLngLat(view.position);
+    compass.current.cone.setAttribute('transform', 'rotate(' + view.heading.toFixed(1) + ')');
+    compass.current.marker.getElement().dataset.cap = String(Math.round(view.heading));
+  }, [view?.position, view?.heading, ready]);
 
   const pnx = props.panoramax;
   useEffect(() => {

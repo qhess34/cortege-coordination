@@ -1,5 +1,6 @@
 // Vue Panoramax au clic sur la carte. L'API Panoramax est simulée (aucun appel réseau réel).
 import { expect, test, type Page } from '@playwright/test';
+import { mockPanoramax } from './helpers-panoramax';
 
 const H = { 'x-requested-with': 'cortege' };
 
@@ -110,4 +111,27 @@ test('le panneau Panoramax se déplace par sa barre de titre et reste dans la ca
   const reset = (await panel.boundingBox())!;
   expect(Math.round(reset.x)).toBe(Math.round(initial.x));
   expect(Math.round(reset.y)).toBe(Math.round(initial.y));
+});
+
+test('boussole sur la carte, orientée comme la visionneuse (photo réellement chargée)', async ({ page }) => {
+  // Photo prise 30 m à l'ouest de l'endroit cliqué.
+  await mockPanoramax(page, ([w, s, e, n]) => [(w! + e!) / 2 - 30 / (111195 * Math.cos((((s! + n!) / 2) * Math.PI) / 180)), (s! + n!) / 2]);
+  page.on('pageerror', (e) => console.log('PAGEERROR', e.message));
+  await openEvent(page);
+  const map = page.getByTestId('map');
+  const box = (await map.boundingBox())!;
+  await map.click({ position: { x: box.width / 2, y: box.height / 2 } });
+  await page.getByRole('menuitem', { name: /Voir les photos ici/ }).click();
+  const viewer = page.locator('pnx-photo-viewer');
+  await expect(viewer).toHaveCount(1);
+
+  // La photo se charge réellement : la vue est tournée vers l'endroit cliqué, à l'est (90°) de la photo.
+  const compass = page.getByTestId('boussole');
+  await expect(compass).toHaveAttribute('data-cap', /^(89|90|91)$/, { timeout: 20_000 });
+  // On tourne la vue dans la visionneuse : la boussole suit.
+  await viewer.evaluate((el) => (el as unknown as { psv: { setXYZ: (x: number, y: number, z: number) => void } }).psv.setXYZ(200, 0, 0));
+  await expect(compass).toHaveAttribute('data-cap', /^(199|200|201)$/);
+  // Elle disparaît avec la visionneuse.
+  await page.getByRole('button', { name: 'Fermer la vue Panoramax' }).click();
+  await expect(compass).toHaveCount(0);
 });

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
+import { bearing } from '../../../server/src/geo/route';
 import { PANORAMAX_API, SEARCH_RADIUS, exploreUrl, findNearestPicture, type NearestPicture } from '../panoramax';
 import { dateTime } from '../labels';
 import type { Position } from '../types';
@@ -8,6 +9,8 @@ interface Props {
   onClose: () => void;
   /** Photo trouvée (ou null), pour la repérer sur la carte. */
   onPicture: (p: NearestPicture | null) => void;
+  /** Photo affichée et direction regardée (0° = nord, sens horaire), pour la boussole de la carte. */
+  onView?: (v: { position: Position; heading: number }) => void;
 }
 
 type State = { kind: 'loading' } | { kind: 'none' } | { kind: 'error'; message: string } | { kind: 'ok'; picture: NearestPicture };
@@ -95,12 +98,17 @@ function useDraggablePanel(disabled: boolean) {
   return { root, handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onDoubleClick } };
 }
 
-export function PanoramaxPanel({ position, onClose, onPicture }: Props) {
+export function PanoramaxPanel({ position, onClose, onPicture, onView }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [ready, setReady] = useState(false);
   const [large, setLarge] = useState(false);
   const { root, handlers } = useDraggablePanel(large);
   const host = useRef<HTMLDivElement>(null);
+  const orientPending = useRef(false);
+  const clicked = useRef(position);
+  clicked.current = position;
+  const viewRef = useRef(onView);
+  viewRef.current = onView;
   const viewer = useRef<(HTMLElement & { select?: (seq: string | null, pic: string | null, force?: boolean) => void }) | null>(null);
   const report = useRef(onPicture);
   report.current = onPicture;
@@ -134,7 +142,10 @@ export function PanoramaxPanel({ position, onClose, onPicture }: Props) {
     if (state.kind !== 'ok' || !ready || !host.current) return;
     const { id, sequence } = state.picture;
     if (viewer.current) {
-      if (viewer.current.getAttribute('picture') !== id) viewer.current.select?.(sequence, id, true);
+      if (viewer.current.getAttribute('picture') !== id) {
+        orientPending.current = true;
+        viewer.current.select?.(sequence, id, true);
+      }
       return;
     }
     const attrs: Record<string, string> = {
@@ -146,6 +157,33 @@ export function PanoramaxPanel({ position, onClose, onPicture }: Props) {
     const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
     host.current.innerHTML = '<pnx-photo-viewer ' + Object.entries(attrs).map(([k, v]) => k + '="' + esc(v) + '"').join(' ') + '></pnx-photo-viewer>';
     viewer.current = host.current.firstElementChild as HTMLElement;
+    orientPending.current = true;
+    // Boussole : position de la photo et direction regardée, à chaque photo et à chaque rotation.
+    const el = viewer.current as HTMLElement & { psv?: { setXYZ?: (x: number, y: number, z: number) => void; getXYZ?: () => { z: number } } };
+    let photoPos: Position | null = null;
+    el.addEventListener('psv:picture-loaded', (ev) => {
+      const d = (ev as CustomEvent<{ lon?: number; lat?: number; x?: number }>).detail;
+      if (typeof d.lon !== 'number' || typeof d.lat !== 'number') return;
+      photoPos = [d.lon, d.lat];
+      let heading = d.x ?? 0;
+      // Photo chargée suite à un clic sur la carte : on tourne la vue vers l'endroit cliqué.
+      const target = clicked.current;
+      if (orientPending.current && target && (Math.abs(target[0] - d.lon) > 1e-6 || Math.abs(target[1] - d.lat) > 1e-6)) {
+        heading = bearing(photoPos, target);
+        try {
+          el.psv?.setXYZ?.(heading, 0, el.psv.getXYZ?.().z ?? 0);
+        } catch {
+          // Visionneuse pas encore prête : la vue garde son orientation d'origine.
+          heading = d.x ?? 0;
+        }
+      }
+      orientPending.current = false;
+      viewRef.current?.({ position: photoPos, heading });
+    });
+    el.addEventListener('psv:view-rotated', (ev) => {
+      const d = (ev as CustomEvent<{ x?: number }>).detail;
+      if (photoPos && typeof d.x === 'number') viewRef.current?.({ position: photoPos, heading: ((d.x % 360) + 360) % 360 });
+    });
   }, [state, ready]);
 
   return (
