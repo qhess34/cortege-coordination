@@ -1,4 +1,5 @@
 import type { Client } from './db.js';
+import { markTouched } from './services/live.js';
 
 /** Journal des modifications importantes. Ne jamais y mettre de secret (mot de passe, jeton, lien). */
 export async function audit(
@@ -9,4 +10,6 @@ export async function audit(
     'INSERT INTO audit_logs(actor_id, event_id, entity, entity_id, action, details) VALUES ($1, $2, $3, $4, $5, $6)',
     [entry.actorId, entry.eventId, entry.entity, entry.entityId, entry.action, JSON.stringify(entry.details ?? {})],
   );
+  // Signal temps réel envoyé une fois la réponse partie (donc la transaction validée).
+  markTouched(entry.eventId);
 }

@@ -6,11 +6,15 @@ import { loadConfig } from './config.js';
 import { createPool } from './db.js';
 import { migrate } from './migrate.js';
 import { overpassFetcher } from './services/overpass.js';
+import { osrmRouter } from './services/routing.js';
 
 const config = loadConfig();
 const db = createPool(config.databaseUrl);
 const applied = await migrate(db);
-const app = await buildApp({ db, config, osm: overpassFetcher(config.overpassUrls, config.userAgent), logger: true });
+const app = await buildApp({ db, config, osm: overpassFetcher(config.overpassUrls, config.userAgent),
+  router: config.routingUrl ? osrmRouter(config.routingUrl, config.userAgent) : null,
+  logger: true,
+ });
 if (applied.length) app.log.info({ applied }, 'migrations appliquées');
 
 // En production, le serveur distribue aussi l'interface compilée (web/dist).

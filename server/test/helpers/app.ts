@@ -7,6 +7,7 @@ import { createPool, type Db } from '../../src/db.js';
 import type { OverpassResponse } from '../../src/geo/osm-analysis.js';
 import { migrate } from '../../src/migrate.js';
 import { resetLoginFailures } from '../../src/routes/auth.js';
+import type { Position } from '../../src/geo/route.js';
 
 export const TEST_DB = process.env.TEST_DATABASE_URL ?? 'postgres://cortege:cortege@localhost:5432/cortege_test';
 
@@ -15,10 +16,12 @@ export interface TestContext {
   db: Db;
   /** Réponse Overpass renvoyée par le faux client ; modifiable entre deux analyses. */
   osm: { data: OverpassResponse; queries: string[]; fail: Error | null; respond: ((query: string, n: number) => OverpassResponse) | null };
+  /** Faux service d'itinéraire : ligne droite, ou erreur si `fail`. */
+  router: { calls: [Position, Position][]; fail: Error | null };
   close: () => Promise<void>;
 }
 
-export async function setup(opts: { logStream?: NodeJS.WritableStream; joinRateLimit?: number } = {}): Promise<TestContext> {
+export async function setup(opts: { logStream?: NodeJS.WritableStream; joinRateLimit?: number; noRouter?: boolean } = {}): Promise<TestContext> {
   const db = createPool(TEST_DB);
   await db.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
@@ -29,11 +32,18 @@ export async function setup(opts: { logStream?: NodeJS.WritableStream; joinRateL
     // Les tests ouvrent de nombreux liens depuis la même adresse ; la limite est testée à part.
     joinRateLimit: opts.joinRateLimit ?? 10_000,
     loginRateLimit: 20,
+    routingUrl: null,
   };
   const osm: TestContext['osm'] = { data: { elements: [] }, queries: [], fail: null, respond: null };
+  const router: TestContext['router'] = { calls: [], fail: null };
   const app = await buildApp({
     db,
     config,
+    router: opts.noRouter ? null : async (from, to) => {
+      router.calls.push([from, to]);
+      if (router.fail) throw router.fail;
+      return { geometry: [from, to], distance: 123, duration: 90 };
+    },
     logStream: opts.logStream,
     osm: async (q) => {
       osm.queries.push(q);
@@ -41,7 +51,7 @@ export async function setup(opts: { logStream?: NodeJS.WritableStream; joinRateL
       return structuredClone(osm.respond ? osm.respond(q, osm.queries.length) : osm.data);
     },
   });
-  return { app, db, osm, close: async () => { await app.close(); await db.end(); } };
+  return { app, db, osm, router, close: async () => { await app.close(); await db.end(); } };
 }
 
 export async function createUser(db: Db, login: string, globalRole: 'admin' | 'organisateur' | 'aucun', password = 'mot-de-passe-solide'): Promise<number> {

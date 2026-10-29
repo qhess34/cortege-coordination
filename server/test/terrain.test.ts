@@ -1,0 +1,184 @@
+// Lot 3 : vue de mission, statuts depuis le terrain, incidents, messages, progression, tableau de bord, direct.
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Agent, createUser, setup, type TestContext } from './helpers/app.js';
+import { at, gpxFrom } from './helpers/osm.js';
+
+let ctx: TestContext;
+let orga: Agent;
+let alice: Agent; // participante de l'équipe A
+let bob: Agent; // participant de l'équipe B
+let eventId: number;
+let teamA: number;
+let teamB: number;
+let missionA: number;
+
+const mission = async (who: Agent) => (await who.get('/api/terrain/equipes/' + teamA)).json().missions[0];
+
+beforeAll(async () => {
+  ctx = await setup();
+  await createUser(ctx.db, 'orga', 'organisateur');
+  orga = new Agent(ctx.app);
+  await orga.login('orga');
+  eventId = (await orga.post('/api/events', { name: 'Jour J', instructions: 'Gilets.' })).json().id;
+  await orga.upload('/api/events/' + eventId + '/tracks', gpxFrom([[[0, 0], [500, 0]]]));
+  teamA = (await orga.post('/api/events/' + eventId + '/teams', { name: 'Équipe A', color: '#e63946' })).json().id;
+  teamB = (await orga.post('/api/events/' + eventId + '/teams', { name: 'Équipe B', color: '#1d3557' })).json().id;
+  const p = (await orga.post('/api/events/' + eventId + '/points', { name: 'Angle', position: at(200, 0) })).json().id;
+  await orga.post('/api/teams/' + teamA + '/missions', { pointId: p });
+  for (const [team, name] of [[teamA, 'Alice'], [teamB, 'Bob']] as const) {
+    const inv = (await orga.post('/api/teams/' + team + '/invitations', { kind: 'equipe', admission: 'immediate' })).json();
+    const a = new Agent(ctx.app);
+    expect((await a.join(inv.token, name)).statusCode).toBe(200);
+    if (name === 'Alice') alice = a; else bob = a;
+  }
+  missionA = (await mission(alice)).id;
+});
+afterAll(() => ctx.close());
+
+describe('vue de mission', () => {
+  it('le membre voit son équipe, ses missions et le parcours ; pas les autres équipes', async () => {
+    const r = (await alice.get('/api/terrain/equipes/' + teamA)).json();
+    expect(r.team.name).toBe('Équipe A');
+    expect(r.me).toMatchObject({ displayName: 'Alice', role: 'membre', organizer: false });
+    expect(r.missions).toHaveLength(1);
+    expect(r.missions[0]).toMatchObject({ status: 'affectee', point: { name: 'Angle' } });
+    expect(r.track[0].length).toBeGreaterThanOrEqual(2);
+    expect(r.event.instructions).toBe('Gilets.');
+    expect((await alice.get('/api/terrain/equipes/' + teamB)).statusCode).toBe(404);
+    expect((await orga.get('/api/terrain/equipes/' + teamB)).statusCode).toBe(200);
+  });
+});
+
+describe('statuts posés depuis le terrain', () => {
+  it('en route, arrivé, terminé ; pas de retour en arrière ni de version périmée', async () => {
+    let m = await mission(alice);
+    const post = (who: Agent, status: string, version: number) => who.post('/api/terrain/missions/' + m.id + '/statut', { status, version });
+    expect((await post(alice, 'en_deplacement', m.version)).statusCode).toBe(200);
+    expect((await post(alice, 'en_position', m.version)).statusCode).toBe(409); // version périmée
+    m = await mission(alice);
+    expect((await post(alice, 'affectee', m.version)).statusCode).toBe(409); // retour réservé à l'organisation
+    expect((await post(bob, 'en_position', m.version)).statusCode).toBe(404); // autre équipe
+    expect((await post(alice, 'en_position', m.version)).statusCode).toBe(200);
+    m = await mission(alice);
+    expect(m.status).toBe('en_position');
+    expect(m.statusChangedAt).toBeTruthy();
+    const t = (await orga.get('/api/events/' + eventId + '/tableau')).json();
+    expect(t.teams.find((x: { id: number }) => x.id === teamA).missions[0]).toMatchObject({ status: 'en_position', changedBy: 'Alice' });
+  });
+});
+
+describe('incidents', () => {
+  let incidentId: number;
+  it('un signalement sur la mission la passe en « incident » ; « aide » est prioritaire', async () => {
+    const r = await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', description: 'Voiture qui force le passage', missionId: missionA, position: at(200, 5) });
+    expect(r.statusCode).toBe(201);
+    expect(r.json()).toMatchObject({ priority: 'haute', status: 'ouvert', pointName: 'Angle', reporterName: 'Alice', teamName: 'Équipe A' });
+    incidentId = r.json().id;
+    expect((await mission(alice)).status).toBe('incident');
+    expect((await bob.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'autre' })).statusCode).toBe(404);
+    const list = (await orga.get('/api/events/' + eventId + '/incidents')).json();
+    expect(list.map((i: { id: number }) => i.id)).toContain(incidentId);
+  });
+  it('suivi par l’organisation ; un simple membre ne peut pas clore', async () => {
+    let i = (await orga.get('/api/events/' + eventId + '/incidents')).json()[0];
+    expect((await alice.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version })).statusCode).toBe(403);
+    expect((await bob.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version })).statusCode).toBe(404);
+    const taken = await orga.patch('/api/incidents/' + i.id, { status: 'pris_en_charge', version: i.version });
+    expect(taken.json()).toMatchObject({ status: 'pris_en_charge', handledByName: expect.any(String) });
+    expect((await orga.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version })).statusCode).toBe(409);
+    i = taken.json();
+    expect((await orga.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version })).json().resolvedAt).toBeTruthy();
+    // La mission peut reprendre depuis le terrain.
+    const m = await mission(alice);
+    expect((await alice.post('/api/terrain/missions/' + m.id + '/statut', { status: 'en_position', version: m.version })).statusCode).toBe(200);
+  });
+});
+
+describe('messages', () => {
+  it('annonce à tous et message d’équipe ; chacun ne voit que les siens ; accusés de lecture', async () => {
+    const all = (await orga.post('/api/events/' + eventId + '/messages', { body: 'Départ dans 10 min', urgent: true })).json();
+    await orga.post('/api/events/' + eventId + '/messages', { body: 'Équipe A : avancez au carrefour', teamId: teamA });
+    const a = (await alice.get('/api/terrain/equipes/' + teamA)).json().messages;
+    expect(a.map((m: { body: string }) => m.body)).toEqual(['Équipe A : avancez au carrefour', 'Départ dans 10 min']);
+    expect(a.every((m: { read: boolean; fromOrganisation: boolean }) => !m.read && m.fromOrganisation)).toBe(true);
+    const b = (await bob.get('/api/terrain/equipes/' + teamB)).json().messages;
+    expect(b.map((m: { body: string }) => m.body)).toEqual(['Départ dans 10 min']);
+
+    expect((await alice.post('/api/messages/' + all.id + '/lu')).statusCode).toBe(200);
+    expect((await alice.post('/api/messages/' + all.id + '/lu')).statusCode).toBe(200);
+    const teamMsg = a[0];
+    expect((await bob.post('/api/messages/' + teamMsg.id + '/lu')).statusCode).toBe(404);
+    const o = (await orga.get('/api/events/' + eventId + '/messages')).json();
+    expect(o.find((m: { id: number }) => m.id === all.id)).toMatchObject({ reads: 1, recipients: 2, urgent: true });
+
+    const reply = await alice.post('/api/terrain/equipes/' + teamA + '/messages', { body: 'Bien reçu' });
+    expect(reply.statusCode).toBe(201);
+    expect(reply.json()).toMatchObject({ authorName: 'Alice', fromOrganisation: false });
+    expect((await bob.post('/api/events/' + eventId + '/messages', { body: 'Je me fais passer pour l’orga' })).statusCode).toBe(404);
+  });
+});
+
+describe('progression déclarée', () => {
+  it('déclarée par l’organisation (ou un responsable), jamais par un simple membre', async () => {
+    expect((await alice.post('/api/events/' + eventId + '/progression', { distance: 100 })).statusCode).toBe(403);
+    expect((await orga.post('/api/events/' + eventId + '/progression', { distance: 5000 })).statusCode).toBe(400);
+    const r = await orga.post('/api/events/' + eventId + '/progression', { distance: 150, note: 'Tête place de la mairie' });
+    expect(r.statusCode).toBe(201);
+    expect(r.json()).toMatchObject({ distance: 150, note: 'Tête place de la mairie' });
+    expect((await alice.get('/api/terrain/equipes/' + teamA)).json().progress.distance).toBe(150);
+    const t = (await orga.get('/api/events/' + eventId + '/tableau')).json();
+    expect(t.progress.distance).toBe(150);
+    expect(t.progressHistory).toHaveLength(1);
+    expect(t.teams.find((x: { id: number }) => x.id === teamA)).toMatchObject({ members: 1 });
+  });
+});
+
+describe('itinéraire piéton', () => {
+  it('passe par le service configuré ; erreur claire s’il échoue', async () => {
+    const r = await alice.get('/api/terrain/itineraire?from=2.35,48.85&to=2.351,48.851');
+    expect(r.json()).toMatchObject({ distance: 123, duration: 90 });
+    expect(ctx.router.calls.at(-1)).toEqual([[2.35, 48.85], [2.351, 48.851]]);
+    ctx.router.fail = new (await import('../src/services/routing.js')).RoutingError('Aucun itinéraire piéton trouvé.');
+    const e = await alice.get('/api/terrain/itineraire?from=2.35,48.85&to=2.351,48.851');
+    expect(e.statusCode).toBe(502);
+    expect(e.json().error).toBe('Aucun itinéraire piéton trouvé.');
+    ctx.router.fail = null;
+    expect((await alice.get('/api/terrain/itineraire?from=999,48&to=2,48')).statusCode).toBe(400);
+    expect((await new Agent(ctx.app).get('/api/terrain/itineraire?from=2,48&to=2,48')).statusCode).toBe(401);
+  });
+});
+
+describe('direct (WebSocket)', () => {
+  // Les messages sont collectés dès l'ouverture (le premier arrive avant la fin de la poignée de main).
+  const open = async (who: Agent, ev: number) => {
+    const queue: string[] = [];
+    const waiters: ((m: string) => void)[] = [];
+    const ws = await ctx.app.injectWS('/api/direct?event=' + ev, { headers: { cookie: who.cookie ?? '' } }, {
+      onInit: (w) => w.on('message', (d) => { const w0 = waiters.shift(); if (w0) w0(String(d)); else queue.push(String(d)); }),
+    });
+    const next = () => new Promise<string>((resolve, reject) => {
+      if (queue.length) return resolve(queue.shift()!);
+      const t = setTimeout(() => reject(new Error('aucun message')), 3000);
+      waiters.push((m) => { clearTimeout(t); resolve(m); });
+    });
+    return Object.assign(ws, { next });
+  };
+
+  it('un membre reçoit un signal après une modification, sans aucune donnée', async () => {
+    const ws = await open(alice, eventId);
+    expect(JSON.parse(await ws.next()).type).toBe('connecte');
+    const got = ws.next();
+    await orga.post('/api/events/' + eventId + '/messages', { body: 'Signal' });
+    const msg = JSON.parse(await got);
+    expect(msg.type).toBe('maj');
+    expect(Object.keys(msg).sort()).toEqual(['at', 'type']);
+    ws.terminate();
+  });
+  it('refusé hors de sa manifestation ou sans session', async () => {
+    const other = (await orga.post('/api/events', { name: 'Autre' })).json().id;
+    for (const ws of [await open(alice, other), await open(new Agent(ctx.app), eventId)]) {
+      const code = await new Promise<number>((resolve) => ws.once('close', (c) => resolve(c)));
+      expect(code).toBe(4404);
+    }
+  });
+});

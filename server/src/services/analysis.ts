@@ -98,7 +98,7 @@ export function startAnalysisJob(app: FastifyInstance, userId: number, eventId: 
   const job: AnalysisJob = { id: randomBytes(12).toString('base64url'), eventId, status: 'en_cours', progress: { done: 0, total: 0 }, startedAt: Date.now() };
   jobs.set(job.id, job);
   runAnalysis(app, userId, eventId, b, (done, total) => { job.progress = { done, total }; }).then(
-    (result) => { job.status = 'termine'; job.result = result; },
+    (result) => { job.status = 'termine'; job.result = result; app.live.publish(eventId); },
     (e: Error) => { job.status = 'echec'; job.error = e instanceof HttpError ? e.message : 'Erreur interne pendant l’analyse.'; if (!(e instanceof HttpError)) app.log.error(e); },
   );
   return job;

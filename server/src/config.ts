@@ -16,6 +16,8 @@ export interface Config {
   joinRateLimit: number;
   /** Tentatives de connexion autorisées par minute et par adresse IP. */
   loginRateLimit: number;
+  /** Serveur d'itinéraires compatible OSRM, profil piéton (facultatif). */
+  routingUrl: string | null;
 }
 
 function bool(v: string | undefined, def: boolean): boolean {
@@ -40,5 +42,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     webDist: env.WEB_DIST ?? null,
     joinRateLimit: Number(env.JOIN_RATE_LIMIT ?? 30),
     loginRateLimit: Number(env.LOGIN_RATE_LIMIT ?? 20),
+    routingUrl: env.ROUTING_URL || null,
   };
 }

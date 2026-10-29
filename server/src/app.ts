@@ -1,13 +1,16 @@
 import cookie from '@fastify/cookie';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
+import websocket from '@fastify/websocket';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import { SESSION_COOKIE, loadSession, type SessionUser } from './auth.js';
 import type { Config } from './config.js';
 import type { Db } from './db.js';
 import { HttpError } from './errors.js';
+import { LiveHub, runWithTracking } from './services/live.js';
 import type { OsmFetcher } from './services/overpass.js';
+import type { WalkRouter } from './services/routing.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { eventRoutes } from './routes/events.js';
@@ -16,16 +19,21 @@ import { pointRoutes } from './routes/points.js';
 import { roadbookRoutes } from './routes/roadbook.js';
 import { suggestionRoutes } from './routes/suggestions.js';
 import { teamRoutes } from './routes/teams.js';
+import { terrainRoutes } from './routes/terrain.js';
 import { trackRoutes } from './routes/tracks.js';
 
 declare module 'fastify' {
   interface FastifyRequest {
     user: SessionUser | null;
+    /** Manifestations modifiées par la requête (signal temps réel). */
+    touched: Set<number> | null;
   }
   interface FastifyInstance {
     db: Db;
     config: Config;
     osm: OsmFetcher;
+    router: WalkRouter | null;
+    live: LiveHub;
   }
 }
 
@@ -33,6 +41,8 @@ export interface AppDeps {
   db: Db;
   config: Config;
   osm: OsmFetcher;
+  /** Itinéraires piétons (facultatif : sans lui, l'application propose un lien vers une carte externe). */
+  router?: WalkRouter | null;
   logger?: boolean;
   /** Flux de journal (tests : vérifier qu'aucun jeton n'y apparaît). */
   logStream?: NodeJS.WritableStream;
@@ -57,11 +67,25 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorate('db', deps.db);
   app.decorate('config', deps.config);
   app.decorate('osm', deps.osm);
+  app.decorate('router', deps.router ?? null);
+  app.decorate('live', new LiveHub());
   app.decorateRequest('user', null);
+  app.decorateRequest('touched', null);
+  app.addHook('onClose', async () => app.live.close());
+
+  // Suit les manifestations modifiées pendant la requête ; le signal part après l'envoi de la réponse, c'est-à-dire
+  // après la validation de la transaction.
+  app.addHook('onRequest', (req, _reply, done) => {
+    req.touched = runWithTracking(done);
+  });
+  app.addHook('onResponse', async (req, reply) => {
+    if (reply.statusCode < 400) for (const id of req.touched ?? []) app.live.publish(id);
+  });
 
   await app.register(cookie);
   await app.register(multipart, { limits: { fileSize: deps.config.maxGpxBytes, files: 1 } });
   await app.register(rateLimit, { global: false });
+  await app.register(websocket, { options: { maxPayload: 4096 } });
 
   app.addHook('onRequest', async (req, reply) => {
     reply.header('x-content-type-options', 'nosniff');
@@ -105,6 +129,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(teamRoutes);
   await app.register(roadbookRoutes);
   await app.register(invitationRoutes);
+  await app.register(terrainRoutes);
   return app;
 }
 

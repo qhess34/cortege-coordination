@@ -230,7 +230,10 @@ export async function teamRoutes(app: FastifyInstance) {
       if (!allowed.includes(b.status)) {
         throw conflict('Passage de « ' + m.status + ' » à « ' + b.status + ' » non autorisé.', { allowed });
       }
-      const r = await c.query('UPDATE missions SET status = $2, version = version + 1, updated_at = now() WHERE id = $1 RETURNING status, version', [id, b.status]);
+      const r = await c.query(
+        'UPDATE missions SET status = $2, version = version + 1, updated_at = now(), status_changed_at = now(), status_changed_by = $3 WHERE id = $1 RETURNING status, version',
+        [id, b.status, u.id],
+      );
       await audit(c, { actorId: u.id, eventId, entity: 'mission', entityId: id, action: 'statut', details: { from: m.status, to: b.status } });
       return { id, status: r.rows[0].status, version: r.rows[0].version };
     });
