@@ -3,6 +3,7 @@ declare module '@panoramax/web-viewer';
 
 interface ImportMetaEnv {
   readonly VITE_TILE_URL?: string;
+  readonly VITE_VECTOR_STYLE_URL?: string;
   readonly VITE_PANORAMAX_URL?: string;
   readonly VITE_SATELLITE_URL?: string;
   readonly VITE_SATELLITE_ATTRIBUTION?: string;

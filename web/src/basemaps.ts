@@ -2,7 +2,10 @@
 export interface Basemap {
   id: string;
   label: string;
-  tiles: string;
+  /** Fond vectoriel : URL d'un style MapLibre (net à tout zoom et sur écran haute densité). */
+  style?: string;
+  /** Fond raster : modèle d'URL des tuiles. */
+  tiles?: string;
   maxzoom: number;
   attribution: string;
 }
@@ -14,8 +17,15 @@ const IGN_ATTRIBUTION = '© <a href="https://www.ign.fr" target="_blank" rel="no
 
 export const BASEMAPS: Basemap[] = [
   {
+    id: 'vectoriel',
+    label: 'Plan OSM (vectoriel, net)',
+    style: env.VITE_VECTOR_STYLE_URL || 'https://tiles.openfreemap.org/styles/liberty',
+    maxzoom: 20,
+    attribution: '',
+  },
+  {
     id: 'osm',
-    label: 'Plan OpenStreetMap',
+    label: 'Plan OSM (images)',
     tiles: env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
     maxzoom: 19,
     attribution: '© contributeurs <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>',
@@ -43,4 +53,6 @@ export const BASEMAPS: Basemap[] = [
   },
 ];
 
-export const DEFAULT_BASEMAP = 'osm';
+export const DEFAULT_BASEMAP = 'vectoriel';
+/** Fond raster utilisé si le style vectoriel ne peut pas être chargé. */
+export const FALLBACK_BASEMAP = 'osm';

@@ -20,7 +20,7 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   expect(created.status()).toBe(201);
 
   // Panoramax est testé à part (e2e/panoramax.spec.ts) : vue désactivée ici.
-  await page.addInitScript(() => localStorage.setItem('cortege.panoramax', 'non'));
+  await page.addInitScript(() => { localStorage.setItem('cortege.panoramax', 'non'); localStorage.setItem('cortege.fond', 'osm'); });
   await page.goto('/');
   await expect(page.getByText("Il n'y a pas d'inscription en ligne")).toBeVisible();
   await page.getByLabel('Identifiant').fill('orga');
@@ -53,15 +53,23 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   await page.locator('ul.items li', { hasText: 'Carrefour' }).click();
   await expect(page.getByText('Motif de la détection')).toBeVisible();
   await expect(page.locator('.detail').getByText(/Rue B/).first()).toBeVisible();
-  await page.getByRole('button', { name: 'Valider' }).click();
+  // La suggestion sélectionnée s'ouvre aussi en bulle sur la carte : on la valide depuis la carte.
+  const bubble = page.getByTestId('suggestion-popup');
+  await expect(bubble).toContainText('Carrefour');
+  await expect(bubble).toContainText('Rue B');
+  await bubble.getByRole('button', { name: 'Valider' }).click();
   await expect(page.getByText('point de mission créé')).toBeVisible();
+  // Le point créé s'ouvre directement en modification.
+  await expect(page.getByTestId('point-editor').getByLabel('Nom')).toHaveValue(/Carrefour/);
+  await page.getByTestId('point-editor').getByRole('button', { name: 'Annuler' }).click();
 
-  // 5. Écarter un point inutile.
+  // 5. Écarter un point inutile, depuis sa bulle.
   await page.getByRole('tab', { name: /Suggestions/ }).click();
   await page.locator('ul.items li', { hasText: 'Accès piéton' }).click();
-  await page.getByPlaceholder('Motif (facultatif)').fill('Sentier sans enjeu');
-  await page.getByRole('button', { name: 'Écarter' }).click();
+  await bubble.getByPlaceholder('Motif d’exclusion (facultatif)').fill('Sentier sans enjeu');
+  await bubble.getByRole('button', { name: 'Écarter' }).click();
   await expect(page.locator('ul.items li')).toHaveCount(4);
+  await expect(bubble).toHaveCount(0);
 
   // 6. Ajouter manuellement deux points sur la carte : un clic place le point, sa bulle permet de le compléter.
   await page.getByRole('button', { name: '+ Ajouter des points' }).click();

@@ -1,7 +1,10 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Route } from '../../../server/src/geo/route';
 import { ApiError, api } from '../api';
 import { MapView, type PointEdit, type Selection } from '../components/MapView';
+import { MapMenu } from '../components/MapMenu';
 import { PointEditor } from '../components/PointEditor';
+import { SuggestionPopup } from '../components/SuggestionPopup';
 import { PanoramaxPanel } from '../components/PanoramaxPanel';
 import { BASEMAPS, DEFAULT_BASEMAP } from '../basemaps';
 import { PANORAMAX_API } from '../panoramax';
@@ -37,7 +40,7 @@ export interface PanelProps {
 }
 
 type Tab = 'synthese' | 'parcours' | 'suggestions' | 'points' | 'equipes' | 'historique';
-/** Préférence locale (simple confort d'affichage) : vue Panoramax au clic sur la carte. */
+/** Préférence locale (simple confort d'affichage) : couverture des photos Panoramax sur la carte. */
 const PNX_PREF = 'cortege.panoramax';
 function readPanoramaxPref(): boolean {
   try {
@@ -76,13 +79,18 @@ export function EventPage({ eventId }: { eventId: number }) {
   const [edit, setEdit] = useState<PointEdit | null>(null);
   const [focus, setFocus] = useState<{ position: Position; n: number } | null>(null);
   const closeEdit = useCallback(() => setEdit(null), []);
+  // Menu ouvert par un clic sur la carte, et bulle de la suggestion sélectionnée.
+  const [menuAt, setMenuAt] = useState<Position | null>(null);
+  const [suggestionPopup, setSuggestionPopup] = useState(false);
+  const closeMenu = useCallback(() => setMenuAt(null), []);
+  const closeSuggestion = useCallback(() => setSuggestionPopup(false), []);
+  const route = useMemo(() => (data?.track ? new Route(data.track.geometry.coordinates) : null), [data?.track]);
   const chooseBasemap = (id: string) => {
     setBasemap(id);
     try { localStorage.setItem(BASEMAP_PREF, id); } catch { /* stockage indisponible : préférence non mémorisée */ }
   };
   const togglePanoramax = (on: boolean) => {
     setPanoramax(on);
-    if (!on) { setInspectAt(null); setPhotoAt(null); }
     try { localStorage.setItem(PNX_PREF, on ? 'oui' : 'non'); } catch { /* stockage indisponible : préférence non mémorisée */ }
   };
 
@@ -130,6 +138,8 @@ export function EventPage({ eventId }: { eventId: number }) {
   // Sélectionner un point (sur la carte ou dans la liste) ouvre sa bulle d'édition sur la carte.
   const select = (s: Selection) => {
     setSelection(s);
+    setMenuAt(null);
+    setSuggestionPopup(s?.kind === 'suggestion');
     if (s?.kind === 'suggestion') setTab('suggestions');
     if (s?.kind === 'point') setTab('points');
     const p = s?.kind === 'point' ? data.points.find((x) => x.id === s.id) : undefined;
@@ -149,11 +159,13 @@ export function EventPage({ eventId }: { eventId: number }) {
   // la validation de sa bulle. Le mode reste actif pour enchaîner plusieurs points.
   const placeDraft = (p: Position) => {
     setSelection(null);
+    setMenuAt(null);
     setEdit((prev) => (prev?.kind === 'new' ? { ...prev, position: p } : newDraft(p)));
   };
 
   const startDraft = (p: Position) => {
     setSelection(null);
+    setMenuAt(null);
     setEdit(newDraft(p));
     setFocus((f) => ({ position: p, n: (f?.n ?? 0) + 1 }));
   };
@@ -161,6 +173,20 @@ export function EventPage({ eventId }: { eventId: number }) {
   const toggleAddMode = () => {
     if (addMode && edit?.kind === 'new') setEdit(null);
     setAddMode(!addMode);
+  };
+
+  // Clic sur la carte hors point et suggestion : menu (photos, ajout d'un point…) ; en mode ajout, point provisoire.
+  const mapClick = (p: Position) => {
+    if (addMode && canEdit) return placeDraft(p);
+    setSelection(null);
+    setEdit(null);
+    setSuggestionPopup(false);
+    setMenuAt(p);
+  };
+
+  const openPhotos = (p: Position) => {
+    setInspectAt(p);
+    setPhotoAt(null);
   };
 
   const editingPoint = edit?.kind === 'existing' ? data.points.find((p) => p.id === edit.id) ?? null : null;
@@ -183,8 +209,60 @@ export function EventPage({ eventId }: { eventId: number }) {
         setToast({ kind: 'ok', text: 'Point supprimé.' });
         await reload();
       }}
+      onPhotos={() => openPhotos(edit.position)}
     />
   ) : null;
+
+  const selectedSuggestion = selection?.kind === 'suggestion' ? data.suggestions.find((x) => x.id === selection.id) : undefined;
+  const onRoute = menuAt && route ? route.locate(menuAt) : null;
+  const popup = editor && edit
+    ? { key: 'point:' + edit.kind + ':' + (edit.id ?? 'nouveau'), position: edit.position, content: editor }
+    : menuAt
+      ? {
+          key: 'menu:' + menuAt.join(','),
+          position: menuAt,
+          content: (
+            <MapMenu
+              position={menuAt}
+              onRoute={onRoute ? { distance: onRoute.distance, offset: onRoute.offset } : null}
+              canEdit={canEdit}
+              onClose={closeMenu}
+              onPhotos={() => { openPhotos(menuAt); setMenuAt(null); }}
+              onAddPoint={() => { setMenuAt(null); setEdit(newDraft(menuAt)); }}
+            />
+          ),
+        }
+      : selectedSuggestion && suggestionPopup
+        ? {
+            key: 'suggestion:' + selectedSuggestion.id,
+            position: selectedSuggestion.position,
+            content: (
+              <SuggestionPopup
+                key={selectedSuggestion.id}
+                s={selectedSuggestion}
+                canEdit={canEdit}
+                onClose={closeSuggestion}
+                onPhotos={() => openPhotos(selectedSuggestion.position)}
+                onDetails={() => setTab('suggestions')}
+                onDone={async (message, pointId) => {
+                  setToast({ kind: 'ok', text: message });
+                  await reload();
+                  setSuggestionPopup(false);
+                  if (pointId) {
+                    // La suggestion validée devient un point : on ouvre directement sa bulle de modification.
+                    setSelection({ kind: 'point', id: pointId });
+                    setTab('points');
+                    const pts = await api.get<MissionPoint[]>(base + '/points');
+                    const p = pts.find((x) => x.id === pointId);
+                    if (p) setEdit({ kind: 'existing', id: p.id, version: p.version, position: p.position, name: p.name, type: p.type, description: p.description });
+                  } else {
+                    setSelection(null);
+                  }
+                }}
+              />
+            ),
+          }
+        : null;
 
   const props: PanelProps = { data, canEdit, reload, run, selection, select, startDraft };
   const visibleSuggestions = data.suggestions.filter((s) => s.status === 'a_examiner' || (showDismissed && s.status === 'ecartee'));
@@ -199,13 +277,13 @@ export function EventPage({ eventId }: { eventId: number }) {
           selection={selection}
           addMode={addMode && canEdit}
           onSelect={select}
-          onMapClick={placeDraft}
+          onMapClick={mapClick}
           onEditMove={(p) => setEdit((prev) => (prev ? { ...prev, position: p } : prev))}
           edit={canEdit ? edit : null}
-          editor={editor}
+          popup={popup}
+          onBasemapError={(text) => setToast({ kind: 'error', text })}
           focus={focus}
           basemap={basemap}
-          onInspect={panoramax ? (p) => { setInspectAt(p); setPhotoAt(null); } : undefined}
           panoramax={{ enabled: panoramax, tilesUrl: PANORAMAX_API + '/map/{z}/{x}/{y}.mvt', clicked: inspectAt, photo: photoAt }}
         />
         <div className="map-toolbar">
@@ -218,9 +296,9 @@ export function EventPage({ eventId }: { eventId: number }) {
           <select className="basemap" value={basemap} onChange={(e) => chooseBasemap(e.target.value)} aria-label="Fond de carte">
             {BASEMAPS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}
           </select>
-          <label className="check" title="Affiche la photo de rue Panoramax la plus proche de l’endroit cliqué"><input type="checkbox" checked={panoramax} onChange={(e) => togglePanoramax(e.target.checked)} /> Photos Panoramax au clic</label>
+          <label className="check" title="Rues couvertes par des photos Panoramax (à partir du zoom 13)"><input type="checkbox" checked={panoramax} onChange={(e) => togglePanoramax(e.target.checked)} /> Couverture photos</label>
         </div>
-        {panoramax && inspectAt && !addMode && (
+        {inspectAt && (
           <PanoramaxPanel position={inspectAt} onPicture={(p) => setPhotoAt(p?.position ?? null)} onClose={() => { setInspectAt(null); setPhotoAt(null); }} />
         )}
         {addMode && <div className="map-hint">Cliquez sur la carte pour placer un point, complétez sa fiche puis « Ajouter ». Recommencez pour le suivant.</div>}

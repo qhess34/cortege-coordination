@@ -6,7 +6,8 @@ import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Route } from '../../../server/src/geo/route';
-import { BASEMAPS, DEFAULT_BASEMAP } from '../basemaps';
+import { BASEMAPS, DEFAULT_BASEMAP, FALLBACK_BASEMAP } from '../basemaps';
+import { loadVectorBasemap } from './vectorBasemap';
 import type { MissionPoint, Position, Suggestion, Track } from '../types';
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -34,13 +35,14 @@ interface Props {
   onMapClick: (p: Position) => void;
   /** Le point en cours d'édition a été glissé à une nouvelle position (non enregistrée). */
   onEditMove: (p: Position) => void;
-  /** Édition en cours : le marqueur reflète les valeurs saisies, la bulle contient le formulaire. */
+  /** Édition en cours : le marqueur reflète les valeurs saisies avant enregistrement. */
   edit: PointEdit | null;
-  editor: ReactNode;
+  /** Bulle affichée sur la carte (menu, fiche de suggestion, édition d'un point). */
+  popup: { key: string; position: Position; content: ReactNode } | null;
+  /** Le fond vectoriel n'a pas pu être chargé (le fond raster de secours est affiché). */
+  onBasemapError?: (message: string) => void;
   /** Demande de centrage (n change à chaque demande). */
   focus?: { position: Position; n: number } | null;
-  /** Clic hors mode ajout : position à inspecter (vue Panoramax). */
-  onInspect?: (p: Position) => void;
   /** Identifiant du fond de carte (voir basemaps.ts). */
   basemap?: string;
   /** Affiche la couverture Panoramax et les repères d'inspection. */
@@ -93,13 +95,13 @@ export function MapView(props: Props) {
       style: {
         version: 8,
         // Un seul fond visible à la fois ; les tuiles des fonds masqués ne sont pas téléchargées.
-        sources: Object.fromEntries(BASEMAPS.map((b) => [
+        sources: Object.fromEntries(BASEMAPS.filter((b) => b.tiles).map((b) => [
           'fond-' + b.id,
-          { type: 'raster' as const, tiles: [b.tiles], tileSize: 256, maxzoom: b.maxzoom, attribution: b.attribution },
+          { type: 'raster' as const, tiles: [b.tiles!], tileSize: 256, maxzoom: b.maxzoom, attribution: b.attribution },
         ])),
-        layers: BASEMAPS.map((b) => ({
+        layers: BASEMAPS.filter((b) => b.tiles).map((b) => ({
           id: 'fond-' + b.id, type: 'raster' as const, source: 'fond-' + b.id,
-          layout: { visibility: b.id === (props.basemap ?? DEFAULT_BASEMAP) ? 'visible' as const : 'none' as const },
+          layout: { visibility: 'none' as const },
         })),
       },
       center: [2.35, 48.85],
@@ -152,19 +154,8 @@ export function MapView(props: Props) {
       const hits = m.queryRenderedFeatures(e.point, { layers: ['suggestions'] });
       const f = hits[0];
       const clicked: Position = [e.lngLat.lng, e.lngLat.lat];
-      if (latest.current.addMode) {
-        latest.current.onMapClick(clicked);
-        return;
-      }
-      if (f) {
-        latest.current.onSelect({ kind: 'suggestion', id: Number(f.properties.id) });
-        // Pour un point ou une suggestion, on inspecte l'élément lui-même plutôt que l'endroit exact du clic.
-        const g = f.geometry;
-        latest.current.onInspect?.(g.type === 'Point' ? [g.coordinates[0]!, g.coordinates[1]!] : clicked);
-      } else {
-        latest.current.onSelect(null);
-        latest.current.onInspect?.(clicked);
-      }
+      if (f && !latest.current.addMode) latest.current.onSelect({ kind: 'suggestion', id: Number(f.properties.id) });
+      else latest.current.onMapClick(clicked);
     });
     m.on('mouseenter', 'suggestions', () => { m.getCanvas().style.cursor = 'pointer'; });
     m.on('mouseleave', 'suggestions', () => { m.getCanvas().style.cursor = latest.current.addMode ? 'crosshair' : ''; });
@@ -176,12 +167,33 @@ export function MapView(props: Props) {
     if (map.current) map.current.getCanvas().style.cursor = props.addMode ? 'crosshair' : '';
   }, [props.addMode]);
 
+  // Fond de carte : un seul visible. Le fond vectoriel est chargé à la première demande ; en cas d'échec,
+  // on affiche le plan raster de secours.
+  const [vectorFailed, setVectorFailed] = useState(false);
+  const vectorLoad = useRef<Promise<string[]> | null>(null);
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
-    const wanted = BASEMAPS.some((b) => b.id === props.basemap) ? props.basemap : DEFAULT_BASEMAP;
-    for (const b of BASEMAPS) m.setLayoutProperty('fond-' + b.id, 'visibility', b.id === wanted ? 'visible' : 'none');
-  }, [props.basemap, ready]);
+    let wanted = BASEMAPS.find((b) => b.id === props.basemap) ?? BASEMAPS.find((b) => b.id === DEFAULT_BASEMAP)!;
+    if (wanted.style && vectorFailed) wanted = BASEMAPS.find((b) => b.id === FALLBACK_BASEMAP)!;
+    for (const b of BASEMAPS) if (b.tiles) m.setLayoutProperty('fond-' + b.id, 'visibility', b.id === wanted.id ? 'visible' : 'none');
+    const showVector = (on: boolean) => vectorLoad.current?.then((ids) => {
+      for (const id of ids) if (m.getLayer(id)) m.setLayoutProperty(id, 'visibility', on ? 'visible' : 'none');
+    }, () => undefined);
+    if (wanted.style) {
+      vectorLoad.current ??= loadVectorBasemap(m, wanted.style, 'track-casing');
+      vectorLoad.current.then(() => {
+        // Le sprite du style vectoriel remplace celui de la carte : on remet nos images si besoin.
+        if (!m.hasImage('arrow')) m.addImage('arrow', arrowImage());
+        void showVector(true);
+      }, (e: Error) => {
+        setVectorFailed(true);
+        latest.current.onBasemapError?.('Plan vectoriel indisponible (' + e.message + ') : plan OSM en images affiché.');
+      });
+    } else {
+      void showVector(false);
+    }
+  }, [props.basemap, ready, vectorFailed]);
 
   const pnx = props.panoramax;
   useEffect(() => {
@@ -189,8 +201,8 @@ export function MapView(props: Props) {
     if (!m || !ready || !pnx) return;
     if (m.getLayer('panoramax-sequences')) m.setLayoutProperty('panoramax-sequences', 'visibility', pnx.enabled ? 'visible' : 'none');
     const features = [];
-    if (pnx.enabled && pnx.clicked) features.push({ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: pnx.clicked }, properties: { kind: 'clic' } });
-    if (pnx.enabled && pnx.photo) features.push({ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: pnx.photo }, properties: { kind: 'photo' } });
+    if (pnx.clicked) features.push({ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: pnx.clicked }, properties: { kind: 'clic' } });
+    if (pnx.photo) features.push({ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: pnx.photo }, properties: { kind: 'photo' } });
     (m.getSource('inspect') as GeoJSONSource).setData({ type: 'FeatureCollection', features });
   }, [pnx?.enabled, pnx?.clicked, pnx?.photo, ready]);
 
@@ -279,8 +291,6 @@ export function MapView(props: Props) {
           const id = Number(el.dataset.id);
           if (!el.dataset.id || latest.current.addMode) return;
           latest.current.onSelect({ kind: 'point', id });
-          const ll = marker.getLngLat();
-          latest.current.onInspect?.([ll.lng, ll.lat]);
         });
         marker.on('drag', () => {
           const ll = marker.getLngLat();
@@ -311,14 +321,14 @@ export function MapView(props: Props) {
   // Bulle d'édition ancrée au point, dont le contenu est rendu par React.
   const popup = useRef<maplibregl.Popup | null>(null);
   const [popupNode, setPopupNode] = useState<HTMLDivElement | null>(null);
-  const editKey = props.edit ? props.edit.kind + ':' + (props.edit.id ?? 'nouveau') : null;
+  const popupKey = props.popup?.key ?? null;
   useEffect(() => {
     const m = map.current;
-    if (!m || !ready || !editKey) return;
+    if (!m || !ready || !popupKey) return;
     const node = document.createElement('div');
     const p = new maplibregl.Popup({ closeButton: false, closeOnClick: false, offset: 18, maxWidth: '340px', className: 'point-popup' })
       .setDOMContent(node)
-      .setLngLat(latest.current.edit!.position)
+      .setLngLat(latest.current.popup!.position)
       .addTo(m);
     popup.current = p;
     setPopupNode(node);
@@ -327,10 +337,10 @@ export function MapView(props: Props) {
       popup.current = null;
       setPopupNode(null);
     };
-  }, [editKey, ready]);
+  }, [popupKey, ready]);
   useEffect(() => {
-    if (props.edit) popup.current?.setLngLat(props.edit.position);
-  }, [props.edit?.position]);
+    if (props.popup) popup.current?.setLngLat(props.popup.position);
+  }, [props.popup?.position]);
 
   useEffect(() => {
     const m = map.current;
@@ -350,7 +360,7 @@ export function MapView(props: Props) {
   return (
     <>
       <div ref={container} className="map" data-testid="map" />
-      {popupNode && props.editor ? createPortal(props.editor, popupNode) : null}
+      {popupNode && props.popup ? createPortal(props.popup.content, popupNode) : null}
     </>
   );
 }

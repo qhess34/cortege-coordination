@@ -66,26 +66,28 @@ dl.kv dd { margin: 0; }
 .topbar { display: flex; align-items: center; gap: 1rem; padding: .5rem 1rem; background: var(--primary); color: #fff; }
 .topbar a, .topbar .muted, .topbar button.link { color: #fff; }
 .brand { font-weight: 600; text-decoration: none; }
-.app { min-height: 100vh; display: flex; flex-direction: column; }
+/* Hauteur fixée à l'écran : seul le panneau de droite défile, jamais la page (la carte reste en place). */
+.app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; }
+.app > .page { overflow-y: auto; flex: 1; }
 .page { padding: 1.5rem; max-width: 960px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; gap: 1rem; }
 .table { width: 100%; border-collapse: collapse; background: var(--surface); }
 .table th, .table td { text-align: left; padding: .5rem; border-bottom: 1px solid var(--border); }
 .inline-form { display: flex; flex-direction: column; gap: .6rem; max-width: 420px; }
 
-.event-layout { flex: 1; display: grid; grid-template-columns: 1fr minmax(360px, 440px); min-height: 0; height: calc(100vh - 44px); }
+.event-layout { flex: 1; display: grid; grid-template-columns: 1fr minmax(360px, 440px); grid-template-rows: minmax(0, 1fr); min-height: 0; }
 .map-pane { position: relative; min-height: 300px; }
 /* Spécificité renforcée : le viewer Panoramax réinjecte la feuille de MapLibre (.maplibregl-map { position: relative }). */
 .map-pane > .map { position: absolute; inset: 0; }
 .map-toolbar { position: absolute; top: .6rem; left: 3.2rem; display: flex; gap: .6rem; align-items: center; background: rgba(255,255,255,.92); padding: .35rem .6rem; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.2); }
 .map-hint { position: absolute; top: 3.6rem; left: 3.2rem; background: var(--primary); color: #fff; padding: .35rem .6rem; border-radius: 6px; font-size: .9rem; }
 .disclaimer { position: absolute; bottom: 2rem; left: .6rem; max-width: min(640px, 48%); font-size: .78rem; background: rgba(255,255,255,.9); padding: .3rem .5rem; border-radius: 6px; }
-.side-pane { display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--bg); min-height: 0; }
+.side-pane { display: flex; flex-direction: column; border-left: 1px solid var(--border); background: var(--bg); min-height: 0; overflow: hidden; }
 .event-title { padding: .8rem 1rem 0; display: flex; align-items: center; }
 .tabs { display: flex; flex-wrap: wrap; gap: .2rem; padding: .5rem 1rem 0; border-bottom: 1px solid var(--border); }
 .tabs button { border: none; border-bottom: 3px solid transparent; border-radius: 0; background: none; padding: .4rem .5rem; }
 .tabs button.active { border-bottom-color: var(--primary); font-weight: 600; }
 .tabs .count { background: var(--primary); color: #fff; border-radius: 999px; font-size: .72rem; padding: 0 .4rem; margin-left: .3rem; }
-.panel { padding: 1rem; overflow-y: auto; flex: 1; }
+.panel { padding: 1rem; overflow-y: auto; overscroll-behavior: contain; flex: 1; min-height: 0; }
 .filters { display: flex; gap: .4rem; flex-wrap: wrap; }
 .filters > * { flex: 1; min-width: 8rem; }
 ul.items { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: .3rem; }
@@ -113,8 +115,10 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 .km-marker.km-end { background: var(--primary); color: #fff; }
 
 @media (max-width: 800px) {
-  .event-layout { grid-template-columns: 1fr; grid-template-rows: 50vh auto; height: auto; }
-  .side-pane { border-left: none; }
+  /* Petit écran : carte en haut, panneau dessous, la page défile normalement. */
+  .app { height: auto; overflow: visible; }
+  .event-layout { grid-template-columns: 1fr; grid-template-rows: 50vh auto; }
+  .side-pane { border-left: none; overflow: visible; }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -164,3 +168,8 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 .point-editor .row { align-items: center; }
 .point-editor p { margin: 0; }
 .small { font-size: .8rem; }
+
+/* Menu contextuel de la carte */
+.map-menu { display: flex; flex-direction: column; gap: .35rem; min-width: 240px; }
+.map-menu > button { text-align: left; }
+ul.compact { margin: 0; padding-left: 1.1rem; }

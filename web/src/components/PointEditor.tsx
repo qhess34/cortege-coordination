@@ -17,11 +17,13 @@ interface Props {
   /** Après enregistrement : identifiant du point. */
   onSaved: (id: number, message: string) => Promise<void>;
   onDeleted: () => Promise<void>;
+  /** Ouvre la vue Panoramax à la position du point. */
+  onPhotos: () => void;
 }
 
 interface Consequences { missions: { team: string; status: string }[]; suggestion: unknown }
 
-export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, onDeleted }: Props) {
+export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, onDeleted, onPhotos }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Consequences | null>(null);
@@ -116,6 +118,7 @@ export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, 
           <button className="primary" disabled={busy || !dirty}>{isNew ? 'Ajouter' : 'Enregistrer'}</button>
           <button type="button" onClick={onClose}>Annuler</button>
           {!isNew && <button type="button" className="danger" disabled={busy} onClick={() => remove(false)}>Supprimer</button>}
+          <button type="button" onClick={onPhotos} title="Photos Panoramax autour du point">📷</button>
         </div>
       )}
     </form>
