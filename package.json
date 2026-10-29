@@ -1,0 +1,15 @@
+{
+  "name": "cortege-coordination",
+  "private": true,
+  "workspaces": ["server", "web"],
+  "scripts": {
+    "dev:server": "npm run dev -w server",
+    "dev:web": "npm run dev -w web",
+    "build": "npm run build -w server && npm run build -w web",
+    "test": "npm test -w server && npm test -w web",
+    "typecheck": "npm run typecheck -w server && npm run typecheck -w web",
+    "migrate": "npm run migrate -w server",
+    "admin:create": "npm run admin:create -w server"
+  },
+  "engines": { "node": ">=20" }
+}
