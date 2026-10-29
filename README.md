@@ -60,6 +60,10 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
   **déplacer** un point, faites-le glisser directement : sa bulle s'ouvre avec « position modifiée », puis
   « Enregistrer » (ou « Annuler » pour le remettre en place) (conséquences présentées si le point est affecté). Le nom affiché sur la carte suit la saisie.
   Le panneau latéral garde la liste, la recherche, les filtres, l'historique et le placement par coordonnées.
+- **Équipes sur la carte** : la bulle d'un point permet de l'affecter à une ou plusieurs équipes (ou de l'en
+  retirer) ; pour un nouveau point, l'équipe se choisit avant l'ajout. Chaque point prend la couleur de son équipe
+  (pastille partagée s'il en a plusieurs, gris sans équipe). Une légende liste les équipes avec leur nombre de points
+  et permet de masquer ou d'afficher les points de chacune.
 - **Équipes et missions** : création, couleur, responsable, consignes, désactivation ; affectation ordonnée,
   réordonnancement, réaffectation, statuts de mission avec transitions contrôlées (la fin d'une mission ne libère
   pas le point).

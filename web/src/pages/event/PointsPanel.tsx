@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { api } from '../../api';
+import { teamColors } from '../../components/MapView';
 import { POINT_TYPES as TYPES } from '../../components/PointEditor';
 import { MISSION_STATUS, POINT_STATUS, SUGGESTION_TYPES, coords, dateTime, km } from '../../labels';
 import type { HistoryEntry, MissionPoint } from '../../types';
@@ -41,7 +42,7 @@ export function PointsPanel({ data, canEdit, selection, select, startDraft }: Pa
       <ul className="items">
         {list.map((p) => (
           <li key={p.id} className={current?.id === p.id ? 'selected' : ''} onClick={() => select({ kind: 'point', id: p.id })}>
-            <span className="dot" style={{ background: p.missions[0]?.color ?? '#495057' }} />
+            <span className="dot" style={{ background: teamColors(p.missions.map((m) => m.color)) }} />
             <span className="grow">
               <b>{p.name}</b><br />
               <span className="muted">{km(p.distance)} · {POINT_STATUS[p.status]}{p.missions.length ? ' · ' + p.missions.map((m) => m.teamName).join(', ') : ''}</span>

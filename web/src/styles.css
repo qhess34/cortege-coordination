@@ -236,3 +236,10 @@ a.button:hover { border-color: var(--primary); }
 .pnx-compass .ring { fill: none; stroke: rgba(29, 53, 87, .7); stroke-width: 2; stroke-dasharray: 3 3; }
 .pnx-compass .north { font: bold 11px system-ui, sans-serif; fill: #d62828; text-anchor: middle; }
 .pnx-compass .center { fill: #ff6f00; stroke: #fff; stroke-width: 2; }
+
+/* Légende des équipes sur la carte */
+.team-legend { position: absolute; left: .6rem; bottom: 5.2rem; z-index: 2; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: .4rem .6rem; box-shadow: 0 1px 4px rgba(0,0,0,.2); font-size: .85rem; max-height: 40%; overflow-y: auto; }
+.team-legend ul { margin-top: .3rem; }
+.team-picker { border: 1px solid var(--border); border-radius: 6px; padding: .3rem .5rem; margin: 0; display: flex; flex-direction: column; gap: .2rem; }
+.team-picker legend { font-size: .8rem; color: var(--muted); padding: 0 .2rem; }
+.team-picker .check { font-size: .85rem; color: var(--text); }

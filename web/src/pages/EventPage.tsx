@@ -5,6 +5,7 @@ import { MapView, type PointEdit, type Selection } from '../components/MapView';
 import { MapMenu } from '../components/MapMenu';
 import { PointEditor } from '../components/PointEditor';
 import { SuggestionPopup } from '../components/SuggestionPopup';
+import { TeamLegend, visiblePoints } from '../components/TeamLegend';
 import { PanoramaxPanel } from '../components/PanoramaxPanel';
 import { BASEMAPS, DEFAULT_BASEMAP } from '../basemaps';
 import { PANORAMAX_API } from '../panoramax';
@@ -80,6 +81,8 @@ export function EventPage({ eventId }: { eventId: number }) {
   const [edit, setEdit] = useState<PointEdit | null>(null);
   const [focus, setFocus] = useState<{ position: Position; n: number } | null>(null);
   const closeEdit = useCallback(() => setEdit(null), []);
+  // Équipes dont les points sont masqués sur la carte (0 = points sans équipe).
+  const [hiddenTeams, setHiddenTeams] = useState<Set<number>>(new Set());
   // Menu ouvert par un clic sur la carte, et bulle de la suggestion sélectionnée.
   const [menuAt, setMenuAt] = useState<Position | null>(null);
   const [suggestionPopup, setSuggestionPopup] = useState(false);
@@ -215,6 +218,11 @@ export function EventPage({ eventId }: { eventId: number }) {
         await reload();
       }}
       onPhotos={() => openPhotos(edit.position)}
+      teams={data.teams}
+      onTeamsChanged={async (message) => {
+        setToast({ kind: 'ok', text: message });
+        await reload();
+      }}
     />
   ) : null;
 
@@ -283,7 +291,12 @@ export function EventPage({ eventId }: { eventId: number }) {
         <MapView
           track={data.track}
           suggestions={visibleSuggestions}
-          points={data.points}
+          points={visiblePoints(data.points, hiddenTeams).concat(
+            // Le point en cours d'édition reste affiché même si son équipe est masquée.
+            edit?.kind === 'existing' && !visiblePoints(data.points, hiddenTeams).some((p) => p.id === edit.id)
+              ? data.points.filter((p) => p.id === edit.id)
+              : [],
+          )}
           selection={selection}
           addMode={addMode && canEdit}
           onSelect={select}
@@ -314,6 +327,17 @@ export function EventPage({ eventId }: { eventId: number }) {
         {inspectAt && (
           <PanoramaxPanel position={inspectAt} onPicture={(p) => setPhotoAt(p?.position ?? null)} onView={setPhotoView} onClose={() => { setInspectAt(null); setPhotoAt(null); setPhotoView(null); }} />
         )}
+        <TeamLegend
+          teams={data.teams}
+          points={data.points}
+          hidden={hiddenTeams}
+          onToggle={(id) => setHiddenTeams((prev) => {
+            const next = new Set(prev);
+            if (next.has(id)) next.delete(id);
+            else next.add(id);
+            return next;
+          })}
+        />
         {addMode && <div className="map-hint">Cliquez sur la carte pour placer un point, complétez sa fiche puis « Ajouter ». Recommencez pour le suivant.</div>}
         <div className="disclaimer">
           Suggestions issues d’OpenStreetMap, à vérifier sur le terrain. Elles ne garantissent rien en matière de sécurité

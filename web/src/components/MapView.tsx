@@ -70,6 +70,15 @@ export const TYPE_COLORS: Record<string, string> = {
 
 const empty = { type: 'FeatureCollection' as const, features: [] };
 
+/** Fond CSS d'une pastille de point selon les couleurs de ses équipes. */
+export function teamColors(colors: string[]): string {
+  const c = [...new Set(colors)];
+  if (!c.length) return '#495057';
+  if (c.length === 1) return c[0]!;
+  const step = 100 / c.length;
+  return 'conic-gradient(' + c.map((x, i) => x + ' ' + (i * step).toFixed(1) + '% ' + ((i + 1) * step).toFixed(1) + '%').join(', ') + ')';
+}
+
 function arrowImage(): ImageData {
   const c = document.createElement('canvas');
   c.width = c.height = 24;
@@ -348,7 +357,8 @@ export function MapView(props: Props) {
       wanted.set('p' + p.id, {
         position: editing ? edit.position : p.position,
         name: editing ? edit.name : p.name,
-        color: p.missions[0]?.color ?? '#495057',
+        // Couleur de l'équipe ; plusieurs équipes : pastille partagée entre leurs couleurs ; sans équipe : gris.
+        color: teamColors(p.missions.map((m) => m.color)),
         selected: editing || (props.selection?.kind === 'point' && props.selection.id === p.id),
         // Organisateur : tout point se glisse directement (hors mode ajout) ; sa bulle s'ouvre alors.
         draggable: editing || props.canEdit,

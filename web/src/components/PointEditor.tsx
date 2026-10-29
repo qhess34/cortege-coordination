@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../api';
 import { MISSION_STATUS, SUGGESTION_TYPES, coords, km } from '../labels';
-import type { MissionPoint } from '../types';
+import type { MissionPoint, Team } from '../types';
 import type { PointEdit } from './MapView';
 
 export const POINT_TYPES = ['carrefour', 'rue_laterale', 'acces_vehicule_entrant', 'acces_pieton_cycle', 'voie_privee', 'verification', 'point_fixe', 'autre'];
@@ -19,15 +19,24 @@ interface Props {
   onDeleted: () => Promise<void>;
   /** Ouvre la vue Panoramax à la position du point. */
   onPhotos: () => void;
+  /** Équipes de la manifestation, pour affecter le point depuis la carte. */
+  teams: Team[];
+  /** Après une affectation ou un retrait : recharger les données. */
+  onTeamsChanged: (message: string) => Promise<void>;
 }
 
 interface Consequences { missions: { team: string; status: string }[]; suggestion: unknown }
 
-export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, onDeleted, onPhotos }: Props) {
+export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, onDeleted, onPhotos, teams, onTeamsChanged }: Props) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Consequences | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
+  // Nouveau point : équipes choisies avant l'ajout (affectées juste après la création).
+  const [newTeams, setNewTeams] = useState<number[]>([]);
+  const activeTeams = teams.filter((t) => !t.disabled);
+  // Case cochée ou décochée en attendant la réponse du serveur.
+  const [pending, setPending] = useState<Record<number, boolean>>({});
   const isNew = edit.kind === 'new';
   const moved = !!point && (point.position[0] !== edit.position[0] || point.position[1] !== edit.position[1]);
   const dirty = isNew || moved || (!!point && (point.name !== edit.name || point.type !== edit.type || point.description !== edit.description));
@@ -54,7 +63,8 @@ export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, 
         const created = await api.post<MissionPoint>('/api/events/' + eventId + '/points', {
           name: edit.name, type: edit.type, description: edit.description, position: edit.position,
         });
-        await onSaved(created.id, 'Point ajouté.');
+        for (const teamId of newTeams) await api.post('/api/teams/' + teamId + '/missions', { pointId: created.id });
+        await onSaved(created.id, newTeams.length ? 'Point ajouté et affecté.' : 'Point ajouté.');
       } else {
         const body: Record<string, unknown> = { version: edit.version, name: edit.name, type: edit.type, description: edit.description };
         if (moved) body.position = edit.position;
@@ -100,8 +110,48 @@ export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, 
         {moved ? ' · position modifiée' : ''}
         <br />Glissez le marqueur pour {isNew ? 'ajuster' : 'déplacer'} le point.
       </p>
-      {point && point.missions.length > 0 && (
-        <p className="muted small">{point.missions.map((m) => m.teamName + ' (' + (MISSION_STATUS[m.status] ?? m.status) + ')').join(', ')}</p>
+      {activeTeams.length > 0 && (
+        <fieldset className="team-picker">
+          <legend>Équipes</legend>
+          {activeTeams.map((t) => {
+            const mission = point?.missions.find((m) => m.teamId === t.id);
+            const checked = isNew ? newTeams.includes(t.id) : pending[t.id] ?? !!mission;
+            const toggle = async () => {
+              if (isNew) {
+                setNewTeams((ids) => (ids.includes(t.id) ? ids.filter((x) => x !== t.id) : [...ids, t.id]));
+                return;
+              }
+              setBusy(true);
+              setError(null);
+              setPending((p) => ({ ...p, [t.id]: !mission }));
+              try {
+                if (mission) {
+                  await api.delete('/api/missions/' + mission.missionId);
+                  await onTeamsChanged('Point retiré de l’équipe ' + t.name + '.');
+                } else {
+                  await api.post('/api/teams/' + t.id + '/missions', { pointId: edit.id });
+                  await onTeamsChanged('Point affecté à l’équipe ' + t.name + '.');
+                }
+              } catch (err) {
+                setError(err instanceof ApiError ? err.message : 'Affectation impossible.');
+              } finally {
+                setPending((p) => {
+                  const next = { ...p };
+                  delete next[t.id];
+                  return next;
+                });
+                setBusy(false);
+              }
+            };
+            return (
+              <label key={t.id} className="check">
+                <input type="checkbox" checked={checked} disabled={busy} onChange={toggle} />
+                <span className="dot" style={{ background: t.color }} /> {t.name}
+                {mission ? <span className="muted small"> — mission n° {mission.position}, {MISSION_STATUS[mission.status] ?? mission.status}</span> : null}
+              </label>
+            );
+          })}
+        </fieldset>
       )}
       {error && <p className="error small" role="alert">{error}</p>}
       {confirmDelete ? (
