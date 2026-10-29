@@ -63,11 +63,12 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
 - **Clic sur la carte** : menu avec la position (et la distance sur le parcours), « Voir les photos ici »,
   « Ajouter un point ici », « Copier les coordonnées ». Un clic sur une suggestion ouvre sa bulle (valider,
   écarter, photos, détails).
-- **Photos de rue Panoramax** : « Voir les photos ici » ouvre la photo
-  [Panoramax](https://panoramax.fr) la plus proche (à moins de 50 m) dans le viewer officiel, pour vérifier un
-  carrefour ou un accès sans se déplacer ; un clic sur un point ou une suggestion montre la photo la plus proche de
-  cet élément. La couverture photo est tracée en orange à partir du zoom 13. Désactivable dans la barre de la carte
-  (« Photos Panoramax au clic »). Une photo peut être ancienne : elle ne reflète pas forcément l'état actuel.
+- **Photos de rue Panoramax** : « Voir les photos ici » (menu de la carte) ou le bouton 📷 d'un point ou d'une
+  suggestion ouvre la photo [Panoramax](https://panoramax.fr) la plus proche (à moins de 50 m) dans le viewer
+  officiel, pour vérifier un carrefour ou un accès sans se déplacer. Le panneau se déplace par sa barre de titre
+  (position mémorisée, double-clic pour le replacer) et peut être agrandi. La couverture photo est tracée en orange
+  à partir du zoom 13 (case « Couverture photos »). Une photo peut être ancienne : elle ne reflète pas forcément
+  l'état actuel.
 - **Synthèse** : points validés sans équipe, répartition des statuts, analyse à relancer après changement de
   parcours.
 

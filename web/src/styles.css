@@ -132,8 +132,9 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 
 /* Vue Panoramax */
 .panoramax { position: absolute; right: .6rem; bottom: 2.2rem; width: min(46%, 560px); height: min(52%, 420px); display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,.3); z-index: 5; overflow: hidden; }
-.panoramax.large { width: calc(100% - 1.2rem); height: calc(100% - 3rem); top: .6rem; }
-.panoramax-head { display: flex; align-items: center; gap: .4rem; padding: .3rem .5rem; border-bottom: 1px solid var(--border); }
+.panoramax.large { width: calc(100% - 1.2rem); height: calc(100% - 3rem); top: .6rem; left: .6rem; }
+.panoramax-head { display: flex; align-items: center; gap: .4rem; padding: .3rem .5rem; border-bottom: 1px solid var(--border); cursor: move; user-select: none; touch-action: none; }
+.panoramax.large .panoramax-head { cursor: default; }
 .panoramax-head button { padding: .1rem .5rem; }
 .panoramax-body { position: relative; flex: 1; min-height: 0; }
 .panoramax-body > p { padding: .6rem; margin: 0; }

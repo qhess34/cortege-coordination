@@ -73,3 +73,41 @@ test('clic sur la carte : menu, photo la plus proche, fermeture', async ({ page 
 
   expect(searches).toHaveLength(2);
 });
+
+test('le panneau Panoramax se déplace par sa barre de titre et reste dans la carte', async ({ page }) => {
+  await page.route('https://api.panoramax.xyz/**', (route) => route.fulfill({ json: { type: 'FeatureCollection', features: [] } }));
+  await openEvent(page);
+  const map = page.getByTestId('map');
+  const box = (await map.boundingBox())!;
+  const openPhotos = async () => {
+    await map.click({ position: { x: box.width / 2, y: box.height / 2 } });
+    await page.getByRole('menuitem', { name: /Voir les photos ici/ }).click();
+  };
+  await openPhotos();
+  const panel = page.getByTestId('panoramax');
+  const head = panel.locator('.panoramax-head');
+  const initial = (await panel.boundingBox())!;
+
+  // Glisser vers le coin haut gauche, au-delà du bord : le panneau s'arrête au bord de la carte.
+  const h = (await head.boundingBox())!;
+  await page.mouse.move(h.x + 40, h.y + h.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(h.x - 2000, h.y - 2000, { steps: 10 });
+  await page.mouse.up();
+  const moved = (await panel.boundingBox())!;
+  expect(Math.round(moved.x)).toBe(Math.round(box.x));
+  expect(Math.round(moved.y)).toBe(Math.round(box.y));
+
+  // La position est conservée à la réouverture.
+  await page.getByRole('button', { name: 'Fermer la vue Panoramax' }).click();
+  await openPhotos();
+  const reopened = (await panel.boundingBox())!;
+  expect(Math.round(reopened.x)).toBe(Math.round(moved.x));
+  expect(Math.round(reopened.y)).toBe(Math.round(moved.y));
+
+  // Double-clic sur la barre : retour à la position par défaut.
+  await head.dblclick({ position: { x: 40, y: 10 } });
+  const reset = (await panel.boundingBox())!;
+  expect(Math.round(reset.x)).toBe(Math.round(initial.x));
+  expect(Math.round(reset.y)).toBe(Math.round(initial.y));
+});

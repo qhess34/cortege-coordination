@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { PANORAMAX_API, SEARCH_RADIUS, exploreUrl, findNearestPicture, type NearestPicture } from '../panoramax';
 import { dateTime } from '../labels';
 import type { Position } from '../types';
@@ -16,10 +16,90 @@ type State = { kind: 'loading' } | { kind: 'none' } | { kind: 'error'; message: 
 let viewerLib: Promise<unknown> | null = null;
 const loadViewer = () => (viewerLib ??= import('@panoramax/web-viewer'));
 
+/**
+ * Position du panneau choisie par l'utilisateur, en fractions de l'espace libre (0 = bord gauche/haut, 1 = bord
+ * droit/bas) : elle reste valable si la fenêtre change de taille. Simple confort, mémorisé dans le navigateur.
+ */
+type PanelPosition = { x: number; y: number };
+const POSITION_PREF = 'cortege.panoramax.position';
+function readPosition(): PanelPosition | null {
+  try {
+    const v = JSON.parse(localStorage.getItem(POSITION_PREF) ?? 'null') as PanelPosition | null;
+    return v && Number.isFinite(v.x) && Number.isFinite(v.y) ? v : null;
+  } catch {
+    return null;
+  }
+}
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+
+/** Rend le panneau déplaçable par sa barre de titre, à l'intérieur de son conteneur. */
+function useDraggablePanel(disabled: boolean) {
+  const root = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<PanelPosition | null>(readPosition);
+  const drag = useRef<{ dx: number; dy: number } | null>(null);
+
+  const apply = useCallback((p: PanelPosition | null) => {
+    const el = root.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent) return;
+    if (!p || disabled) {
+      el.style.left = el.style.top = el.style.right = el.style.bottom = '';
+      return;
+    }
+    el.style.right = el.style.bottom = 'auto';
+    el.style.left = Math.round(p.x * Math.max(0, parent.clientWidth - el.offsetWidth)) + 'px';
+    el.style.top = Math.round(p.y * Math.max(0, parent.clientHeight - el.offsetHeight)) + 'px';
+  }, [disabled]);
+
+  useLayoutEffect(() => apply(pos), [pos, apply]);
+  useEffect(() => {
+    const parent = root.current?.offsetParent;
+    if (!parent) return;
+    const ro = new ResizeObserver(() => apply(pos));
+    ro.observe(parent);
+    return () => ro.disconnect();
+  }, [pos, apply]);
+
+  const onPointerDown = (e: ReactPointerEvent<HTMLElement>) => {
+    const el = root.current;
+    if (disabled || !el || e.button !== 0 || (e.target as HTMLElement).closest('button')) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    drag.current = { dx: e.clientX - el.offsetLeft, dy: e.clientY - el.offsetTop };
+  };
+  const toFraction = (e: ReactPointerEvent<HTMLElement>): PanelPosition | null => {
+    const el = root.current;
+    const parent = el?.offsetParent as HTMLElement | null;
+    if (!el || !parent || !drag.current) return null;
+    const freeX = Math.max(1, parent.clientWidth - el.offsetWidth);
+    const freeY = Math.max(1, parent.clientHeight - el.offsetHeight);
+    return { x: clamp01((e.clientX - drag.current.dx) / freeX), y: clamp01((e.clientY - drag.current.dy) / freeY) };
+  };
+  const onPointerMove = (e: ReactPointerEvent<HTMLElement>) => {
+    const p = toFraction(e);
+    if (p) apply(p);
+  };
+  const onPointerUp = (e: ReactPointerEvent<HTMLElement>) => {
+    const p = toFraction(e);
+    drag.current = null;
+    if (!p) return;
+    setPos(p);
+    try { localStorage.setItem(POSITION_PREF, JSON.stringify(p)); } catch { /* préférence non mémorisée */ }
+  };
+  // Double-clic sur la barre : retour à la position par défaut.
+  const onDoubleClick = (e: ReactMouseEvent<HTMLElement>) => {
+    if ((e.target as HTMLElement).closest('button')) return;
+    setPos(null);
+    try { localStorage.removeItem(POSITION_PREF); } catch { /* préférence non mémorisée */ }
+  };
+  return { root, handlers: { onPointerDown, onPointerMove, onPointerUp, onPointerCancel: onPointerUp, onDoubleClick } };
+}
+
 export function PanoramaxPanel({ position, onClose, onPicture }: Props) {
   const [state, setState] = useState<State>({ kind: 'loading' });
   const [ready, setReady] = useState(false);
   const [large, setLarge] = useState(false);
+  const { root, handlers } = useDraggablePanel(large);
   const host = useRef<HTMLDivElement>(null);
   const viewer = useRef<(HTMLElement & { select?: (seq: string | null, pic: string | null, force?: boolean) => void }) | null>(null);
   const report = useRef(onPicture);
@@ -69,8 +149,8 @@ export function PanoramaxPanel({ position, onClose, onPicture }: Props) {
   }, [state, ready]);
 
   return (
-    <div className={'panoramax' + (large ? ' large' : '')} data-testid="panoramax">
-      <div className="panoramax-head">
+    <div ref={root} className={'panoramax' + (large ? ' large' : '')} data-testid="panoramax">
+      <div className="panoramax-head" {...handlers} title={large ? undefined : 'Glisser pour déplacer · double-clic pour replacer'}>
         <b className="grow">Photos Panoramax</b>
         <button onClick={() => setLarge(!large)} aria-label={large ? 'Réduire' : 'Agrandir'}>{large ? '⤡' : '⤢'}</button>
         <button onClick={onClose} aria-label="Fermer la vue Panoramax">✕</button>
