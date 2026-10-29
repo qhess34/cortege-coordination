@@ -89,7 +89,15 @@ describe('attributs OSM', () => {
   it('accès motorisé : la clé la plus spécifique l\'emporte', () => {
     expect(motorAccess({ highway: 'residential' }, [])).toBe('oui');
     expect(motorAccess({ highway: 'footway' }, [])).toBe('non');
-    expect(motorAccess({ highway: 'pedestrian', motor_vehicle: 'delivery' }, [])).toBe('limite');
+    // Voie piétonne ou cyclable : seules motor_vehicle / motorcar comptent pour les véhicules à moteur.
+    const livraisons: string[] = [];
+    expect(motorAccess({ highway: 'pedestrian', motor_vehicle: 'delivery' }, livraisons)).toBe('non');
+    expect(livraisons[0]).toMatch(/livraisons/);
+    expect(motorAccess({ highway: 'footway', access: 'yes' }, [])).toBe('non');
+    expect(motorAccess({ highway: 'path', access: 'permissive' }, [])).toBe('non');
+    expect(motorAccess({ highway: 'cycleway', vehicle: 'yes' }, [])).toBe('non');
+    expect(motorAccess({ highway: 'cycleway', access: 'destination' }, [])).toBe('non');
+    expect(motorAccess({ highway: 'pedestrian', motor_vehicle: 'yes' }, [])).toBe('oui');
     expect(motorAccess({ highway: 'service', access: 'private' }, [])).toBe('prive');
     expect(motorAccess({ highway: 'residential', access: 'no', motor_vehicle: 'destination' }, [])).toBe('limite');
     const unc: string[] = [];
@@ -279,5 +287,21 @@ describe('un point par accès entrant (mode par défaut)', () => {
     const res = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build(), { routeTolerance: 5 });
     expect(haversine(res.suggestions[0]!.position, at(100, 8))).toBeLessThan(0.5);
     expect(res.suggestions[0]!.pertinence).toBe('faible');
+  });
+});
+
+describe('accès piétons et cyclables exclus', () => {
+  it("aucune suggestion sur un chemin, une piste cyclable ou une zone piétonne quand l'option est décochée", () => {
+    const b = new OsmBuilder();
+    b.node(1, 0, 0); b.node(2, 100, 0); b.node(3, 200, 0); b.node(4, 300, 0); b.node(5, 400, 0);
+    b.way(1, [1, 2, 3, 4, 5], { highway: 'residential', name: 'Rue A' });
+    b.node(10, 100, 60); b.way(10, [2, 10], { highway: 'footway', access: 'yes' });
+    b.node(11, 200, 60); b.way(11, [3, 11], { highway: 'cycleway', vehicle: 'yes' });
+    b.node(12, 300, 60); b.way(12, [4, 12], { highway: 'pedestrian', name: 'Place', motor_vehicle: 'delivery' });
+    b.node(13, 250, -40); b.node(14, 250, 40); b.way(13, [13, 14], { highway: 'path', access: 'permissive' }); // croise sans nœud
+    const route = new Route([[at(0, 0), at(400, 0)]]);
+    expect(analyse(route, b.build(), { includeNonMotor: false }).suggestions).toEqual([]);
+    const avec = analyse(route, b.build());
+    expect(avec.suggestions.filter((s) => s.type === 'acces_pieton_cycle').length).toBe(3);
   });
 });

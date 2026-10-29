@@ -153,6 +153,16 @@ export function motorAccess(tags: Tags, uncertainties: string[]): MotorAccess {
       uncertainties.push('Restriction temporelle ' + k + ':conditional=' + tags[k + ':conditional'] + ' : vérifier les horaires.');
     }
   }
+  // Voie piétonne ou cyclable : « access » et « vehicle » (qui inclut les vélos) n'ouvrent pas la voie aux
+  // véhicules à moteur ; seule une autorisation explicite (motor_vehicle, motorcar) compte.
+  if (NON_MOTOR_HIGHWAYS.has(hw)) {
+    const motor = tags.motorcar ?? tags.motor_vehicle;
+    if (motor !== undefined && YES.has(motor)) return 'oui';
+    if (motor !== undefined && LIMITED.has(motor)) {
+      uncertainties.push('Véhicules autorisés dans certains cas (motor_vehicle=' + motor + ', ex. livraisons) : à vérifier sur place.');
+    }
+    return 'non';
+  }
   const value = tags.motorcar ?? tags.motor_vehicle ?? tags.vehicle ?? tags.access;
   let base: MotorAccess;
   if (MOTOR_HIGHWAYS.has(hw)) base = 'oui';

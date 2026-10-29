@@ -26,7 +26,9 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
   const [includeNonMotor, setIncludeNonMotor] = useState(last?.includeNonMotor ?? true);
   const [includeOutgoing, setIncludeOutgoing] = useState(last?.includeOutgoing ?? false);
   const [perAccess, setPerAccess] = useState(last?.perAccess ?? true);
-  const outgoingToReview = data.suggestions.filter((s) => s.type === 'rue_laterale' && s.status === 'a_examiner' && !s.pointId).length;
+  const toReview = (type: string) => data.suggestions.filter((s) => s.type === type && s.status === 'a_examiner' && !s.pointId).length;
+  const outgoingToReview = toReview('rue_laterale');
+  const nonMotorToReview = toReview('acces_pieton_cycle');
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -57,6 +59,16 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
           </label>
           <button className="primary" disabled={busy || !data.track} onClick={analyse}>{busy ? 'Analyse en cours…' : data.summary.lastAnalysis ? 'Relancer l’analyse' : 'Lancer l’analyse'}</button>
           {!data.track && <p className="muted">Importez d’abord un parcours.</p>}
+          <p className="muted small">
+            Ces options s’appliquent aux prochaines analyses : les suggestions déjà proposées restent jusqu’à ce que vous
+            les écartiez.
+          </p>
+          {nonMotorToReview > 0 && (
+            <button onClick={() => {
+              if (!window.confirm('Écarter les ' + nonMotorToReview + ' accès piéton(s) ou cyclable(s) à examiner ? Ils ne réapparaîtront pas lors des prochaines analyses (vous pourrez les réexaminer un à un).')) return;
+              void run(() => api.post('/api/events/' + data.event.id + '/suggestions/dismiss-type', { type: 'acces_pieton_cycle', reason: 'Accès piéton ou cyclable' }), nonMotorToReview + ' accès piéton(s) ou cyclable(s) écarté(s).');
+            }}>Écarter les {nonMotorToReview} accès piéton(s) ou cyclable(s) à examiner</button>
+          )}
           {outgoingToReview > 0 && (
             <button onClick={() => {
               if (!window.confirm('Écarter les ' + outgoingToReview + ' rue(s) sortante(s) à examiner ? Elles ne réapparaîtront pas lors des prochaines analyses (vous pourrez les réexaminer une à une).')) return;

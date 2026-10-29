@@ -32,8 +32,20 @@ test('rues sortantes : option, action groupée, choix mémorisé', async ({ page
   await expect(page.getByText('1 rue(s) sortante(s) écartée(s).')).toBeVisible();
   await expect(page.locator('ul.items li', { hasText: 'Rue latérale' })).toHaveCount(0);
 
+  // Accès piétons déjà proposés : écartés en une fois ; décocher l'option évite qu'ils reviennent.
+  await expect(page.locator('ul.items li', { hasText: 'Accès piéton' })).toHaveCount(1);
+  page.once('dialog', (d) => d.accept());
+  await page.getByRole('button', { name: 'Écarter les 1 accès piéton(s) ou cyclable(s) à examiner' }).click();
+  await expect(page.getByText('1 accès piéton(s) ou cyclable(s) écarté(s).')).toBeVisible();
+  await expect(page.locator('ul.items li', { hasText: 'Accès piéton' })).toHaveCount(0);
+  await page.getByLabel(/Inclure les accès piétons/).uncheck();
+  await page.getByRole('button', { name: 'Relancer l’analyse' }).click();
+  await expect(page.getByText(/0\s*nouvelle\(s\)/)).toBeVisible();
+  await expect(page.locator('ul.items li', { hasText: 'Accès piéton' })).toHaveCount(0);
+
   // Le choix des options est repris à la relance suivante.
   await page.reload();
   await page.getByRole('tab', { name: /Suggestions/ }).click();
   await expect(page.getByLabel(/Inclure les rues sortantes/)).toBeChecked();
+  await expect(page.getByLabel(/Inclure les accès piétons/)).not.toBeChecked();
 });
