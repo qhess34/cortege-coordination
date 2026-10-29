@@ -98,6 +98,7 @@ test('l’administrateur crée un lien de connexion pour un compte', async ({ pa
   const p = await ctx.newPage();
   await p.goto(new URL(url).pathname);
   await p.getByRole('button', { name: 'Se connecter' }).click();
-  await expect(p.getByText('Lien E2E')).toBeVisible();
+  await expect(p.getByRole('heading', { name: 'Manifestations' })).toBeVisible();
+  expect((await (await p.request.get('/api/auth/me')).json()).displayName).toBe('Lien E2E');
   await ctx.close();
 });
