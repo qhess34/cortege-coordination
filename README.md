@@ -22,7 +22,7 @@ sous le tracé.*
 | 1 — Prototype cartographique | Événements, GPX, carte, analyse OSM, suggestions, points, nouvelle analyse non destructive, équipes, missions ordonnées | **Fait** |
 | 2 — Comptes et invitations | Écran d'administration des comptes, accès par manifestation, QR code d'équipe, liens individuels, admission immédiate ou validée, sessions des participants, récupération d'accès | **Fait** |
 | 3 — Coordination mobile | Application terrain installable (PWA), vue de mission, statuts posés par les membres, itinéraire piéton, direct (WebSocket), tableau de coordination, messages, incidents, progression déclarée | **Fait** |
-| 4 — Fonctions avancées | Partage GPS facultatif, hors ligne, relèves avancées, exports | À faire |
+| 4 — Fonctions avancées | Partage GPS facultatif (**fait** : navigateur et OwnTracks), hors ligne, relèves avancées, exports, diagnostic | En cours |
 
 La conception complète (architecture, modèle de données, écrans, flux d'invitation, risques) est dans
 [docs/CONCEPTION.md](docs/CONCEPTION.md).

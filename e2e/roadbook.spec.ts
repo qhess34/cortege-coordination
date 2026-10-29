@@ -1,5 +1,6 @@
 // Roadbook : page imprimable par équipe ou pour toute la manifestation, cartes, GPX, impression PDF.
 import { expect, test } from '@playwright/test';
+import { openTeam } from './helpers-equipes';
 import { gpxFrom } from '../server/test/helpers/osm';
 
 const H = { 'x-requested-with': 'cortege' };
@@ -28,6 +29,7 @@ test('roadbook d’équipe et roadbook complet', async ({ page }) => {
   // Depuis l'onglet Équipes.
   await page.goto('/#/evenements/' + ev.id);
   await page.getByRole('tab', { name: 'Équipes' }).click();
+  await openTeam(page, 'Nord', 'Points');
   await page.getByRole('link', { name: 'Roadbook de l’équipe Nord' }).click();
   const rb = page.getByTestId('roadbook');
   await expect(rb.getByRole('heading', { name: 'Roadbook — Marche roadbook — Nord' })).toBeVisible();

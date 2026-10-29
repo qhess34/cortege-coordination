@@ -1,5 +1,6 @@
 // Lot 2 : comptes, QR code d'équipe, validation des demandes, lien individuel à usage unique.
 import { expect, test } from '@playwright/test';
+import { openTeam } from './helpers-equipes';
 
 const H = { 'x-requested-with': 'cortege' };
 
@@ -19,7 +20,7 @@ test('QR code avec validation : le participant attend, le responsable accepte, i
   await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Nord', color: '#2a9d8f' }, headers: H });
   await page.goto('/#/evenements/' + ev.id);
   await page.getByRole('tab', { name: /Équipes/ }).click();
-  await page.getByRole('button', { name: /Membres et invitations/ }).click();
+  await openTeam(page, 'Équipe Nord', 'Membres');
   await page.getByRole('button', { name: 'Créer le QR code' }).click();
   await expect(page.getByTestId('qr-code')).toBeVisible();
   const url = await page.getByLabel('Lien du QR code').inputValue();
@@ -38,7 +39,7 @@ test('QR code avec validation : le participant attend, le responsable accepte, i
   // L'organisateur accepte la demande.
   await page.reload();
   await page.getByRole('tab', { name: /Équipes/ }).click();
-  await page.getByRole('button', { name: /Membres et invitations/ }).click();
+  await openTeam(page, 'Équipe Nord', 'Membres');
   await page.getByRole('button', { name: 'Accepter' }).click();
   await expect(page.getByText('Camille a rejoint l’équipe.')).toBeVisible();
 
@@ -55,7 +56,7 @@ test('lien individuel : affiché une seule fois, utilisable une seule fois', asy
   await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Sud', color: '#e63946' }, headers: H });
   await page.goto('/#/evenements/' + ev.id);
   await page.getByRole('tab', { name: /Équipes/ }).click();
-  await page.getByRole('button', { name: /Membres et invitations/ }).click();
+  await openTeam(page, 'Équipe Sud', 'Membres');
   await page.getByPlaceholder('Pour qui ? (facultatif)').fill('Dominique');
   await page.getByRole('button', { name: 'Créer un lien' }).click();
   const url = await page.getByLabel('Lien d’invitation').inputValue();
@@ -77,7 +78,7 @@ test('lien individuel : affiché une seule fois, utilisable une seule fois', asy
   // Le membre apparaît côté organisation.
   await page.reload();
   await page.getByRole('tab', { name: /Équipes/ }).click();
-  await page.getByRole('button', { name: /Membres et invitations/ }).click();
+  await openTeam(page, 'Équipe Sud', 'Membres');
   await expect(page.getByTestId(/acces-equipe-/)).toContainText('Dominique');
   await phone.close();
   await other.close();
@@ -90,7 +91,7 @@ test('un organisateur membre d’une équipe a aussi l’onglet « Mon équipe �
   await page.goto('/#/evenements/' + ev.id);
   await expect(page.getByRole('tab', { name: 'Mon équipe' })).toHaveCount(0);
   await page.getByRole('tab', { name: /Équipes/ }).click();
-  await page.getByRole('button', { name: /Membres et invitations/ }).click();
+  await openTeam(page, 'Équipe Est', 'Membres');
   await page.getByLabel('Compte à ajouter').selectOption({ label: 'Admin E2E' });
   await page.getByRole('button', { name: 'Ajouter', exact: true }).click();
   await expect(page.getByText('Compte ajouté à l’équipe.')).toBeVisible();

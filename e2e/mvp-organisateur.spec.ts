@@ -1,5 +1,6 @@
 // Parcours MVP de l'organisateur, de bout en bout, dans un vrai navigateur.
 import { expect, test } from '@playwright/test';
+import { openTeam } from './helpers-equipes';
 import { gpxFrom } from '../server/test/helpers/osm';
 
 const H = { 'x-requested-with': 'cortege' };
@@ -134,17 +135,18 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
 
   // 8-9. Créer une équipe et lui affecter les missions dans l'ordre voulu.
   await page.getByRole('tab', { name: 'Équipes' }).click();
+  await page.getByRole('button', { name: '+ Nouvelle équipe' }).click();
   await page.getByPlaceholder('Nom de la nouvelle équipe').fill('Équipe Nord');
   await page.getByRole('button', { name: 'Créer' }).click();
-  await expect(page.getByRole('heading', { name: 'Équipe Nord' })).toBeVisible();
+  // La nouvelle équipe s'ouvre d'elle-même sur ses points.
+  const card = await openTeam(page, 'Équipe Nord', 'Points');
   for (const name of [/Point 1/, /Rue A × Rue B \(accès nord\)/]) {
-    const select = page.getByLabel('Point à affecter');
+    const select = card.getByLabel('Point à affecter');
     const value = await select.locator('option', { hasText: name }).getAttribute('value');
     await select.selectOption(value!);
-    await page.getByRole('button', { name: 'Affecter', exact: true }).click();
     await expect(page.getByText('Point affecté.')).toBeVisible();
   }
-  const missions = page.locator('ol.missions > li');
+  const missions = card.locator('ol.team-points > li');
   await expect(missions).toHaveCount(2);
   await expect(missions.first()).toContainText('Point 1');
   await missions.nth(1).getByRole('button', { name: 'Monter' }).click();
