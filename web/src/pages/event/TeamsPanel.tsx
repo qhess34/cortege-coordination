@@ -21,6 +21,10 @@ export function TeamsPanel(props: PanelProps) {
 
   return (
     <div className="stack">
+      <div className="row">
+        <a className="button" href={'#/evenements/' + data.event.id + '/roadbook'}>📄 Roadbook complet</a>
+        <a className="button" href={'/api/events/' + data.event.id + '/roadbook.gpx'} download>GPX de tous les points</a>
+      </div>
       {canEdit && (
         <form className="row" onSubmit={create}>
           <input placeholder="Nom de la nouvelle équipe" value={name} onChange={(e) => setName(e.target.value)} required maxLength={120} />
@@ -62,6 +66,7 @@ function TeamCard({ team: t, members, data, canEdit, run, select }: PanelProps &
     <div className={'card team' + (t.disabled ? ' disabled' : '')} style={{ borderLeftColor: t.color }}>
       <div className="row">
         <h3 className="grow">{t.name} {t.disabled && <span className="badge">désactivée</span>}</h3>
+        {!t.disabled && <a className="button" href={'#/evenements/' + data.event.id + '/roadbook/equipe/' + t.id} aria-label={'Roadbook de l’équipe ' + t.name}>📄 Roadbook</a>}
         {canEdit && <button onClick={() => setEditing(!editing)}>{editing ? 'Fermer' : 'Modifier'}</button>}
       </div>
       <p className="muted">Responsable : {t.leaderName ?? 'non désigné'}{t.description ? ' · ' + t.description : ''}</p>

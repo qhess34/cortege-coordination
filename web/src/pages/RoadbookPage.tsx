@@ -1,0 +1,208 @@
+// Roadbook imprimable (manifestation complète ou une équipe). « Imprimer » permet aussi d'enregistrer en PDF.
+import { useEffect, useMemo, useState } from 'react';
+import { ApiError, api } from '../api';
+import { DEFAULT_BASEMAP } from '../basemaps';
+import { renderSnapshots, type SnapshotPoint, type SnapshotView } from '../components/mapSnapshots';
+import { FLOW, MOTOR, SUGGESTION_TYPES, coords, dateTime, km } from '../labels';
+import type { Position } from '../types';
+
+interface RbPoint {
+  id: number; name: string; type: string; description: string; origin: string; position: Position; distance: number | null;
+  osm: { routeNames: string[]; branches: { name: string | null; highway: string; flow: string; motor: string }[]; uncertainties: string[] } | null;
+}
+interface RbTeam {
+  id: number; name: string; color: string; description: string; instructions: string; leaderName: string | null;
+  missions: { order: number; status: string; instructions: string; point: RbPoint }[];
+}
+interface Roadbook {
+  generatedAt: string;
+  scope: 'manifestation' | 'equipe';
+  event: { id: number; name: string; description: string; startsAt: string | null; endsAt: string | null; areaName: string; instructions: string };
+  track: { name: string | null; version: number; length: number; closed: boolean; geometry: { coordinates: Position[][] }; waypoints: { name: string | null; position: Position; distance: number | null }[] } | null;
+  teams: RbTeam[];
+  unassigned: RbPoint[];
+}
+
+function readBasemap(): string {
+  try {
+    return localStorage.getItem('cortege.fond') ?? DEFAULT_BASEMAP;
+  } catch {
+    return DEFAULT_BASEMAP;
+  }
+}
+
+const osmLink = (p: Position) => 'https://www.openstreetmap.org/?mlat=' + p[1].toFixed(6) + '&mlon=' + p[0].toFixed(6) + '#map=18/' + p[1].toFixed(6) + '/' + p[0].toFixed(6);
+
+export function RoadbookPage({ eventId, teamId }: { eventId: number; teamId: number | null }) {
+  const [rb, setRb] = useState<Roadbook | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [images, setImages] = useState<Record<string, string>>({});
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const query = teamId ? '?team=' + teamId : '';
+
+  useEffect(() => {
+    api.get<Roadbook>('/api/events/' + eventId + '/roadbook' + query).then(setRb, (e) => setError(e instanceof ApiError ? e.message : 'Chargement impossible.'));
+  }, [eventId, query]);
+
+  // Cartes : vue d'ensemble, puis une vue par point (point mis en évidence).
+  const plan = useMemo(() => {
+    if (!rb) return null;
+    const points: SnapshotPoint[] = [];
+    const views: SnapshotView[] = [];
+    const all: Position[] = [];
+    for (const t of rb.teams) for (const m of t.missions) {
+      points.push({ id: 'p' + m.point.id, position: m.point.position, color: t.color, label: m.point.name });
+      all.push(m.point.position);
+    }
+    for (const p of rb.unassigned) { points.push({ id: 'p' + p.id, position: p.position, color: '#495057', label: p.name }); all.push(p.position); }
+    for (const seg of rb.track?.geometry.coordinates ?? []) all.push(...seg);
+    if (all.length) {
+      const xs = all.map((p) => p[0]);
+      const ys = all.map((p) => p[1]);
+      views.push({ key: 'ensemble', bounds: [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]] });
+    }
+    const seen = new Set<number>();
+    for (const p of [...rb.teams.flatMap((t) => t.missions.map((m) => m.point)), ...rb.unassigned]) {
+      if (seen.has(p.id)) continue;
+      seen.add(p.id);
+      views.push({ key: 'p' + p.id, center: p.position, zoom: 17, highlight: 'p' + p.id });
+    }
+    return { points, views };
+  }, [rb]);
+
+  useEffect(() => {
+    if (!rb || !plan || !plan.views.length) return;
+    const ctrl = new AbortController();
+    setProgress({ done: 0, total: plan.views.length });
+    void renderSnapshots({
+      width: 900, height: 520, basemapId: readBasemap(), track: rb.track?.geometry.coordinates ?? null,
+      points: plan.points, views: plan.views, signal: ctrl.signal,
+      onImage: (key, url) => {
+        setImages((prev) => ({ ...prev, [key]: url }));
+        setProgress((p) => (p ? { ...p, done: p.done + 1 } : p));
+      },
+    }).catch(() => setProgress(null));
+    return () => ctrl.abort();
+  }, [rb, plan]);
+
+  if (error) return <main className="page"><p className="error">{error}</p></main>;
+  if (!rb) return <main className="page"><p>Préparation du roadbook…</p></main>;
+  const team = rb.scope === 'equipe' ? rb.teams[0] : null;
+  const title = 'Roadbook — ' + rb.event.name + (team ? ' — ' + team.name : '');
+  const mapsReady = !progress || progress.done >= progress.total;
+
+  return (
+    <main className="page roadbook" data-testid="roadbook">
+      <div className="roadbook-actions no-print">
+        <a href={'#/evenements/' + eventId}>← Retour à la carte</a>
+        <span className="spacer" />
+        {progress && !mapsReady && <span className="muted" role="status">Préparation des cartes… {progress.done}/{progress.total}</span>}
+        <a className="button" href={'/api/events/' + eventId + '/roadbook.gpx' + query} download>Télécharger le GPX</a>
+        <button className="primary" onClick={() => window.print()}>Imprimer / PDF</button>
+      </div>
+
+      <section className="rb-cover">
+        <h1>{title}</h1>
+        <dl className="kv">
+          <dt>Début</dt><dd>{dateTime(rb.event.startsAt)}</dd>
+          <dt>Fin</dt><dd>{dateTime(rb.event.endsAt)}</dd>
+          {rb.event.areaName && <><dt>Zone</dt><dd>{rb.event.areaName}</dd></>}
+          {rb.track && <><dt>Parcours</dt><dd>{km(rb.track.length)}{rb.track.closed ? ' (boucle)' : ''} — version {rb.track.version}</dd></>}
+          <dt>Édité le</dt><dd>{dateTime(rb.generatedAt)}</dd>
+        </dl>
+        <p className="rb-warning">
+          Document de coordination. Les points sont issus de la préparation de l’organisateur et, pour certains, de
+          données OpenStreetMap à vérifier sur place. Ils ne valent pas autorisation de fermer une voie et ne
+          remplacent ni les consignes des autorités ni les services d’urgence.
+        </p>
+        {rb.event.instructions && <><h2>Consignes générales</h2><p className="pre">{rb.event.instructions}</p></>}
+        {rb.event.description && <p className="pre muted">{rb.event.description}</p>}
+        <MapImage src={images.ensemble} alt="Vue d’ensemble du parcours" large />
+        {rb.track && rb.track.waypoints.length > 0 && (
+          <><h2>Points de passage</h2>
+            <ul className="plain">{rb.track.waypoints.map((w, i) => <li key={i}>{km(w.distance)} — {w.name ?? 'Sans nom'}</li>)}</ul></>
+        )}
+        {!team && rb.teams.length > 0 && (
+          <><h2>Équipes</h2>
+            <ul className="plain">{rb.teams.map((t) => <li key={t.id}><span className="dot" style={{ background: t.color }} /> {t.name} — {t.missions.length} mission(s){t.leaderName ? ', responsable : ' + t.leaderName : ''}</li>)}</ul></>
+        )}
+      </section>
+
+      {rb.teams.map((t) => <TeamSection key={t.id} team={t} images={images} />)}
+
+      {rb.unassigned.length > 0 && (
+        <section className="rb-team">
+          <h2>Points sans équipe ({rb.unassigned.length})</h2>
+          <p className="rb-warning">Ces points ne sont affectés à aucune équipe active.</p>
+          {rb.unassigned.map((p) => <PointCard key={p.id} p={p} images={images} />)}
+        </section>
+      )}
+      {rb.teams.length === 0 && rb.unassigned.length === 0 && <p className="muted">Aucun point de mission pour l’instant.</p>}
+
+      <footer className="rb-footer muted">Fonds de carte et données : © contributeurs OpenStreetMap{readBasemap().includes('ign') ? ', © IGN' : ''}.</footer>
+    </main>
+  );
+}
+
+function TeamSection({ team: t, images }: { team: RbTeam; images: Record<string, string> }) {
+  return (
+    <section className="rb-team">
+      <h2><span className="rb-color" style={{ background: t.color }} /> Équipe {t.name}</h2>
+      <dl className="kv">
+        <dt>Responsable</dt><dd>{t.leaderName ?? 'non désigné'}</dd>
+        {t.description && <><dt>Description</dt><dd>{t.description}</dd></>}
+      </dl>
+      {t.instructions && <><h3>Consignes de l’équipe</h3><p className="pre">{t.instructions}</p></>}
+      {t.missions.length === 0 ? <p className="muted">Aucune mission.</p> : (
+        <>
+          <table className="table rb-table">
+            <thead><tr><th>N°</th><th>Point</th><th>Type</th><th>Parcours</th><th>Coordonnées</th></tr></thead>
+            <tbody>
+              {t.missions.map((m) => (
+                <tr key={m.point.id}>
+                  <td>{m.order}</td><td>{m.point.name}</td><td>{SUGGESTION_TYPES[m.point.type] ?? m.point.type}</td>
+                  <td>{km(m.point.distance)}</td><td>{coords(m.point.position)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          {t.missions.map((m) => <PointCard key={m.point.id} p={m.point} order={m.order} instructions={m.instructions} images={images} />)}
+        </>
+      )}
+    </section>
+  );
+}
+
+function PointCard({ p, order, instructions, images }: { p: RbPoint; order?: number; instructions?: string; images: Record<string, string> }) {
+  return (
+    <article className="rb-point">
+      <h3>{order !== undefined ? order + '. ' : ''}{p.name}</h3>
+      <div className="rb-point-body">
+        <div>
+          <dl className="kv">
+            <dt>Type</dt><dd>{SUGGESTION_TYPES[p.type] ?? p.type}</dd>
+            <dt>Parcours</dt><dd>{km(p.distance)}</dd>
+            <dt>Coordonnées</dt><dd>{coords(p.position)}</dd>
+            {p.osm && p.osm.routeNames.length > 0 && <><dt>Voie du cortège</dt><dd>{p.osm.routeNames.join(', ')}</dd></>}
+          </dl>
+          {p.description && <p className="pre">{p.description}</p>}
+          {instructions && <p className="pre"><b>Consignes :</b> {instructions}</p>}
+          {p.osm && p.osm.branches.length > 0 && (
+            <><h4>Voies raccordées (OSM)</h4>
+              <ul>{p.osm.branches.map((b, i) => <li key={i}>{b.name ?? 'voie sans nom'} — {MOTOR[b.motor]}{b.motor !== 'non' ? ', ' + FLOW[b.flow] : ''}</li>)}</ul></>
+          )}
+          {p.osm && p.osm.uncertainties.length > 0 && <p className="small muted">À vérifier : {p.osm.uncertainties.join(' ')}</p>}
+          <p className="small"><a href={osmLink(p.position)}>{osmLink(p.position)}</a></p>
+          <div className="rb-notes">Notes :</div>
+        </div>
+        <MapImage src={images['p' + p.id]} alt={'Carte du point ' + p.name} />
+      </div>
+    </article>
+  );
+}
+
+function MapImage({ src, alt, large }: { src?: string; alt: string; large?: boolean }) {
+  return src
+    ? <img className={'rb-map' + (large ? ' large' : '')} src={src} alt={alt} />
+    : <div className={'rb-map placeholder' + (large ? ' large' : '')}>Carte en préparation…</div>;
+}

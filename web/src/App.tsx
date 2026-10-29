@@ -3,6 +3,7 @@ import { ApiError, api } from './api';
 import { EventSwitcher } from './components/EventSwitcher';
 import { EventPage } from './pages/EventPage';
 import { EventsPage } from './pages/EventsPage';
+import { RoadbookPage } from './pages/RoadbookPage';
 import { LoginPage } from './pages/LoginPage';
 import type { Me } from './types';
 
@@ -39,6 +40,8 @@ export function App() {
     setMe(null);
   };
   const m = route.match(/^\/evenements\/(\d+)/);
+  // #/evenements/<id>/roadbook (manifestation) ou #/evenements/<id>/roadbook/equipe/<id>
+  const rb = route.match(/^\/evenements\/(\d+)\/roadbook(\/equipe\/(\d+))?$/);
   return (
     <div className="app">
       <header className="topbar">
@@ -48,7 +51,8 @@ export function App() {
         <span className="muted">{me.displayName}{me.globalRole === 'admin' ? ' (administrateur)' : ''}</span>
         <button className="link" onClick={logout}>Se déconnecter</button>
       </header>
-      {m ? <EventPage key={m[1]} eventId={Number(m[1])} /> : <EventsPage me={me} />}
+      {rb ? <RoadbookPage key={route} eventId={Number(rb[1])} teamId={rb[3] ? Number(rb[3]) : null} />
+        : m ? <EventPage key={m[1]} eventId={Number(m[1])} /> : <EventsPage me={me} />}
     </div>
   );
 }

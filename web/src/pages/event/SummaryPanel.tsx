@@ -60,6 +60,10 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
         </div>
       )}
 
+      <div className="row">
+        <a className="button" href={'#/evenements/' + ev.id + '/roadbook'}>📄 Roadbook de la manifestation</a>
+      </div>
+
       <div className="grid-stats">
         <div className="stat"><b>{s.track ? km(s.track.length) : '—'}</b><span>Parcours{s.track ? ' (v' + s.track.version + ')' : ''}</span></div>
         <div className="stat"><b>{count(s.suggestions, 'a_examiner')}</b><span>Suggestions à examiner</span></div>

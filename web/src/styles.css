@@ -193,3 +193,39 @@ ul.compact { margin: 0; padding-left: 1.1rem; }
 /* Pendant le déplacement d'un point, les éléments posés sur la carte laissent passer la souris (voir MapView). */
 .map-pane.glisser-en-cours > :not(.map),
 .map-pane.glisser-en-cours > :not(.map) * { pointer-events: none !important; }
+
+/* Liens présentés comme des boutons */
+a.button { display: inline-block; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 6px; padding: .4rem .75rem; text-decoration: none; }
+a.button:hover { border-color: var(--primary); }
+
+/* Roadbook */
+.roadbook { max-width: 980px; }
+.roadbook-actions { display: flex; gap: .6rem; align-items: center; flex-wrap: wrap; position: sticky; top: 0; background: var(--bg); padding: .5rem 0; z-index: 1; }
+.rb-cover, .rb-team { background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 1.2rem; }
+.rb-warning { border-left: 4px solid var(--warn-border); background: var(--warn-bg); padding: .5rem .7rem; }
+.rb-color { display: inline-block; width: 1rem; height: 1rem; border-radius: 3px; vertical-align: -2px; }
+.rb-table td, .rb-table th { padding: .3rem .4rem; font-size: .9rem; }
+.rb-point { border-top: 1px solid var(--border); padding-top: .8rem; margin-top: .8rem; }
+.rb-point-body { display: grid; grid-template-columns: 1fr 340px; gap: 1rem; align-items: start; }
+.rb-map { width: 100%; border: 1px solid var(--border); border-radius: 6px; display: block; aspect-ratio: 900 / 520; object-fit: cover; }
+.rb-map.large { margin: .8rem 0; }
+.rb-map.placeholder { display: grid; place-items: center; color: var(--muted); background: var(--bg); }
+.rb-notes { border: 1px dashed var(--border); border-radius: 6px; min-height: 4rem; padding: .3rem .5rem; color: var(--muted); font-size: .85rem; }
+.rb-footer { font-size: .8rem; }
+@media (max-width: 700px) { .rb-point-body { grid-template-columns: 1fr; } }
+
+@media print {
+  :root { --bg: #fff; --surface: #fff; --text: #000; --muted: #444; --border: #bbb; }
+  @page { size: A4; margin: 12mm; }
+  body, .app { background: #fff; }
+  .app { height: auto; overflow: visible; display: block; }
+  .app > .page { overflow: visible; }
+  .topbar, .no-print, .toast { display: none !important; }
+  .roadbook { max-width: none; padding: 0; }
+  .rb-cover, .rb-team { border: none; padding: 0; }
+  .rb-team { break-before: page; }
+  .rb-point { break-inside: avoid; }
+  .rb-table { break-inside: auto; }
+  .rb-point-body { grid-template-columns: 1fr 75mm; }
+  a { color: #000; }
+}
