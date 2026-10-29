@@ -21,7 +21,11 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
   const [status, setStatus] = useState('a_examiner');
   const [type, setType] = useState('');
   const [pertinence, setPertinence] = useState('');
-  const [includeNonMotor, setIncludeNonMotor] = useState(true);
+  // Options reprises de la dernière analyse, pour qu'une relance garde les mêmes choix.
+  const last = data.summary.lastAnalysis?.options;
+  const [includeNonMotor, setIncludeNonMotor] = useState(last?.includeNonMotor ?? true);
+  const [includeOutgoing, setIncludeOutgoing] = useState(last?.includeOutgoing ?? true);
+  const outgoingToReview = data.suggestions.filter((s) => s.type === 'rue_laterale' && s.status === 'a_examiner' && !s.pointId).length;
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -30,7 +34,7 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
 
   const analyse = async () => {
     setBusy(true);
-    await run(async () => setReport(await api.post<AnalysisReport>('/api/events/' + data.event.id + '/analyses', { includeNonMotor })), 'Analyse terminée.');
+    await run(async () => setReport(await api.post<AnalysisReport>('/api/events/' + data.event.id + '/analyses', { includeNonMotor, includeOutgoing })), 'Analyse terminée.');
     setBusy(false);
   };
 
@@ -44,8 +48,17 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
             suggestions écartées ne réapparaissent pas.
           </p>
           <label className="check"><input type="checkbox" checked={includeNonMotor} onChange={(e) => setIncludeNonMotor(e.target.checked)} /> Inclure les accès piétons et cyclables</label>
+          <label className="check" title="Voies à sens unique depuis le parcours : aucun véhicule ne peut en arriver d’après OSM">
+            <input type="checkbox" checked={includeOutgoing} onChange={(e) => setIncludeOutgoing(e.target.checked)} /> Inclure les rues sortantes (sens unique depuis le parcours)
+          </label>
           <button className="primary" disabled={busy || !data.track} onClick={analyse}>{busy ? 'Analyse en cours…' : data.summary.lastAnalysis ? 'Relancer l’analyse' : 'Lancer l’analyse'}</button>
           {!data.track && <p className="muted">Importez d’abord un parcours.</p>}
+          {outgoingToReview > 0 && (
+            <button onClick={() => {
+              if (!window.confirm('Écarter les ' + outgoingToReview + ' rue(s) sortante(s) à examiner ? Elles ne réapparaîtront pas lors des prochaines analyses (vous pourrez les réexaminer une à une).')) return;
+              void run(() => api.post('/api/events/' + data.event.id + '/suggestions/dismiss-type', { type: 'rue_laterale', reason: 'Rue sortante (sens unique depuis le parcours)' }), outgoingToReview + ' rue(s) sortante(s) écartée(s).');
+            }}>Écarter les {outgoingToReview} rue(s) sortante(s) à examiner</button>
+          )}
           {report && <AnalysisSummary report={report} select={select} />}
         </div>
       )}

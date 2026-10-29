@@ -84,6 +84,8 @@ export interface AnalysisOptions {
   clusterRadius: number;
   /** Inclure les connexions uniquement piétonnes ou cyclables. */
   includeNonMotor: boolean;
+  /** Inclure les rues sortantes : voie à sens unique depuis le parcours, d'où aucun véhicule ne peut arriver. */
+  includeOutgoing: boolean;
 }
 
 export const DEFAULT_OPTIONS: AnalysisOptions = {
@@ -91,6 +93,7 @@ export const DEFAULT_OPTIONS: AnalysisOptions = {
   maxAngle: 35,
   clusterRadius: 25,
   includeNonMotor: true,
+  includeOutgoing: true,
 };
 
 // --- Classement des voies ------------------------------------------------------------------------------------
@@ -452,6 +455,7 @@ export function analyse(
     else type = 'acces_pieton_cycle';
 
     if (type === 'acces_pieton_cycle' && !o.includeNonMotor) return null;
+    if (type === 'rue_laterale' && !o.includeOutgoing) return null;
 
     const major = motorOpen.some((b) => MAJOR_HIGHWAYS.has(b.highway));
     const minorService = motorOpen.length > 0 && motorOpen.every((b) => b.highway === 'service' || b.highway === 'track');
@@ -587,4 +591,12 @@ export function mergeOverpass(responses: OverpassResponse[]): OverpassResponse {
   // Date des données : la plus ancienne des réponses, pour ne pas surestimer leur fraîcheur.
   const stamps = responses.map((r) => r.osm3s?.timestamp_osm_base).filter((t): t is string => !!t).sort();
   return { osm3s: stamps.length ? { timestamp_osm_base: stamps[0] } : undefined, elements: [...seen.values()] };
+}
+
+/** Types de suggestion que les options demandent de ne pas proposer. */
+export function excludedTypes(o: Partial<AnalysisOptions>): SuggestionType[] {
+  const out: SuggestionType[] = [];
+  if (o.includeNonMotor === false) out.push('acces_pieton_cycle');
+  if (o.includeOutgoing === false) out.push('rue_laterale');
+  return out;
 }

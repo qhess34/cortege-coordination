@@ -4,7 +4,7 @@ import { idParam, requireUser } from '../app.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
 import { badRequest, conflict, HttpError } from '../errors.js';
-import { DEFAULT_OPTIONS, analyse, mergeOverpass, overpassQueries, type OverpassResponse, type Suggestion } from '../geo/osm-analysis.js';
+import { DEFAULT_OPTIONS, analyse, excludedTypes, mergeOverpass, overpassQueries, type OverpassResponse, type Suggestion } from '../geo/osm-analysis.js';
 import { simplify } from '../geo/route.js';
 import { requireEntityAccess, requireEventRole } from '../permissions.js';
 import { mergeSuggestions } from '../services/merge.js';
@@ -15,6 +15,7 @@ const AnalysisBody = z
     routeTolerance: z.number().min(3).max(50),
     clusterRadius: z.number().min(0).max(80),
     includeNonMotor: z.boolean(),
+    includeOutgoing: z.boolean(),
     corridor: z.number().min(10).max(150),
   })
   .partial()
@@ -97,7 +98,7 @@ export async function suggestionRoutes(app: FastifyInstance) {
           [eventId, track.id, JSON.stringify({ ...options, corridor }), result.osmTimestamp, app.config.overpassUrls.join(', '), JSON.stringify(result.stats), u.id],
         )
       ).rows[0];
-      const merge = await mergeSuggestions(c, eventId, a.id, result.suggestions);
+      const merge = await mergeSuggestions(c, eventId, a.id, result.suggestions, excludedTypes(options));
       const report = {
         merge,
         ignoredCrossings: result.ignoredCrossings,
@@ -177,6 +178,27 @@ export async function suggestionRoutes(app: FastifyInstance) {
       await c.query("UPDATE map_suggestions SET status = 'ecartee', dismissed_reason = $2, decided_at = now(), decided_by = $3 WHERE id = $1", [id, b.reason ?? null, u.id]);
       await audit(c, { actorId: u.id, eventId, entity: 'map_suggestion', entityId: id, action: 'exclusion', details: { reason: b.reason } });
       return { ok: true };
+    });
+  });
+
+  // Écarter d'un coup toutes les suggestions à examiner d'un type (ex. rues sortantes). Celles qui ont déjà donné
+  // un point de mission ne sont pas concernées. Elles restent mémorisées et ne réapparaissent pas.
+  app.post('/api/events/:id/suggestions/dismiss-type', async (req) => {
+    const u = requireUser(req);
+    const eventId = idParam(req);
+    const b = z.object({ type: z.string().max(40), reason: z.string().trim().max(1000).optional() }).parse(req.body);
+    return tx(app.db, async (c) => {
+      await requireEventRole(c, u, eventId, 'organisation');
+      const r = await c.query(
+        `UPDATE map_suggestions s SET status = 'ecartee', dismissed_reason = $3, decided_at = now(), decided_by = $4
+          WHERE s.event_id = $1 AND s.type = $2 AND s.status = 'a_examiner'
+            AND NOT EXISTS (SELECT 1 FROM mission_points p WHERE p.suggestion_id = s.id AND p.deleted_at IS NULL)
+          RETURNING s.id`,
+        [eventId, b.type, b.reason ?? null, u.id],
+      );
+      const ids = r.rows.map((x) => x.id as number);
+      await audit(c, { actorId: u.id, eventId, entity: 'map_suggestion', entityId: null, action: 'exclusion_groupee', details: { type: b.type, reason: b.reason, ids } });
+      return { dismissed: ids.length };
     });
   });
 

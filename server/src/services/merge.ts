@@ -41,7 +41,13 @@ function differences(before: Suggestion, after: Suggestion): string[] {
   return out;
 }
 
-export async function mergeSuggestions(c: PoolClient, eventId: number, analysisId: number, found: Suggestion[]): Promise<MergeReport> {
+/**
+ * `excluded` : types volontairement non recherchés par cette analyse (options) ; les suggestions existantes de
+ * ces types ne sont pas signalées comme absentes.
+ */
+export async function mergeSuggestions(
+  c: PoolClient, eventId: number, analysisId: number, found: Suggestion[], excluded: string[] = [],
+): Promise<MergeReport> {
   const report: MergeReport = { added: [], alreadyPresent: [], modified: [], ignoredDismissed: [], missing: [] };
   const existing = (
     await c.query<Existing>(
@@ -96,7 +102,7 @@ export async function mergeSuggestions(c: PoolClient, eventId: number, analysisI
   }
 
   for (const e of existing) {
-    if (!seen.has(e.id) && e.status !== 'ecartee') {
+    if (!seen.has(e.id) && e.status !== 'ecartee' && !excluded.includes(e.type)) {
       report.missing.push({ id: e.id, stableKey: e.stable_key, status: e.status, hasPoint: e.has_point });
     }
   }

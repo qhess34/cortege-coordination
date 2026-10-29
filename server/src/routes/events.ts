@@ -143,7 +143,7 @@ export async function eventRoutes(app: FastifyInstance) {
       app.db.query('SELECT count(*) FILTER (WHERE disabled_at IS NULL)::int AS active, count(*)::int AS total FROM teams WHERE event_id = $1', [id]),
       app.db.query('SELECT status, count(*)::int AS n FROM missions WHERE event_id = $1 AND cancelled_at IS NULL GROUP BY status', [id]),
       app.db.query('SELECT t.id, t.version, t.length_m, t.closed, t.warnings FROM events e JOIN gpx_tracks t ON t.id = e.current_track_id WHERE e.id = $1', [id]),
-      app.db.query('SELECT id, created_at, osm_timestamp, track_id FROM osm_analyses WHERE event_id = $1 ORDER BY id DESC LIMIT 1', [id]),
+      app.db.query('SELECT id, created_at, osm_timestamp, track_id, options FROM osm_analyses WHERE event_id = $1 ORDER BY id DESC LIMIT 1', [id]),
     ]);
     const unassigned = await app.db.query(
       `SELECT p.id, p.name, p.distance_m FROM mission_points p WHERE p.event_id = $1 AND p.deleted_at IS NULL
@@ -162,7 +162,7 @@ export async function eventRoutes(app: FastifyInstance) {
       missions: toMap(missions.rows),
       unassignedPoints: unassigned.rows.map((r) => ({ id: r.id, name: r.name, distance: r.distance_m })),
       track: t ? { id: t.id, version: t.version, length: t.length_m, closed: t.closed, warnings: t.warnings } : null,
-      lastAnalysis: a ? { id: a.id, at: a.created_at, osmTimestamp: a.osm_timestamp, outdated: !t || a.track_id !== t.id } : null,
+      lastAnalysis: a ? { id: a.id, at: a.created_at, osmTimestamp: a.osm_timestamp, options: a.options, outdated: !t || a.track_id !== t.id } : null,
     };
   });
 

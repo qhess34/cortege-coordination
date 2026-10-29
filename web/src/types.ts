@@ -41,7 +41,7 @@ export interface Summary {
   suggestions: Record<string, number>; points: Record<string, number>; teams: { active: number; total: number };
   missions: Record<string, number>; unassignedPoints: { id: number; name: string; distance: number | null }[];
   track: { id: number; version: number; length: number; closed: boolean; warnings: string[] } | null;
-  lastAnalysis: { id: number; at: string; osmTimestamp: string | null; outdated: boolean } | null;
+  lastAnalysis: { id: number; at: string; osmTimestamp: string | null; outdated: boolean; options?: { includeNonMotor?: boolean; includeOutgoing?: boolean } } | null;
 }
 
 export interface HistoryEntry { id: number; at: string; entity: string; entityId: number | null; action: string; details: unknown; actor: string | null }

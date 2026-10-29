@@ -148,6 +148,12 @@ describe('analyse du réseau', () => {
     expect(r.suggestions.some((s) => s.type === 'acces_pieton_cycle')).toBe(false);
   });
 
+  it('peut exclure les rues sortantes, sans toucher aux carrefours ni aux accès entrants', () => {
+    const r = analyse(route, referenceNetwork(), { includeOutgoing: false });
+    expect(r.suggestions.some((s) => s.type === 'rue_laterale')).toBe(false);
+    expect(r.suggestions.map((s) => s.stableKey)).toEqual(['osm:n2', 'osm:n3', 'osm:x1-6', 'osm:n5', 'osm:n7']);
+  });
+
   it('sens unique inversé (oneway=-1) : arrive sur le parcours', () => {
     const b = new OsmBuilder();
     b.node(1, 0, 0); b.node(2, 100, 0); b.node(3, 200, 0); b.node(4, 100, 100);

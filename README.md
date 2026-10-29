@@ -43,6 +43,9 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
   type de véhicule, restrictions temporelles, restrictions de tournant, voies privées, piétonnes et cyclables,
   regroupement des nœuds d'un même carrefour, passages multiples sur les boucles. Chaque suggestion indique son
   motif, ses voies, ses attributs OSM, ses incertitudes et une pertinence estimée.
+- **Options d'analyse**, reprises d'une analyse à l'autre : inclure ou non les accès piétons et cyclables, et les
+  **rues sortantes** (sens unique depuis le parcours, d'où aucun véhicule ne peut arriver d'après OSM). Les rues
+  sortantes déjà proposées peuvent être écartées en une fois ; elles ne réapparaissent pas.
 - **Nouvelle analyse non destructive** : identifiant stable par nœud OSM (avec repli sur la voie et la position),
   suggestions écartées mémorisées, modifications OSM présentées à part et appliquées seulement sur décision,
   doublons possibles avec des points existants signalés, suggestions disparues conservées et signalées.
