@@ -4,7 +4,9 @@ import { ApiError, api } from '../api';
 import { MISSION_STATUS, SUGGESTION_TYPES, TEAM_KIND, km } from '../labels';
 import type { Position, TeamKind } from '../types';
 import { ago, useLive } from '../useLive';
+import guideMembre from '../../../docs/guide-membre.md?raw';
 import { FieldMap } from './FieldMap';
+import { Markdown } from './Markdown';
 import { OwnTracksCard, type OwnTracksState } from './OwnTracksCard';
 import { useSharing } from './useSharing';
 
@@ -59,7 +61,7 @@ const ACTIONS: Record<string, { to: string; label: string; primary?: boolean }[]
   incident: [{ to: 'en_position', label: 'Reprendre la position', primary: true }, { to: 'en_deplacement', label: 'En route' }, { to: 'terminee', label: 'Terminé' }],
 };
 
-type Tab = 'mission' | 'messages' | 'incidents';
+type Tab = 'mission' | 'messages' | 'incidents' | 'aide';
 
 const meters = (m: number) => (m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km');
 const minutes = (s: number) => Math.max(1, Math.round(s / 60)) + ' min';
@@ -207,6 +209,7 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
         <button role="tab" aria-selected={tab === 'mission'} onClick={() => setTab('mission')}>Mission</button>
         <button role="tab" aria-selected={tab === 'messages'} onClick={() => setTab('messages')}>Messages{unread ? <span className="count">{unread}</span> : null}</button>
         <button role="tab" aria-selected={tab === 'incidents'} onClick={() => setTab('incidents')}>Incidents{openIncidents ? <span className="count">{openIncidents}</span> : null}</button>
+        <button role="tab" aria-selected={tab === 'aide'} onClick={() => setTab('aide')} aria-label="Aide" className="help-tab">?</button>
       </nav>
 
       {tab === 'mission' && (
@@ -328,6 +331,8 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
 
       {tab === 'messages' && <Messages data={data} teamId={teamId} act={act} busy={busy} />}
       {tab === 'incidents' && <Incidents data={data} teamId={teamId} current={current} me={me} locate={locate} act={act} busy={busy} />}
+
+      {tab === 'aide' && <section className="card" data-testid="aide-membre"><Markdown source={guideMembre} toc /></section>}
 
       {footer && <footer className="field-footer">{footer}</footer>}
       {toast && <div className={'toast ' + toast.kind} role="status">{toast.text}</div>}

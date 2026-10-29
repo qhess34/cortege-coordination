@@ -27,6 +27,13 @@ sous le tracé.*
 La conception complète (architecture, modèle de données, écrans, flux d'invitation, risques) est dans
 [docs/CONCEPTION.md](docs/CONCEPTION.md).
 
+**Guides d'utilisation** (aussi affichés dans l'application : lien *Aide* de la barre du haut pour l'organisation,
+onglet *?* de la vue terrain pour les membres) :
+- [Guide de l'organisation](docs/guide-organisateur.md) — préparer la manifestation, répartir les équipes, coordonner
+  le jour J ;
+- [Guide des membres d'équipe](docs/guide-membre.md) — rejoindre son équipe, sa mission sur téléphone, messages,
+  incidents, partage de position.
+
 ## Ce que fait la phase 1
 
 - **Comptes administrés** : pas d'inscription publique. Le premier administrateur est créé en ligne de commande ;

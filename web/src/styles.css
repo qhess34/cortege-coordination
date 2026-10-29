@@ -319,7 +319,7 @@ a.button.big { display: flex; align-items: center; justify-content: center; flex
 .team-head .muted { display: block; }
 .team-head .chevron { color: var(--muted); width: 1rem; }
 .team-body { padding: 0 .75rem .75rem; }
-.segmented { display: flex; gap: 0; margin-bottom: .6rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.segmented { display: flex; gap: 0; margin-bottom: .6rem; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; flex-shrink: 0; }
 .segmented button { flex: 1; border: none; border-radius: 0; padding: .35rem .3rem; font-size: .85rem; background: var(--surface); }
 .segmented button + button { border-left: 1px solid var(--border); }
 .segmented button[aria-selected='true'] { background: var(--primary); color: var(--primary-text); }
@@ -336,3 +336,21 @@ button.icon { padding: .1rem .4rem; min-width: 1.8rem; }
 .kind-choice label { border: 1px solid var(--border); border-radius: 6px; padding: .35rem .5rem; font-size: .85rem; cursor: pointer; }
 .kind-choice label.selected { border-color: var(--primary); background: var(--selected, #eef2f7); }
 .exports { gap: .8rem; border-top: 1px solid var(--border); padding-top: .5rem; }
+
+/* Guides (aide) */
+.help { max-width: 52rem; margin: 0 auto; padding: 1rem; }
+.help > * { flex-shrink: 0; }
+.help-tabs { max-width: 26rem; position: sticky; top: 0; z-index: 3; margin: 0 auto .6rem; box-shadow: 0 1px 4px rgba(0,0,0,.12); }
+.markdown { line-height: 1.5; }
+.markdown h1 { font-size: 1.5rem; margin: .2rem 0 .6rem; }
+.markdown h2 { font-size: 1.2rem; margin: 1.4rem 0 .4rem; padding-top: .4rem; border-top: 1px solid var(--border); }
+.markdown h3 { font-size: 1.05rem; margin: 1rem 0 .3rem; }
+.markdown ul, .markdown ol { padding-left: 1.3rem; }
+.markdown li { margin: .2rem 0; }
+.markdown blockquote { margin: .6rem 0; padding: .5rem .8rem; border-left: 4px solid var(--danger); background: var(--warn-bg); border-radius: 4px; }
+.markdown code { background: var(--bg); padding: 0 .25rem; border-radius: 3px; }
+.markdown .checklist { list-style: none; padding-left: .2rem; }
+.markdown .toc { background: var(--bg); border-radius: 6px; padding: .4rem .8rem; font-size: .9rem; }
+.markdown .toc ol { margin: .2rem 0; }
+.field-tabs .help-tab { flex: 0 0 2.8rem; font-weight: 700; }
+@media print { .topbar, .help-tabs, .no-print, .help > .muted { display: none !important; } .help .card { border: none; } .markdown .toc { display: none; } }

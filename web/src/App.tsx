@@ -4,6 +4,7 @@ import { EventSwitcher } from './components/EventSwitcher';
 import { FieldView } from './components/FieldView';
 import { EventPage } from './pages/EventPage';
 import { AdminPage } from './pages/AdminPage';
+import { HelpPage } from './pages/HelpPage';
 import { EventsPage } from './pages/EventsPage';
 import { JoinPage } from './pages/JoinPage';
 import { ParticipantPage } from './pages/ParticipantPage';
@@ -83,6 +84,7 @@ export function App() {
         <a href="#/" className="brand">Coordination de cortège</a>
         <EventSwitcher me={me} currentId={m ? Number(m[1]) : null} />
         <span className="spacer" />
+        <a href="#/aide">Aide</a>
         {me.globalRole === 'admin' && <a href="#/admin">Comptes</a>}
         <span className="muted">{me.displayName}{me.globalRole === 'admin' ? ' (administrateur)' : ''}</span>
         <button className="link" onClick={logout}>Se déconnecter</button>
@@ -90,6 +92,7 @@ export function App() {
       {rb ? <RoadbookPage key={route} eventId={Number(rb[1])} teamId={rb[3] ? Number(rb[3]) : null} />
         : m ? <EventPage key={m[1]} eventId={Number(m[1])} />
         : route === '/admin' && me.globalRole === 'admin' ? <AdminPage meId={me.id} />
+        : route === '/aide' ? <HelpPage />
         : <EventsPage me={me} />}
     </div>
   );
