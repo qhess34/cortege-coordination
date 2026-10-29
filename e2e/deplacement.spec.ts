@@ -106,7 +106,8 @@ test('glisser une suggestion la valide à la position choisie ; un point se sais
   await expect(page.locator('.point-marker.draft')).toHaveCount(1);
   await bubble.getByRole('button', { name: 'Valider à cette position' }).click();
   await expect(page.getByText('Suggestion validée à la position choisie')).toBeVisible();
-  await page.getByTestId('point-editor').getByRole('button', { name: 'Annuler' }).click();
+  // Le point est posé à l'endroit choisi sans ouvrir sa bulle.
+  await expect(page.getByTestId('map-bubble')).toHaveCount(0);
   const marker = page.locator('.point-marker', { hasText: /Carrefour/ });
   const mb = (await marker.locator('.point-dot').boundingBox())!;
   expect(Math.abs(mb.x + mb.width / 2 - (sx + 60))).toBeLessThan(6);

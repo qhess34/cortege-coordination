@@ -15,7 +15,8 @@ interface Props {
   onDetails: () => void;
   onClose: () => void;
   /** Après une décision : message, et point créé le cas échéant. */
-  onDone: (message: string, pointId?: number) => Promise<void>;
+  /** `openEditor` : ouvrir la bulle du point créé (pas après une validation à une position choisie). */
+  onDone: (message: string, pointId?: number, openEditor?: boolean) => Promise<void>;
 }
 
 export function SuggestionPopup({ s, moveTo, onResetMove, canEdit, onPhotos, onDetails, onClose, onDone }: Props) {
@@ -67,7 +68,7 @@ export function SuggestionPopup({ s, moveTo, onResetMove, canEdit, onPhotos, onD
           <div className="row">
             <button className="primary" disabled={busy} onClick={() => act(async () => {
               const r = await api.post<{ pointId: number }>('/api/suggestions/' + s.id + '/validate', { position: moveTo });
-              await onDone('Suggestion validée à la position choisie : point de mission créé.', r.pointId);
+              await onDone('Suggestion validée à la position choisie : point de mission créé.', r.pointId, false);
             })}>Valider à cette position</button>
             <button disabled={busy} onClick={onResetMove}>Remettre en place</button>
           </div>
@@ -78,7 +79,7 @@ export function SuggestionPopup({ s, moveTo, onResetMove, canEdit, onPhotos, onD
           <div className="row">
             <button className="primary" disabled={busy} onClick={() => act(async () => {
               const r = await api.post<{ pointId: number }>('/api/suggestions/' + s.id + '/validate');
-              await onDone('Suggestion validée : point de mission créé.', r.pointId);
+              await onDone('Suggestion validée : point de mission créé.', r.pointId, true);
             })}>Valider</button>
             <button disabled={busy} onClick={() => act(async () => {
               await api.post('/api/suggestions/' + s.id + '/dismiss', { reason: reason || undefined });

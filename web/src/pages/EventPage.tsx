@@ -249,7 +249,7 @@ export function EventPage({ eventId }: { eventId: number }) {
                 onClose={closeSuggestion}
                 onPhotos={() => openPhotos(selectedSuggestion.position)}
                 onDetails={() => setTab('suggestions')}
-                onDone={async (message, pointId) => {
+                onDone={async (message, pointId, openEditor) => {
                   setToast({ kind: 'ok', text: message });
                   await reload();
                   setSuggestionPopup(false);
@@ -258,6 +258,8 @@ export function EventPage({ eventId }: { eventId: number }) {
                     // La suggestion validée devient un point : on ouvre directement sa bulle de modification.
                     setSelection({ kind: 'point', id: pointId });
                     setTab('points');
+                    // Validée à une position choisie sur la carte : le point est posé, sans rouvrir de bulle.
+                    if (!openEditor) return;
                     const pts = await api.get<MissionPoint[]>(base + '/points');
                     const p = pts.find((x) => x.id === pointId);
                     if (p) setEdit({ kind: 'existing', id: p.id, version: p.version, position: p.position, name: p.name, type: p.type, description: p.description });
