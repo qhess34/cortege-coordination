@@ -5,6 +5,7 @@ import { MISSION_STATUS, SUGGESTION_TYPES, TEAM_KIND, km } from '../labels';
 import type { Position, TeamKind } from '../types';
 import { ago, useLive } from '../useLive';
 import { FieldMap } from './FieldMap';
+import { OwnTracksCard, type OwnTracksState } from './OwnTracksCard';
 import { useSharing } from './useSharing';
 
 export interface FieldMission {
@@ -21,7 +22,7 @@ export interface FieldIncident {
 }
 export interface Progress { distance: number; note: string; at: string; authorName: string | null }
 export interface Terrain {
-  me: { id: number; displayName: string; role: 'membre' | 'responsable'; organizer: boolean };
+  me: { id: number; displayName: string; role: 'membre' | 'responsable'; organizer: boolean; member: boolean };
   event: { id: number; name: string; startsAt: string | null; instructions: string; status: string };
   team: { id: number; name: string; color: string; instructions: string; leaderName: string | null; closed: boolean; kind: TeamKind };
   missions: FieldMission[];
@@ -40,6 +41,8 @@ export interface Terrain {
   /** Partage de position autorisé par l'organisation ; `sharing` : ce compte partage actuellement. */
   locationSharing: boolean;
   sharing: boolean;
+  /** OwnTracks configuré sur un téléphone de ce membre. */
+  owntracks: OwnTracksState | null;
 }
 
 export const INCIDENT_CATEGORY: Record<string, string> = {
@@ -211,7 +214,7 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
           {data.messages.some((m) => m.urgent && m.read === false) && (
             <button className="urgent-banner" onClick={() => setTab('messages')}>⚠ Message urgent de l’organisation — lire</button>
           )}
-          {data.locationSharing && (
+          {data.locationSharing && data.me.member && (
             <div className={'card small' + (sharing.on ? ' sharing' : '')} data-testid="partage-position">
               {sharing.on ? (
                 <div className="row">
@@ -227,6 +230,9 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
               )}
               <p className="muted">Seulement tant que l’application est ouverte à l’écran ; dernière position seulement, effacée à l’arrêt.</p>
             </div>
+          )}
+          {data.locationSharing && data.me.member && (
+            <OwnTracksCard teamId={teamId} state={data.owntracks} reload={load} notify={setToast} />
           )}
           <Progression data={data} reload={load} setToast={setToast} locate={locate} />
           {data.team.kind !== 'points' && <RoleCard data={data} openIncidents={() => setTab('incidents')} />}

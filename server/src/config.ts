@@ -18,6 +18,8 @@ export interface Config {
   loginRateLimit: number;
   /** Serveur d'itinéraires compatible OSRM, profil piéton (facultatif). */
   routingUrl: string | null;
+  /** Adresse publique du site (https://…), utilisée dans la configuration envoyée à OwnTracks. */
+  publicUrl: string | null;
 }
 
 function bool(v: string | undefined, def: boolean): boolean {
@@ -43,5 +45,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     joinRateLimit: Number(env.JOIN_RATE_LIMIT ?? 30),
     loginRateLimit: Number(env.LOGIN_RATE_LIMIT ?? 20),
     routingUrl: env.ROUTING_URL || null,
+    publicUrl: env.PUBLIC_URL ? env.PUBLIC_URL.replace(/\/+$/, '') : null,
   };
 }

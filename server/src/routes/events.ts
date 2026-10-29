@@ -17,6 +17,8 @@ const EventFields = {
   instructions: z.string().max(20000),
   /** Autorise les membres à partager leur position en direct (chacun doit encore l'activer sur son téléphone). */
   locationSharing: z.boolean(),
+  /** Rayon (m) des zones envoyées à OwnTracks autour des points de mission. */
+  zoneRadius: z.number().int().min(20).max(300),
 };
 const CreateEvent = z.object({
   ...EventFields,
@@ -26,6 +28,7 @@ const CreateEvent = z.object({
   areaName: EventFields.areaName.default(''),
   instructions: EventFields.instructions.default(''),
   locationSharing: EventFields.locationSharing.default(false),
+  zoneRadius: EventFields.zoneRadius.default(50),
 });
 const UpdateEvent = z.object({ ...EventFields, status: Status }).partial().extend({ version: z.number().int() });
 const AddMember = z.object({ userId: z.number().int().positive(), role: z.enum(['organisateur', 'responsable', 'membre']) });
@@ -34,7 +37,7 @@ export function publicEvent(r: Record<string, unknown>) {
   return {
     id: r.id, name: r.name, description: r.description, startsAt: r.starts_at, endsAt: r.ends_at, areaName: r.area_name,
     status: r.status, instructions: r.instructions, currentTrackId: r.current_track_id, version: r.version,
-    locationSharing: !!r.location_sharing,
+    locationSharing: !!r.location_sharing, zoneRadius: r.zone_radius_m,
     createdAt: r.created_at, updatedAt: r.updated_at, ...(r.role ? { role: r.role } : {}),
   };
 }
@@ -60,9 +63,9 @@ export async function eventRoutes(app: FastifyInstance) {
     const b = CreateEvent.parse(req.body);
     const ev = await tx(app.db, async (c) => {
       const r = await c.query(
-        `INSERT INTO events(name, description, starts_at, ends_at, area_name, instructions, created_by, location_sharing)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING *`,
-        [b.name, b.description, b.startsAt, b.endsAt, b.areaName, b.instructions, u.id, b.locationSharing],
+        `INSERT INTO events(name, description, starts_at, ends_at, area_name, instructions, created_by, location_sharing, zone_radius_m)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
+        [b.name, b.description, b.startsAt, b.endsAt, b.areaName, b.instructions, u.id, b.locationSharing, b.zoneRadius],
       );
       const e = r.rows[0];
       await c.query("INSERT INTO event_memberships(event_id, user_id, role) VALUES ($1, $2, 'organisateur')", [e.id, u.id]);
@@ -93,13 +96,14 @@ export async function eventRoutes(app: FastifyInstance) {
                 starts_at = CASE WHEN $4::boolean THEN $5::timestamptz ELSE starts_at END,
                 ends_at = CASE WHEN $6::boolean THEN $7::timestamptz ELSE ends_at END,
                 area_name = coalesce($8, area_name), instructions = coalesce($9, instructions), status = coalesce($10, status),
-                location_sharing = coalesce($11, location_sharing), version = version + 1, updated_at = now()
+                location_sharing = coalesce($11, location_sharing), zone_radius_m = coalesce($12, zone_radius_m), version = version + 1, updated_at = now()
           WHERE id = $1 RETURNING *`,
         [id, b.name ?? null, b.description ?? null, b.startsAt !== undefined, b.startsAt ?? null, b.endsAt !== undefined, b.endsAt ?? null,
-          b.areaName ?? null, b.instructions ?? null, b.status ?? null, b.locationSharing ?? null],
+          b.areaName ?? null, b.instructions ?? null, b.status ?? null, b.locationSharing ?? null, b.zoneRadius ?? null],
       );
       // Partage désactivé par l'organisation : les positions connues sont effacées aussitôt.
       if (b.locationSharing === false) await c.query('DELETE FROM member_locations WHERE event_id = $1', [id]);
+      // Les applications OwnTracks se mettront au repos à leur prochain envoi (identifiants refusés tant que coupé).
       const changes = Object.fromEntries(Object.entries(b).filter(([k]) => k !== 'version' && k !== 'instructions' && k !== 'description'));
       await audit(c, { actorId: u.id, eventId: id, entity: 'event', entityId: id, action: 'modification', details: changes });
       return publicEvent(r.rows[0]);

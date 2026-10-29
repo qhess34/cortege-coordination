@@ -15,6 +15,7 @@ import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { eventRoutes } from './routes/events.js';
 import { invitationRoutes } from './routes/invitations.js';
+import { owntracksRoutes } from './routes/owntracks.js';
 import { pointRoutes } from './routes/points.js';
 import { roadbookRoutes } from './routes/roadbook.js';
 import { suggestionRoutes } from './routes/suggestions.js';
@@ -97,7 +98,9 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
     reply.header('cache-control', 'no-store');
     // Protection CSRF complémentaire au cookie SameSite : un formulaire d'un autre site ne peut pas
     // ajouter cet en-tête.
-    if (!['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers['x-requested-with'] !== 'cortege') {
+    // /api/owntracks : application mobile authentifiée par identifiant de suivi (Basic), sans cookie ni en-tête CSRF.
+    const owntracks = req.url.split('?')[0] === '/api/owntracks';
+    if (!owntracks && !['GET', 'HEAD', 'OPTIONS'].includes(req.method) && req.headers['x-requested-with'] !== 'cortege') {
       throw new HttpError(403, 'En-tête X-Requested-With manquant.');
     }
     const token = req.cookies[SESSION_COOKIE];
@@ -130,6 +133,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(roadbookRoutes);
   await app.register(invitationRoutes);
   await app.register(terrainRoutes);
+  await app.register(owntracksRoutes);
   return app;
 }
 

@@ -237,7 +237,7 @@ partagé, messages, incidents, progression déclarée du cortège. Le temps rée
 WebSocket) émis après validation de la transaction, à partir des écritures du journal d'audit ; le routage piéton passe
 par un serveur compatible OSRM configurable, avec repli sur un lien vers la carte OpenStreetMap.
 
-**Phase 4** — partage GPS facultatif (✔ avancé : dernière position seulement, double accord, arrivée automatique), mode hors ligne avec file d'actions et résolution de conflits, relèves avancées,
+**Phase 4** — partage GPS facultatif (✔ avancé : dernière position seulement, double accord, arrivée automatique ; suivi écran éteint par l'application OwnTracks en mode HTTP, points de mission envoyés comme zones), mode hors ligne avec file d'actions et résolution de conflits, relèves avancées,
 export des fiches de mission, outils de diagnostic.
 
 ## 7. Principaux risques techniques

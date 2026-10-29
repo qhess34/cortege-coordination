@@ -104,7 +104,7 @@ function arrowImage(): ImageData {
   return g.getImageData(0, 0, 24, 24);
 }
 
-export interface MemberPosition { userId: number; displayName: string; teamId: number; teamName: string; color: string; position: Position; accuracy: number | null; updatedAt: string }
+export interface MemberPosition { userId: number; displayName: string; teamId: number; teamName: string; color: string; position: Position; accuracy: number | null; updatedAt: string; source?: 'web' | 'owntracks'; battery?: number | null }
 
 export function MapView(props: Props) {
   const container = useRef<HTMLDivElement>(null);
@@ -555,7 +555,8 @@ export function MapView(props: Props) {
       (el.querySelector('.member-dot') as HTMLElement).style.background = p.color;
       el.querySelector('.member-name')!.textContent = p.displayName;
       el.title = p.displayName + ' (' + p.teamName + ') — ' + new Date(p.updatedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) +
-        (p.accuracy ? ' · précision ±' + Math.round(p.accuracy) + ' m' : '');
+        (p.accuracy ? ' · précision ±' + Math.round(p.accuracy) + ' m' : '') +
+        (p.source === 'owntracks' ? ' · OwnTracks' : '') + (p.battery !== null && p.battery !== undefined ? ' · batterie ' + p.battery + ' %' : '');
       el.dataset.testid = 'membre-' + p.userId;
       mk.setLngLat(p.position);
     }

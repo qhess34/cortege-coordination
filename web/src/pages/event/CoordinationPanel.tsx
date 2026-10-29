@@ -138,6 +138,8 @@ export function CoordinationPanel({ data, canEdit, liveTick, members }: PanelPro
         <p className="muted small">L’ordre des missions et les affectations se règlent dans l’onglet Équipes.</p>
       </div>
 
+      {canEdit && data.event.locationSharing && <TrackersCard eventId={eventId} liveTick={liveTick} members={members} />}
+
       <MessagesCard eventId={eventId} teams={t.teams} messages={messages} canEdit={canEdit} act={act} />
       <p className="muted small">{t.live} écran(s) connecté(s) en direct à cette manifestation.</p>
     </div>
@@ -179,6 +181,37 @@ function ProgressCard({ eventId, t, act }: { eventId: number; t: Tableau; act: (
         <details><summary className="small">Historique</summary>
           <dl className="kv small">{t.progressHistory.map((p, i) => <Fragment key={i}><dt>{ago(p.at)}</dt><dd>{p.part === 'queue' ? 'Queue' : 'Tête'} · {km(p.distance)}{p.note ? ' · ' + p.note : ''}</dd></Fragment>)}</dl>
         </details>
+      )}
+    </div>
+  );
+}
+
+interface Tracker { id: string; displayName: string; teamName: string; color: string; lastSeenAt: string | null; battery: number | null; expiresAt: string }
+
+/** Téléphones suivis par OwnTracks (écran éteint) : dernier envoi, batterie, révocation. */
+function TrackersCard({ eventId, liveTick, members }: { eventId: number; liveTick: number; members: MemberPosition[] | null }) {
+  const [list, setList] = useState<Tracker[]>([]);
+  const load = useCallback(() => { api.get<Tracker[]>('/api/events/' + eventId + '/trackers').then(setList, () => undefined); }, [eventId]);
+  useEffect(load, [load, liveTick, members]);
+  return (
+    <div className="card" data-testid="owntracks-orga">
+      <h3>Suivi OwnTracks ({list.length})</h3>
+      {list.length === 0 ? <p className="muted small">Aucun membre n’a configuré OwnTracks (suivi écran éteint).</p> : (
+        <ul className="plain small">
+          {list.map((k) => (
+            <li key={k.id} className="row">
+              <span className="dot" style={{ background: k.color }} />
+              <span className="grow">{k.displayName} <span className="muted">({k.teamName})</span></span>
+              <span className={k.battery !== null && k.battery < 20 ? 'error' : 'muted'}>{k.battery !== null ? '🔋 ' + k.battery + ' %' : ''}</span>
+              <span className="muted">{k.lastSeenAt ? ago(k.lastSeenAt) : 'jamais'}</span>
+              <button onClick={async () => {
+                if (!window.confirm('Révoquer le suivi OwnTracks de ' + k.displayName + ' ?')) return;
+                await api.post('/api/trackers/' + k.id + '/revoke').catch(() => undefined);
+                load();
+              }}>Révoquer</button>
+            </li>
+          ))}
+        </ul>
       )}
     </div>
   );

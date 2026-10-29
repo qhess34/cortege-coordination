@@ -12,6 +12,8 @@ export interface EventInfo {
   version: number; role?: 'organisateur' | 'responsable' | 'membre';
   /** Partage de position en direct autorisé pour la manifestation. */
   locationSharing: boolean;
+  /** Rayon (m) des zones OwnTracks autour des points. */
+  zoneRadius: number;
 }
 
 export interface Track {

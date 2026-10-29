@@ -9,6 +9,7 @@ import { tx, type Client } from '../db.js';
 import { HttpError, badRequest, conflict, forbidden, notFound } from '../errors.js';
 import { simplify, type Position } from '../geo/route.js';
 import { eventRole, requireEventRole } from '../permissions.js';
+import { POSITION_MAX_AGE, detectArrival, isTeamMember, storePosition } from '../services/locations.js';
 import { RoutingError } from '../services/routing.js';
 import { currentTrack } from '../services/track.js';
 import { TRANSITIONS } from './teams.js';
@@ -26,13 +27,6 @@ export const MEMBER_TRANSITIONS: Partial<Record<MissionStatus, MissionStatus[]>>
   releve_necessaire: ['en_position', 'terminee'],
   incident: ['en_deplacement', 'en_position', 'terminee'],
 };
-
-/** Distance (m) au point de mission en deçà de laquelle l'arrivée est enregistrée automatiquement. */
-export const ARRIVAL_RADIUS = 30;
-/** Précision GPS minimale (m) pour l'arrivée automatique. */
-const ARRIVAL_MAX_ACCURACY = 50;
-/** Une position plus ancienne n'est plus affichée. */
-const POSITION_MAX_AGE = '10 minutes';
 
 const INCIDENT_CATEGORIES = ['aide', 'securite', 'sante', 'circulation', 'materiel', 'autre'] as const;
 const Lon = z.number().min(-180).max(180);
@@ -170,7 +164,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     const e = ev.rows[0];
     const t = team.rows[0];
     return {
-      me: { id: u.id, displayName: u.displayName, role: access.role, organizer: access.asOrganizer },
+      me: { id: u.id, displayName: u.displayName, role: access.role, organizer: access.asOrganizer, member: await isTeamMember(app.db, u.id, teamId) },
       event: { id: e.id, name: e.name, startsAt: e.starts_at, endsAt: e.ends_at, instructions: e.instructions, status: e.status },
       team: { id: t.id, name: t.name, color: t.color, instructions: t.instructions, leaderName: t.leader_name, closed: !!t.disabled_at, kind: access.kind },
       missions: missions.rows.map((m) => ({
@@ -191,6 +185,12 @@ export async function terrainRoutes(app: FastifyInstance) {
       canHandleIncidents: flying || access.asOrganizer || access.role === 'responsable',
       locationSharing: !!e.location_sharing,
       sharing: !!(await app.db.query('SELECT 1 FROM member_locations WHERE user_id = $1', [u.id])).rowCount,
+      // OwnTracks configuré sur un téléphone de ce membre (identifiant actif).
+      owntracks: (await app.db.query(
+        `SELECT last_seen_at AS "lastSeenAt", battery, expires_at AS "expiresAt" FROM trackers
+          WHERE user_id = $1 AND team_id = $2 AND revoked_at IS NULL AND expires_at > now() ORDER BY created_at DESC LIMIT 1`,
+        [u.id, teamId],
+      )).rows[0] ?? null,
       routing: !!app.router,
     };
   });
@@ -480,35 +480,9 @@ export async function terrainRoutes(app: FastifyInstance) {
       const ev = (await c.query('SELECT location_sharing FROM events WHERE id = $1', [access.eventId])).rows[0];
       if (!ev.location_sharing) throw new HttpError(409, 'Le partage de position n’est pas activé pour cette manifestation.');
       // Un organisateur qui consulte l'équipe sans en faire partie ne partage rien.
-      const member = !!(await c.query('SELECT 1 FROM team_memberships WHERE team_id = $1 AND user_id = $2 UNION SELECT 1 FROM teams WHERE id = $1 AND leader_user_id = $2', [teamId, u.id])).rowCount;
-      if (!member) throw forbidden();
-      await c.query(
-        `INSERT INTO member_locations(user_id, event_id, team_id, geom, accuracy_m, updated_at)
-         VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, now())
-         ON CONFLICT (user_id) DO UPDATE SET event_id = EXCLUDED.event_id, team_id = EXCLUDED.team_id, geom = EXCLUDED.geom,
-                                             accuracy_m = EXCLUDED.accuracy_m, updated_at = now()`,
-        [u.id, access.eventId, teamId, b.position[0], b.position[1], b.accuracy],
-      );
-      // Arrivée automatique : la première mission non terminée de l'équipe passe « en position » quand le membre est
-      // à moins de ARRIVAL_RADIUS du point (et que la précision du téléphone le permet).
-      let arrived: { missionId: number; pointName: string } | null = null;
-      if (access.kind === 'points' && (b.accuracy === null || b.accuracy <= ARRIVAL_MAX_ACCURACY)) {
-        const m = (await c.query(
-          `SELECT m.id, m.status, p.name, ST_DistanceSphere(p.geom, ST_SetSRID(ST_MakePoint($2, $3), 4326)) AS d
-             FROM missions m JOIN mission_points p ON p.id = m.mission_point_id
-            WHERE m.team_id = $1 AND m.cancelled_at IS NULL AND m.status <> 'terminee'
-            ORDER BY m.position LIMIT 1 FOR UPDATE OF m`,
-          [teamId, b.position[0], b.position[1]],
-        )).rows[0];
-        if (m && (m.status === 'affectee' || m.status === 'en_deplacement') && m.d <= ARRIVAL_RADIUS) {
-          await c.query(
-            "UPDATE missions SET status = 'en_position', version = version + 1, updated_at = now(), status_changed_at = now(), status_changed_by = $2 WHERE id = $1",
-            [m.id, u.id],
-          );
-          await audit(c, { actorId: u.id, eventId: access.eventId, entity: 'mission', entityId: m.id, action: 'statut', details: { from: m.status, to: 'en_position', auto: true } });
-          arrived = { missionId: m.id, pointName: m.name };
-        }
-      }
+      if (!(await isTeamMember(c, u.id, teamId))) throw forbidden();
+      await storePosition(c, { userId: u.id, eventId: access.eventId, teamId, position: b.position as Position, accuracy: b.accuracy, source: 'web' });
+      const arrived = await detectArrival(c, { userId: u.id, eventId: access.eventId, teamId, position: b.position as Position, accuracy: b.accuracy });
       return { eventId: access.eventId, arrived };
     });
     app.live.publish(out.eventId, 'positions');
@@ -532,14 +506,14 @@ export async function terrainRoutes(app: FastifyInstance) {
     await app.db.query("DELETE FROM member_locations WHERE updated_at < now() - interval '2 hours'");
     const r = await app.db.query(
       `SELECT l.user_id, u.display_name, l.team_id, t.name AS team_name, t.color, t.kind, ST_X(l.geom) AS lon, ST_Y(l.geom) AS lat,
-              l.accuracy_m, l.updated_at
+              l.accuracy_m, l.updated_at, l.source, l.battery
          FROM member_locations l JOIN users u ON u.id = l.user_id JOIN teams t ON t.id = l.team_id
         WHERE l.event_id = $1 AND l.updated_at > now() - $2::interval ORDER BY t.name, u.display_name`,
       [eventId, POSITION_MAX_AGE],
     );
     return r.rows.map((x) => ({
       userId: x.user_id, displayName: x.display_name, teamId: x.team_id, teamName: x.team_name, color: x.color, kind: x.kind,
-      position: [x.lon, x.lat], accuracy: x.accuracy_m, updatedAt: x.updated_at,
+      position: [x.lon, x.lat], accuracy: x.accuracy_m, updatedAt: x.updated_at, source: x.source, battery: x.battery,
     }));
   });
 

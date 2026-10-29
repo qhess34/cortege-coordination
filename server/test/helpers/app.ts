@@ -33,6 +33,7 @@ export async function setup(opts: { logStream?: NodeJS.WritableStream; joinRateL
     joinRateLimit: opts.joinRateLimit ?? 10_000,
     loginRateLimit: 20,
     routingUrl: null,
+    publicUrl: 'https://cortege.test',
   };
   const osm: TestContext['osm'] = { data: { elements: [] }, queries: [], fail: null, respond: null };
   const router: TestContext['router'] = { calls: [], fail: null };

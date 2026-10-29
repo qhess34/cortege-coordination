@@ -151,6 +151,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `SESSION_TTL_HOURS` | Durée des sessions (glissante) | `12` |
 | `LOGIN_RATE_LIMIT` | Tentatives de connexion par minute et par adresse IP | `20` |
 | `ROUTING_URL` | Serveur d'itinéraires compatible OSRM (profil piéton), facultatif | — (lien vers la carte OSM) |
+| `PUBLIC_URL` | Adresse publique du site (`https://…`), pour la configuration OwnTracks | déduite de la requête |
 | `JOIN_RATE_LIMIT` | Ouvertures de lien d'invitation par minute et par adresse IP | `30` |
 | `OVERPASS_URL` | Serveurs Overpass, séparés par des virgules, essayés dans l'ordre | `overpass-api.de`, puis `overpass.private.coffee` |
 | `OSM_USER_AGENT` | Identification envoyée à Overpass | `cortege-coordination (auto-hébergé)` |
@@ -247,9 +248,27 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
     conservée — aucun historique, rien dans le journal d'audit —, visible de l'organisation seulement, masquée après
     10 minutes sans mise à jour et supprimée après 2 heures, à l'arrêt du partage, au retrait de l'équipe ou quand
     l'organisation désactive le partage. Pensez à en informer les membres (base légale, information RGPD).
-  - **Limite** : une application web ne suit la position que **tant qu'elle est ouverte à l'écran** (l'écran est gardé
-    allumé pendant le partage quand le navigateur le permet) ; écran verrouillé ou application en arrière-plan, les
-    envois s'arrêtent — surtout sur iPhone. Un suivi en arrière-plan demanderait une application native.
+  - **Limite du navigateur** : une application web ne suit la position que **tant qu'elle est ouverte à l'écran**
+    (l'écran est gardé allumé pendant le partage quand le navigateur le permet) ; écran verrouillé ou application en
+    arrière-plan, les envois s'arrêtent — surtout sur iPhone. D'où OwnTracks, ci-dessous.
+- **Suivi écran éteint avec OwnTracks (facultatif)** : l'application libre et gratuite
+  [OwnTracks](https://owntracks.org) (Android : Google Play ou F-Droid ; iPhone : App Store) envoie la position à notre
+  serveur même téléphone verrouillé.
+  - Le membre touche *Configurer* dans sa vue terrain, puis *Ouvrir OwnTracks avec la configuration* : l'application se
+    règle seule (mode HTTP vers `/api/owntracks`, identifiant de suivi personnel, envoi ≈ 30 s / 20 m). Un QR code
+    permet de configurer un autre téléphone. Le lien contient un secret : il n'est affiché qu'une fois et n'est jamais
+    journalisé ; seul son hash est stocké.
+  - Les **points de mission de l'équipe deviennent des zones** dans OwnTracks (rayon réglable par manifestation,
+    50 m par défaut) : y entrer enregistre l'arrivée, même avec une position imprécise. Les zones sont mises à jour
+    automatiquement quand les missions changent.
+  - Mêmes règles que le partage par le navigateur (dernière position seulement, organisation seulement). L'organisation
+    voit dans *Coordination* les téléphones suivis, leur dernier envoi et leur **batterie**, et peut révoquer un suivi.
+  - Fin : identifiant révoqué (par le membre ou l'organisation), partage désactivé ou lendemain de la manifestation ⇒
+    le serveur refuse les positions et demande à l'application de se mettre **au repos** ; on peut ensuite la
+    désinstaller. Reconfigurer sur un nouveau téléphone révoque l'ancien.
+  - **Prérequis** : HTTPS (obligatoire sur iPhone) et `PUBLIC_URL` renseignée (adresse publique du site, utilisée dans la
+    configuration). Le mode suivi d'OwnTracks consomme beaucoup de batterie : prévoir des batteries externes et tester
+    avant le jour J ; autoriser la localisation « Toujours » et désactiver l'économie de batterie pour l'application.
 
 Derrière un proxy HTTPS, autorisez la mise à niveau WebSocket sur `/api/direct` (nginx : `proxy_http_version 1.1;`
 `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` — Caddy le fait d'office).

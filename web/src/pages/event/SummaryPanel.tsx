@@ -12,7 +12,7 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: ev.name, description: ev.description, areaName: ev.areaName, status: ev.status, instructions: ev.instructions,
-    startsAt: toLocal(ev.startsAt), endsAt: toLocal(ev.endsAt), locationSharing: ev.locationSharing,
+    startsAt: toLocal(ev.startsAt), endsAt: toLocal(ev.endsAt), locationSharing: ev.locationSharing, zoneRadius: ev.zoneRadius,
   });
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -46,9 +46,14 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
           <label className="check"><input type="checkbox" checked={form.locationSharing} onChange={(e) => setForm({ ...form, locationSharing: e.target.checked })} />
             Autoriser le partage de position en direct</label>
           <p className="muted small">
-            Chaque membre décide lui-même de partager sa position depuis son téléphone. Seule la dernière position est conservée,
+            Chaque membre décide lui-même de partager sa position depuis son téléphone (navigateur, ou application OwnTracks pour un suivi écran éteint). Seule la dernière position est conservée,
             visible de l’organisation uniquement ; elle est effacée à l’arrêt du partage. Désactiver efface toutes les positions.
           </p>
+          {form.locationSharing && (
+            <label>Rayon des zones OwnTracks autour des points (m)
+              <input type="number" min={20} max={300} value={form.zoneRadius} onChange={(e) => setForm({ ...form, zoneRadius: Number(e.target.value) })} />
+            </label>
+          )}
           <label>Consignes générales<textarea rows={5} value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} /></label>
           <div className="row"><button className="primary">Enregistrer</button><button type="button" onClick={() => setEditing(false)}>Annuler</button></div>
         </form>
