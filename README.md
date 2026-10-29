@@ -80,9 +80,10 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
   l'état actuel.
 - **Roadbook** (onglet Équipes ou Synthèse) : par équipe ou pour toute la manifestation, page imprimable ou
   enregistrable en PDF (« Imprimer / PDF ») : page de garde avec consignes générales et carte d'ensemble, puis par
-  équipe le responsable, les consignes, le tableau ordonné des missions et une fiche par point (mini-carte,
-  coordonnées, distance sur le parcours, description, voies raccordées d'après OSM, lien OpenStreetMap, zone de
-  notes). Le roadbook complet liste aussi les points sans équipe. **Export GPX** des points (dans l'ordre des
+  équipe le responsable, les consignes, le tableau ordonné des missions et une fiche par lieu : les points à moins
+  de 50 m les uns des autres (ex. les accès d'un même carrefour) sont regroupés, avec une grande carte zoomée où
+  les numéros des missions sont indiqués, puis pour chaque point coordonnées, distance sur le parcours, description,
+  voie d'accès et consignes, et une zone de notes. Le roadbook complet liste aussi les points sans équipe. **Export GPX** des points (dans l'ordre des
   missions) et du parcours, pour un téléphone ou un GPS.
 - **Synthèse** : points validés sans équipe, répartition des statuts, analyse à relancer après changement de
   parcours.

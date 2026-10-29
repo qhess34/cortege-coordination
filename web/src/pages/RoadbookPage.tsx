@@ -5,11 +5,8 @@ import { DEFAULT_BASEMAP } from '../basemaps';
 import { renderSnapshots, type SnapshotPoint, type SnapshotView } from '../components/mapSnapshots';
 import { SUGGESTION_TYPES, coords, dateTime, fieldDescription, km } from '../labels';
 import type { Position } from '../types';
+import { groupItems, type Group, type Item, type RbPoint } from './roadbookGroups';
 
-interface RbPoint {
-  id: number; name: string; type: string; description: string; origin: string; position: Position; distance: number | null;
-  osm: { routeNames: string[]; branches: { name: string | null; highway: string; flow: string; motor: string }[]; uncertainties: string[] } | null;
-}
 interface RbTeam {
   id: number; name: string; color: string; description: string; instructions: string; leaderName: string | null;
   missions: { order: number; status: string; instructions: string; point: RbPoint }[];
@@ -44,11 +41,22 @@ export function RoadbookPage({ eventId, teamId }: { eventId: number; teamId: num
     api.get<Roadbook>('/api/events/' + eventId + '/roadbook' + query).then(setRb, (e) => setError(e instanceof ApiError ? e.message : 'Chargement impossible.'));
   }, [eventId, query]);
 
-  // Cartes : vue d'ensemble, puis une vue par point (point mis en évidence).
-  const plan = useMemo(() => {
+  // Lieux de chaque section (équipes, puis points sans équipe).
+  const sections = useMemo(() => {
     if (!rb) return null;
+    return {
+      teams: rb.teams.map((t) => ({
+        team: t,
+        groups: groupItems(t.missions.map((m) => ({ point: m.point, order: m.order, instructions: m.instructions })), 't' + t.id),
+      })),
+      unassigned: groupItems(rb.unassigned.map((p) => ({ point: p })), 'u'),
+    };
+  }, [rb]);
+
+  // Cartes : vue d'ensemble, puis une vue par lieu (ses points mis en évidence et numérotés).
+  const plan = useMemo(() => {
+    if (!rb || !sections) return null;
     const points: SnapshotPoint[] = [];
-    const views: SnapshotView[] = [];
     const all: Position[] = [];
     for (const t of rb.teams) for (const m of t.missions) {
       points.push({ id: 'p' + m.point.id, position: m.point.position, color: t.color, label: m.point.name });
@@ -56,19 +64,32 @@ export function RoadbookPage({ eventId, teamId }: { eventId: number; teamId: num
     }
     for (const p of rb.unassigned) { points.push({ id: 'p' + p.id, position: p.position, color: '#495057', label: p.name }); all.push(p.position); }
     for (const seg of rb.track?.geometry.coordinates ?? []) all.push(...seg);
+    const views: SnapshotView[] = [];
     if (all.length) {
       const xs = all.map((p) => p[0]);
       const ys = all.map((p) => p[1]);
-      views.push({ key: 'ensemble', bounds: [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]] });
+      views.push({
+        key: 'ensemble',
+        bounds: [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]],
+        // Roadbook d'équipe : numéros des missions sur la vue d'ensemble.
+        labels: rb.scope === 'equipe' ? rb.teams[0]?.missions.map((m) => ({ position: m.point.position, text: String(m.order) })) : undefined,
+      });
     }
-    const seen = new Set<number>();
-    for (const p of [...rb.teams.flatMap((t) => t.missions.map((m) => m.point)), ...rb.unassigned]) {
-      if (seen.has(p.id)) continue;
-      seen.add(p.id);
-      views.push({ key: 'p' + p.id, center: p.position, zoom: 18.5, highlight: 'p' + p.id });
+    for (const g of [...sections.teams.flatMap((t) => t.groups), ...sections.unassigned]) {
+      const pos = g.items.map((i) => i.point.position);
+      const xs = pos.map((p) => p[0]);
+      const ys = pos.map((p) => p[1]);
+      views.push({
+        key: g.key,
+        ...(g.items.length === 1
+          ? { center: pos[0]!, zoom: 19 }
+          : { bounds: [[Math.min(...xs), Math.min(...ys)], [Math.max(...xs), Math.max(...ys)]] as [Position, Position], maxZoom: 19 }),
+        highlight: g.items.map((i) => 'p' + i.point.id),
+        labels: g.items.filter((i) => i.order !== undefined).map((i) => ({ position: i.point.position, text: String(i.order) })),
+      });
     }
     return { points, views };
-  }, [rb]);
+  }, [rb, sections]);
 
   useEffect(() => {
     if (!rb || !plan || !plan.views.length) return;
@@ -128,13 +149,13 @@ export function RoadbookPage({ eventId, teamId }: { eventId: number; teamId: num
         )}
       </section>
 
-      {rb.teams.map((t) => <TeamSection key={t.id} team={t} images={images} />)}
+      {sections?.teams.map(({ team: t, groups }) => <TeamSection key={t.id} team={t} groups={groups} images={images} />)}
 
       {rb.unassigned.length > 0 && (
         <section className="rb-team">
           <h2>Points sans équipe ({rb.unassigned.length})</h2>
           <p className="rb-warning">Ces points ne sont affectés à aucune équipe active.</p>
-          {rb.unassigned.map((p) => <PointCard key={p.id} p={p} images={images} />)}
+          {sections?.unassigned.map((g) => <GroupCard key={g.key} group={g} images={images} />)}
         </section>
       )}
       {rb.teams.length === 0 && rb.unassigned.length === 0 && <p className="muted">Aucun point de mission pour l’instant.</p>}
@@ -144,7 +165,7 @@ export function RoadbookPage({ eventId, teamId }: { eventId: number; teamId: num
   );
 }
 
-function TeamSection({ team: t, images }: { team: RbTeam; images: Record<string, string> }) {
+function TeamSection({ team: t, groups, images }: { team: RbTeam; groups: Group[]; images: Record<string, string> }) {
   return (
     <section className="rb-team">
       <h2><span className="rb-color" style={{ background: t.color }} /> Équipe {t.name}</h2>
@@ -166,38 +187,53 @@ function TeamSection({ team: t, images }: { team: RbTeam; images: Record<string,
               ))}
             </tbody>
           </table>
-          {t.missions.map((m) => <PointCard key={m.point.id} p={m.point} order={m.order} instructions={m.instructions} images={images} />)}
+          {groups.map((g) => <GroupCard key={g.key} group={g} images={images} />)}
         </>
       )}
     </section>
   );
 }
 
-function PointCard({ p, order, instructions, images }: { p: RbPoint; order?: number; instructions?: string; images: Record<string, string> }) {
+/** Fiche d'un lieu : un point seul, ou plusieurs points proches (ex. accès d'un même carrefour) et une seule carte. */
+function GroupCard({ group, images }: { group: Group; images: Record<string, string> }) {
+  const single = group.items.length === 1 ? group.items[0]! : null;
+  const orders = group.items.map((i) => i.order).filter((o): o is number => o !== undefined);
   return (
-    <article className="rb-point">
-      <h3>{order !== undefined ? order + '. ' : ''}{p.name}</h3>
+    <article className="rb-point" data-testid="rb-lieu">
+      <h3>
+        {single
+          ? (single.order !== undefined ? single.order + '. ' : '') + single.point.name
+          : 'Lieu : ' + group.title + (orders.length ? ' — points ' + orders.join(', ') : ' — ' + group.items.length + ' points')}
+      </h3>
       <div className="rb-point-body">
-        <div>
-          <dl className="kv">
-            <dt>Type</dt><dd>{SUGGESTION_TYPES[p.type] ?? p.type}</dd>
-            <dt>Parcours</dt><dd>{km(p.distance)}</dd>
-            <dt>Coordonnées</dt><dd>{coords(p.position)}</dd>
-            {p.osm && p.osm.routeNames.length > 0 && <><dt>Voie du cortège</dt><dd>{p.osm.routeNames.join(', ')}</dd></>}
-          </dl>
-          {fieldDescription(p.description) && <p className="pre">{fieldDescription(p.description)}</p>}
-          {instructions && <p className="pre"><b>Consignes :</b> {instructions}</p>}
-          {p.osm && p.osm.branches.length > 0 && (
-            <p>
-              <b>Voie d’accès :</b>{' '}
-              {p.osm.branches.map((b) => (b.name ?? 'voie sans nom') + (b.motor === 'non' ? ' (piétons, vélos)' : ' — ' + FLOW_SHORT[b.flow])).join(' ; ')}
-            </p>
-          )}
-          <div className="rb-notes">Notes :</div>
-        </div>
-        <MapImage src={images['p' + p.id]} alt={'Carte du point ' + p.name} />
+        <div>{group.items.map((it) => <PointDetails key={it.point.id} item={it} titled={!single} />)}</div>
+        <MapImage src={images[group.key]} alt={'Carte : ' + group.title} />
+        <div className="rb-notes">Notes :</div>
       </div>
     </article>
+  );
+}
+
+function PointDetails({ item, titled }: { item: Item; titled: boolean }) {
+  const p = item.point;
+  return (
+    <div className={titled ? 'rb-subpoint' : undefined}>
+      {titled && <h4>{item.order !== undefined ? item.order + '. ' : ''}{p.name}</h4>}
+      <dl className="kv">
+        <dt>Type</dt><dd>{SUGGESTION_TYPES[p.type] ?? p.type}</dd>
+        <dt>Parcours</dt><dd>{km(p.distance)}</dd>
+        <dt>Coordonnées</dt><dd>{coords(p.position)}</dd>
+        {!titled && p.osm && p.osm.routeNames.length > 0 && <><dt>Voie du cortège</dt><dd>{p.osm.routeNames.join(', ')}</dd></>}
+      </dl>
+      {fieldDescription(p.description) && <p className="pre">{fieldDescription(p.description)}</p>}
+      {item.instructions && <p className="pre"><b>Consignes :</b> {item.instructions}</p>}
+      {p.osm && p.osm.branches.length > 0 && (
+        <p>
+          <b>Voie d’accès :</b>{' '}
+          {p.osm.branches.map((b) => (b.name ?? 'voie sans nom') + (b.motor === 'non' ? ' (piétons, vélos)' : ' — ' + FLOW_SHORT[b.flow])).join(' ; ')}
+        </p>
+      )}
+    </div>
   );
 }
 

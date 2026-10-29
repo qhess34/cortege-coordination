@@ -6,7 +6,13 @@ import { BASEMAPS } from '../basemaps';
 import type { Position } from '../types';
 
 export interface SnapshotPoint { id: string; position: Position; color: string; label: string }
-export interface SnapshotView { key: string; center?: Position; zoom?: number; bounds?: [Position, Position]; highlight?: string }
+export interface SnapshotView {
+  key: string; center?: Position; zoom?: number; bounds?: [Position, Position]; maxZoom?: number;
+  /** Points mis en évidence (cercle rouge). */
+  highlight?: string[];
+  /** Numéros dessinés sur l'image (ordre des missions). */
+  labels?: { position: Position; text: string }[];
+}
 
 const empty = { type: 'FeatureCollection' as const, features: [] };
 
@@ -62,15 +68,47 @@ export async function renderSnapshots(opts: {
     });
     for (const v of opts.views) {
       if (opts.signal.aborted) return;
-      m.setFilter('highlight', ['==', ['get', 'id'], v.highlight ?? '']);
-      if (v.bounds) m.fitBounds(v.bounds, { padding: 40, duration: 0, maxZoom: 17 });
+      m.setFilter('highlight', ['in', ['get', 'id'], ['literal', v.highlight ?? []]]);
+      if (v.bounds) m.fitBounds(v.bounds, { padding: 60, duration: 0, maxZoom: v.maxZoom ?? 17 });
       else m.jumpTo({ center: v.center, zoom: v.zoom ?? 17 });
       await waitIdle(m, opts.timeoutMs ?? 10_000);
       if (opts.signal.aborted) return;
-      opts.onImage(v.key, m.getCanvas().toDataURL('image/png'));
+      opts.onImage(v.key, compose(m, v.labels ?? []));
     }
   } finally {
     m.remove();
     host.remove();
   }
+}
+
+/** Image finale : rendu de la carte, plus les numéros des points (dessinés en 2D, sans police de carte). */
+function compose(m: MlMap, labels: { position: Position; text: string }[]): string {
+  const src = m.getCanvas();
+  if (!labels.length) return src.toDataURL('image/png');
+  const c = document.createElement('canvas');
+  c.width = src.width;
+  c.height = src.height;
+  const g = c.getContext('2d')!;
+  g.drawImage(src, 0, 0);
+  const ratio = src.width / src.clientWidth;
+  const r = 10 * ratio;
+  g.font = 'bold ' + Math.round(11 * ratio) + 'px system-ui, sans-serif';
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  for (const l of labels) {
+    const p = m.project(l.position);
+    // Étiquette décalée en haut à droite du point, pour ne pas le masquer.
+    const x = (p.x + 14) * ratio;
+    const y = (p.y - 14) * ratio;
+    g.beginPath();
+    g.arc(x, y, r, 0, Math.PI * 2);
+    g.fillStyle = '#ffffff';
+    g.fill();
+    g.lineWidth = 2 * ratio;
+    g.strokeStyle = '#1d3557';
+    g.stroke();
+    g.fillStyle = '#1d3557';
+    g.fillText(l.text, x, y + ratio);
+  }
+  return c.toDataURL('image/png');
 }

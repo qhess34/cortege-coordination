@@ -20,6 +20,10 @@ test('roadbook d’équipe et roadbook complet', async ({ page }) => {
   const team = await (await r.post('/api/events/' + ev.id + '/teams', { data: { name: 'Nord', color: '#2a9d8f', instructions: 'Rester groupés.' }, headers: H })).json();
   await r.post('/api/teams/' + team.id + '/missions', { data: { pointId: p1 }, headers: H });
   await r.post('/api/teams/' + team.id + '/missions', { data: { pointId: p2, instructions: 'Relève à 15 h' }, headers: H });
+  // Accès sud du même carrefour, 40 m plus loin : il doit être regroupé avec l'accès nord.
+  const sud = ((await (await r.get('/api/events/' + ev.id + '/suggestions')).json()) as { id: number; stableKey: string }[]).find((x) => x.stableKey === 'osm:n3-n20')!;
+  const p3 = (await (await r.post('/api/suggestions/' + sud.id + '/validate', { data: {}, headers: H })).json()).pointId;
+  await r.post('/api/teams/' + team.id + '/missions', { data: { pointId: p3 }, headers: H });
 
   // Depuis l'onglet Équipes.
   await page.goto('/#/evenements/' + ev.id);
@@ -29,8 +33,10 @@ test('roadbook d’équipe et roadbook complet', async ({ page }) => {
   await expect(rb.getByRole('heading', { name: 'Roadbook — Marche roadbook — Nord' })).toBeVisible();
   await expect(rb).toContainText('Gilets jaunes obligatoires.');
   await expect(rb).toContainText('Rester groupés.');
-  await expect(rb.locator('.rb-table tbody tr')).toHaveCount(2);
-  await expect(rb.locator('.rb-point h3')).toHaveText(['1. Accès véhicules — Rue B côté nord (Rue A)', '2. Angle est']);
+  await expect(rb.locator('.rb-table tbody tr')).toHaveCount(3);
+  // Les deux accès du carrefour forment un seul lieu, avec une seule carte.
+  await expect(rb.locator('.rb-point > h3')).toHaveText(['Lieu : Rue A / Rue B — points 1, 3', '2. Angle est']);
+  await expect(rb.locator('.rb-point').first().locator('h4')).toHaveText(['1. Accès véhicules — Rue B côté nord (Rue A)', '3. Accès véhicules — Rue B côté sud (Rue A)']);
   await expect(rb).toContainText('Relève à 15 h');
   await expect(rb).toContainText('Rue B');
   await expect(rb).toContainText('Voie d’accès : Rue B — double sens');
