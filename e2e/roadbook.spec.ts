@@ -13,7 +13,7 @@ test('roadbook d’équipe et roadbook complet', async ({ page }) => {
   const ev = await (await r.post('/api/events', { data: { name: 'Marche roadbook', instructions: 'Gilets jaunes obligatoires.' }, headers: H })).json();
   await r.post('/api/events/' + ev.id + '/tracks', { headers: H, multipart: { file: { name: 'a.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(gpxFrom([[[0, 3], [250, -2], [500, 2]]])) } } });
   await r.post('/api/events/' + ev.id + '/analyses', { data: {}, headers: H });
-  const sugg = (await (await r.get('/api/events/' + ev.id + '/suggestions?type=carrefour')).json())[0];
+  const sugg = ((await (await r.get('/api/events/' + ev.id + '/suggestions')).json()) as { id: number; stableKey: string }[]).find((x) => x.stableKey === 'osm:n3-n21')!;
   const p1 = (await (await r.post('/api/suggestions/' + sugg.id + '/validate', { data: {}, headers: H })).json()).pointId;
   const p2 = (await (await r.post('/api/events/' + ev.id + '/points', { data: { name: 'Angle est', description: 'Barrière Vauban', position: [2.353, 48.85] }, headers: H })).json()).id;
   await r.post('/api/events/' + ev.id + '/points', { data: { name: 'Orphelin', position: [2.354, 48.85] }, headers: H });
@@ -30,7 +30,7 @@ test('roadbook d’équipe et roadbook complet', async ({ page }) => {
   await expect(rb).toContainText('Gilets jaunes obligatoires.');
   await expect(rb).toContainText('Rester groupés.');
   await expect(rb.locator('.rb-table tbody tr')).toHaveCount(2);
-  await expect(rb.locator('.rb-point h3')).toHaveText([/^1\. Carrefour/, '2. Angle est']);
+  await expect(rb.locator('.rb-point h3')).toHaveText(['1. Accès véhicules — Rue B côté nord (Rue A)', '2. Angle est']);
   await expect(rb).toContainText('Relève à 15 h');
   await expect(rb).toContainText('Rue B');
   await expect(rb).not.toContainText('Orphelin');

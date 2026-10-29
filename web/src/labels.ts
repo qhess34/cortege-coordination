@@ -40,3 +40,10 @@ export const MISSION_TRANSITIONS: Record<string, string[]> = {
 export const km = (m: number | null | undefined) => (m === null || m === undefined ? '—' : (m / 1000).toFixed(2).replace('.', ',') + ' km');
 export const coords = (p: [number, number]) => p[1].toFixed(6) + ', ' + p[0].toFixed(6);
 export const dateTime = (s: string | null) => (s ? new Date(s).toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' }) : '—');
+
+/** Libellé court d'une suggestion : voie concernée, côté de l'accès et voie du cortège. */
+export function suggestionPlace(s: { routeNames: string[]; branches: { name: string | null }[]; junction?: { side: string } | null }): string {
+  const branch = s.branches[0]?.name ?? 'voie sans nom';
+  if (s.junction) return branch + ' côté ' + s.junction.side + (s.routeNames[0] ? ' (' + s.routeNames[0] + ')' : '');
+  return (s.routeNames[0] ?? 'voie sans nom') + (s.branches[0]?.name ? ' / ' + s.branches[0].name : '');
+}

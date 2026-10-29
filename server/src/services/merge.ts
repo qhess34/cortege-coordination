@@ -5,8 +5,9 @@ import { haversine, type Position } from '../geo/route.js';
 
 /** Rayon (m) pour reconnaître une suggestion dont le nœud OSM a changé d'identifiant. */
 const MATCH_RADIUS = 15;
-/** Rayon (m) pour signaler un doublon possible avec un point opérationnel existant. */
-const DUPLICATE_RADIUS = 20;
+/** Rayon (m) pour signaler un doublon possible avec un point opérationnel existant (les points d'accès sont à
+ * une vingtaine de mètres du carrefour). */
+const DUPLICATE_RADIUS = 30;
 
 export interface MergeReport {
   added: { id: number; stableKey: string; type: string; duplicateOfPoint: { id: number; name: string } | null }[];
@@ -74,6 +75,13 @@ export async function mergeSuggestions(
       match = existing.find(
         (e) => !seen.has(e.id) && haversine([e.lon, e.lat], s.position) <= MATCH_RADIUS && e.data.branches.some((b) => ways.has(b.wayId)),
       );
+    }
+    // Point d'accès d'un carrefour écarté lors d'une analyse antérieure (un point par carrefour) : l'exclusion
+    // vaut pour ses accès, qui ne sont pas proposés.
+    const oldJunction = !match && s.junction ? byKey.get('osm:n' + s.junction.nodeId) : undefined;
+    if (oldJunction?.status === 'ecartee') {
+      report.ignoredDismissed.push({ id: oldJunction.id, stableKey: s.stableKey });
+      continue;
     }
     if (match) {
       if (seen.has(match.id)) continue;

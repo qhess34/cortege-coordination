@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
 import { haversine } from '../../../server/src/geo/route';
-import { FLOW, MOTOR, PERTINENCE, SUGGESTION_STATUS, SUGGESTION_TYPES, km } from '../labels';
+import { FLOW, MOTOR, PERTINENCE, SUGGESTION_STATUS, SUGGESTION_TYPES, km, suggestionPlace } from '../labels';
 import type { Position, Suggestion } from '../types';
 
 interface Props {
@@ -49,7 +49,7 @@ export function SuggestionPopup({ s, moveTo, onResetMove, canEdit, onPhotos, onD
         <button type="button" className="link" onClick={onClose} aria-label="Fermer">✕</button>
       </div>
       <p className="small">
-        {s.routeNames[0] ?? 'Voie sans nom'} · {km(s.distance)} · pertinence {PERTINENCE[s.pertinence]?.toLowerCase()} · {SUGGESTION_STATUS[s.status]}
+        {suggestionPlace(s)} · {km(s.distance)} · pertinence {PERTINENCE[s.pertinence]?.toLowerCase()} · {SUGGESTION_STATUS[s.status]}
       </p>
       <ul className="small compact">
         {s.branches.map((b) => (

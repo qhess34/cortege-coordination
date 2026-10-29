@@ -18,7 +18,8 @@ beforeAll(async () => {
   await orga.upload('/api/events/' + eventId + '/tracks', gpxFrom([[[0, 3], [250, -2], [500, 2]]], 'Rue A', [{ name: 'Départ', x: 0, y: 0 }]));
   ctx.osm.data = referenceNetwork();
   await orga.post('/api/events/' + eventId + '/analyses', {});
-  const carrefour = ((await orga.get('/api/events/' + eventId + '/suggestions?type=carrefour')).json() as { id: number }[])[0]!;
+  // Accès nord de la rue B (point d'accès d'un carrefour).
+  const carrefour = ((await orga.get('/api/events/' + eventId + '/suggestions')).json() as { id: number; stableKey: string }[]).find((x) => x.stableKey === 'osm:n3-n21')!;
   const fromOsm = (await orga.post('/api/suggestions/' + carrefour.id + '/validate', {})).json().pointId;
   const a = (await orga.post('/api/events/' + eventId + '/points', { name: 'Angle <est>', description: 'Barrière', position: at(300, 10) })).json().id;
   await orga.post('/api/events/' + eventId + '/points', { name: 'Orphelin', position: at(450, 0) });
@@ -39,7 +40,7 @@ describe('roadbook', () => {
     expect(rb.teams.map((t: { name: string }) => t.name)).toEqual(['Nord', 'Sud']);
     const n = rb.teams[0];
     expect(n.instructions).toBe('Rester groupés.');
-    expect(n.missions.map((m: { order: number; point: { name: string } }) => [m.order, m.point.name])).toEqual([[1, expect.stringMatching(/Carrefour/)], [2, 'Angle <est>']]);
+    expect(n.missions.map((m: { order: number; point: { name: string } }) => [m.order, m.point.name])).toEqual([[1, 'Accès véhicules — Rue B côté nord (Rue A)'], [2, 'Angle <est>']]);
     // Un point issu d'OSM garde les informations utiles sur le terrain.
     expect(n.missions[0].point.osm.branches[0].name).toBe('Rue B');
     expect(n.missions[1].point.osm).toBeNull();
@@ -61,7 +62,7 @@ describe('roadbook', () => {
     expect(res.headers['content-disposition']).toMatch(/filename="roadbook-marche-roadbook-nord\.gpx"/);
     expect(res.body).toContain('&lt;est&gt;');
     const g = parseGpx(res.body);
-    expect(g.waypoints.map((w) => w.name)).toEqual([expect.stringMatching(/^01 Carrefour/), '02 Angle <est>']);
+    expect(g.waypoints.map((w) => w.name)).toEqual(['01 Accès véhicules — Rue B côté nord (Rue A)', '02 Angle <est>']);
     expect(g.length).toBeCloseTo(500, -1);
   });
 

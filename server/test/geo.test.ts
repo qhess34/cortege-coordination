@@ -4,6 +4,9 @@ import { analyse, motorAccess, onewayDirection } from '../src/geo/osm-analysis.j
 import { Route, haversine, simplify } from '../src/geo/route.js';
 import { OsmBuilder, at, gpxFrom, referenceNetwork } from './helpers/osm.js';
 
+/** Mode « un point par carrefour » (option), testé ici avec les rues sortantes. */
+const CLUSTER = { perAccess: false, includeOutgoing: true };
+
 describe('distances', () => {
   it('haversine : un degré de latitude ≈ 111,2 km', () => {
     expect(haversine([2, 48], [2, 49])).toBeCloseTo(111195, -1);
@@ -97,7 +100,7 @@ describe('attributs OSM', () => {
 
 describe('analyse du réseau', () => {
   const route = new Route([[at(0, 3), at(250, -2), at(500, 2)]]);
-  const result = analyse(route, referenceNetwork());
+  const result = analyse(route, referenceNetwork(), CLUSTER);
   const byKey = (k: string) => result.suggestions.find((s) => s.stableKey === k);
 
   it('détecte les intersections réelles et leur type', () => {
@@ -144,12 +147,12 @@ describe('analyse du réseau', () => {
   });
 
   it('peut exclure les accès non motorisés', () => {
-    const r = analyse(route, referenceNetwork(), { includeNonMotor: false });
+    const r = analyse(route, referenceNetwork(), { ...CLUSTER, includeNonMotor: false });
     expect(r.suggestions.some((s) => s.type === 'acces_pieton_cycle')).toBe(false);
   });
 
   it('peut exclure les rues sortantes, sans toucher aux carrefours ni aux accès entrants', () => {
-    const r = analyse(route, referenceNetwork(), { includeOutgoing: false });
+    const r = analyse(route, referenceNetwork(), { ...CLUSTER, includeOutgoing: false });
     expect(r.suggestions.some((s) => s.type === 'rue_laterale')).toBe(false);
     expect(r.suggestions.map((s) => s.stableKey)).toEqual(['osm:n2', 'osm:n3', 'osm:x1-6', 'osm:n5', 'osm:n7']);
   });
@@ -159,7 +162,7 @@ describe('analyse du réseau', () => {
     b.node(1, 0, 0); b.node(2, 100, 0); b.node(3, 200, 0); b.node(4, 100, 100);
     b.way(1, [1, 2, 3], { highway: 'residential', name: 'Rue A' });
     b.way(2, [2, 4], { highway: 'residential', name: 'Rue E', oneway: '-1' });
-    const r = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build());
+    const r = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build(), CLUSTER);
     expect(r.suggestions[0]).toMatchObject({ type: 'acces_vehicule_entrant' });
     expect(r.suggestions[0]!.branches[0]!.flow).toBe('entrant');
   });
@@ -172,7 +175,7 @@ describe('analyse du réseau', () => {
     b.way(10, [10, 11, 12], { highway: 'footway', footway: 'sidewalk' });
     b.node(20, 100, 100);
     b.way(2, [2, 11, 20], { highway: 'residential', name: 'Rue F' });
-    const r = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build());
+    const r = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build(), CLUSTER);
     expect(r.suggestions).toHaveLength(1);
     expect(r.suggestions[0]).toMatchObject({ stableKey: 'osm:n2', type: 'acces_vehicule_entrant' });
     expect(r.suggestions[0]!.nodeIds.sort()).toEqual([11, 2]);
@@ -184,7 +187,7 @@ describe('analyse du réseau', () => {
     b.way(1, [1, 2, 3], { highway: 'residential', name: 'Rue A' });
     b.way(2, [2, 4], { highway: 'residential', name: 'Rue G' });
     // Le parcours suit la rue A puis tourne dans la rue G.
-    const r = analyse(new Route([[at(0, 0), at(100, 0), at(100, 100)]]), b.build());
+    const r = analyse(new Route([[at(0, 0), at(100, 0), at(100, 100)]]), b.build(), CLUSTER);
     expect(r.suggestions).toHaveLength(1);
     expect(r.suggestions[0]!.branches.map((x) => x.wayId)).toEqual([1]);
     expect(r.suggestions[0]!.routeNames.sort()).toEqual(['Rue A', 'Rue G']);
@@ -195,7 +198,7 @@ describe('analyse du réseau', () => {
     b.node(1, 0, 0); b.node(2, 200, 0); b.node(3, 400, 0); b.node(4, 200, 100);
     b.way(1, [1, 2, 3], { highway: 'residential', name: 'Rue A' });
     b.way(2, [2, 4], { highway: 'residential', name: 'Rue H' });
-    const r = analyse(new Route([[at(0, 0), at(400, 0), at(400, 2), at(0, 2)]]), b.build());
+    const r = analyse(new Route([[at(0, 0), at(400, 0), at(400, 2), at(0, 2)]]), b.build(), CLUSTER);
     expect(r.suggestions).toHaveLength(1);
     expect(r.suggestions[0]!.passages).toHaveLength(2);
     expect(r.suggestions[0]!.uncertainties.join(' ')).toMatch(/passe 2 fois/);
@@ -205,7 +208,7 @@ describe('analyse du réseau', () => {
     const b = new OsmBuilder();
     b.node(1, 0, 0); b.node(2, 200, 0);
     b.way(1, [1, 2], { highway: 'residential' });
-    const r = analyse(new Route([[at(0, 0), at(200, 0), at(400, 0)]]), b.build());
+    const r = analyse(new Route([[at(0, 0), at(200, 0), at(400, 0)]]), b.build(), CLUSTER);
     expect(r.unmatched).toHaveLength(1);
     expect(r.unmatched[0]![0]).toBeGreaterThan(190);
     expect(r.coverage).toBeLessThan(0.6);
@@ -218,9 +221,63 @@ describe('sens de circulation non précisé', () => {
     b.node(1, 0, 0); b.node(2, 100, 0); b.node(3, 200, 0); b.node(4, 100, 100);
     b.way(1, [1, 2, 3], { highway: 'residential', name: 'Rue A' });
     b.way(2, [2, 4], { highway: 'primary', name: 'Avenue sans sens indiqué' });
-    const r = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build());
+    const r = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build(), CLUSTER);
     expect(r.suggestions[0]!.branches[0]!.flow).toBe('double_sens');
     expect(r.suggestions[0]!.uncertainties.join(' ')).not.toMatch(/sens/i);
     expect(r.suggestions[0]!.type).toBe('acces_vehicule_entrant');
+  });
+});
+
+describe('un point par accès entrant (mode par défaut)', () => {
+  const route = new Route([[at(0, 3), at(250, -2), at(500, 2)]]);
+  const r = analyse(route, referenceNetwork());
+  const get = (k: string) => r.suggestions.find((s) => s.stableKey === k)!;
+
+  it("propose un point par côté d'où l'on peut arriver, et aucun pour une rue sortante", () => {
+    expect(r.suggestions.map((s) => [s.stableKey, s.type])).toEqual([
+      ['osm:n2-n70', 'acces_pieton_cycle'],
+      ['osm:n3-n20', 'acces_vehicule_entrant'],
+      ['osm:n3-n21', 'acces_vehicule_entrant'],
+      ['osm:x1-6', 'verification'],
+      ['osm:n5-n40', 'acces_vehicule_entrant'],
+      ['osm:n7-n80', 'voie_privee'],
+    ]);
+  });
+
+  it('place chaque point dans la voie, à 20 m du carrefour, avec son côté', () => {
+    const sud = get('osm:n3-n20');
+    const nord = get('osm:n3-n21');
+    expect(haversine(sud.position, at(100, 0))).toBeCloseTo(20, 0);
+    expect(haversine(nord.position, at(100, 0))).toBeCloseTo(20, 0);
+    expect(sud.junction).toMatchObject({ nodeId: 3, side: 'sud', accesses: 2 });
+    expect(nord.junction!.side).toBe('nord');
+    expect(nord.branches).toEqual([expect.objectContaining({ name: 'Rue B', flow: 'double_sens' })]);
+    expect(nord.distance).toBeCloseTo(100, -1);
+    expect(nord.reasons.join(' ')).toMatch(/Côté nord du carrefour Rue A \/ Rue B/);
+    expect(nord.restrictions).toHaveLength(1);
+  });
+
+  it('rues sortantes en option', () => {
+    const avec = analyse(route, referenceNetwork(), { includeOutgoing: true });
+    expect(avec.suggestions.find((s) => s.stableKey === 'osm:n4-n30')).toMatchObject({ type: 'rue_laterale' });
+  });
+
+  it('voie à sens unique qui traverse le parcours : un seul accès entrant', () => {
+    const b = new OsmBuilder();
+    b.node(1, 0, 0); b.node(2, 100, 0); b.node(3, 200, 0); b.node(4, 100, -80); b.node(5, 100, 80);
+    b.way(1, [1, 2, 3], { highway: 'residential', name: 'Rue A' });
+    b.way(2, [4, 2, 5], { highway: 'residential', name: 'Rue S', oneway: 'yes' }); // du sud vers le nord
+    const res = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build());
+    expect(res.suggestions.map((s) => [s.stableKey, s.junction?.side])).toEqual([['osm:n2-n4', 'sud']]);
+  });
+
+  it('voie plus courte que 20 m : le point est à son extrémité', () => {
+    const b = new OsmBuilder();
+    b.node(1, 0, 0); b.node(2, 100, 0); b.node(3, 200, 0); b.node(4, 100, 8);
+    b.way(1, [1, 2, 3], { highway: 'residential', name: 'Rue A' });
+    b.way(2, [2, 4], { highway: 'service', name: 'Cour' });
+    const res = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build(), { routeTolerance: 5 });
+    expect(haversine(res.suggestions[0]!.position, at(100, 8))).toBeLessThan(0.5);
+    expect(res.suggestions[0]!.pertinence).toBe('faible');
   });
 });

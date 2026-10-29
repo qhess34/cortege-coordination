@@ -43,9 +43,14 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
   type de véhicule, restrictions temporelles, restrictions de tournant, voies privées, piétonnes et cyclables,
   regroupement des nœuds d'un même carrefour, passages multiples sur les boucles. Chaque suggestion indique son
   motif, ses voies, ses attributs OSM, ses incertitudes et une pertinence estimée.
-- **Options d'analyse**, reprises d'une analyse à l'autre : inclure ou non les accès piétons et cyclables, et les
-  **rues sortantes** (sens unique depuis le parcours, d'où aucun véhicule ne peut arriver d'après OSM). Les rues
-  sortantes déjà proposées peuvent être écartées en une fois ; elles ne réapparaissent pas.
+- **Un point par accès entrant** (par défaut) : pour chaque carrefour, un point est proposé sur chaque côté d'où
+  l'on peut arriver sur le parcours (une rue à double sens qui traverse le cortège donne deux points, au nord et au
+  sud par exemple), placé à 20 m dans la rue, avec son côté. Un accès en sens unique sortant n'a pas de point.
+  Option « un point par carrefour » pour revenir à un seul point au centre de chaque carrefour. Un carrefour écarté
+  dans l'ancien mode n'est pas reproposé par ses accès.
+- **Options d'analyse**, reprises d'une analyse à l'autre : un point par accès ou par carrefour, accès piétons et
+  cyclables, et **rues sortantes** (sens unique depuis le parcours ; non proposées par défaut). Les rues sortantes
+  déjà proposées peuvent être écartées en une fois ; elles ne réapparaissent pas.
 - **Nouvelle analyse non destructive** : identifiant stable par nœud OSM (avec repli sur la voie et la position),
   suggestions écartées mémorisées, modifications OSM présentées à part et appliquées seulement sur décision,
   doublons possibles avec des points existants signalés, suggestions disparues conservées et signalées.

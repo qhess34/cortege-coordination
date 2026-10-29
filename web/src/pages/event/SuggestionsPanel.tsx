@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { api } from '../../api';
 import { TYPE_COLORS } from '../../components/MapView';
-import { FLOW, MOTOR, PERTINENCE, SUGGESTION_STATUS, SUGGESTION_TYPES, coords, km } from '../../labels';
+import { FLOW, MOTOR, PERTINENCE, SUGGESTION_STATUS, SUGGESTION_TYPES, coords, km, suggestionPlace } from '../../labels';
 import type { Suggestion } from '../../types';
 import type { PanelProps } from '../EventPage';
 
@@ -24,7 +24,8 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
   // Options reprises de la dernière analyse, pour qu'une relance garde les mêmes choix.
   const last = data.summary.lastAnalysis?.options;
   const [includeNonMotor, setIncludeNonMotor] = useState(last?.includeNonMotor ?? true);
-  const [includeOutgoing, setIncludeOutgoing] = useState(last?.includeOutgoing ?? true);
+  const [includeOutgoing, setIncludeOutgoing] = useState(last?.includeOutgoing ?? false);
+  const [perAccess, setPerAccess] = useState(last?.perAccess ?? true);
   const outgoingToReview = data.suggestions.filter((s) => s.type === 'rue_laterale' && s.status === 'a_examiner' && !s.pointId).length;
   const [report, setReport] = useState<AnalysisReport | null>(null);
   const [busy, setBusy] = useState(false);
@@ -34,7 +35,7 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
 
   const analyse = async () => {
     setBusy(true);
-    await run(async () => setReport(await api.post<AnalysisReport>('/api/events/' + data.event.id + '/analyses', { includeNonMotor, includeOutgoing })), 'Analyse terminée.');
+    await run(async () => setReport(await api.post<AnalysisReport>('/api/events/' + data.event.id + '/analyses', { includeNonMotor, includeOutgoing, perAccess })), 'Analyse terminée.');
     setBusy(false);
   };
 
@@ -50,6 +51,9 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
           <label className="check"><input type="checkbox" checked={includeNonMotor} onChange={(e) => setIncludeNonMotor(e.target.checked)} /> Inclure les accès piétons et cyclables</label>
           <label className="check" title="Voies à sens unique depuis le parcours : aucun véhicule ne peut en arriver d’après OSM">
             <input type="checkbox" checked={includeOutgoing} onChange={(e) => setIncludeOutgoing(e.target.checked)} /> Inclure les rues sortantes (sens unique depuis le parcours)
+          </label>
+          <label className="check" title="Décoché : un seul point au centre de chaque carrefour">
+            <input type="checkbox" checked={perAccess} onChange={(e) => setPerAccess(e.target.checked)} /> Un point par accès entrant (chaque côté d’où l’on peut arriver)
           </label>
           <button className="primary" disabled={busy || !data.track} onClick={analyse}>{busy ? 'Analyse en cours…' : data.summary.lastAnalysis ? 'Relancer l’analyse' : 'Lancer l’analyse'}</button>
           {!data.track && <p className="muted">Importez d’abord un parcours.</p>}
@@ -85,8 +89,7 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
           <li key={s.id} className={current?.id === s.id ? 'selected' : ''} onClick={() => select({ kind: 'suggestion', id: s.id })}>
             <span className="dot" style={{ background: TYPE_COLORS[s.type] ?? '#999' }} />
             <span className="grow">
-              <b>{SUGGESTION_TYPES[s.type] ?? s.type}</b> — {s.routeNames[0] ?? 'voie sans nom'}
-              {s.branches[0]?.name ? ' / ' + s.branches[0].name : ''}
+              <b>{SUGGESTION_TYPES[s.type] ?? s.type}</b> — {suggestionPlace(s)}
               <br /><span className="muted">{km(s.distance)} · pertinence {PERTINENCE[s.pertinence]?.toLowerCase()} · {SUGGESTION_STATUS[s.status]}</span>
               {s.uncertainties.length > 0 && <span className="badge warn" title={s.uncertainties.join('\n')}>incertain</span>}
               {s.pendingUpdate ? <span className="badge">OSM modifié</span> : null}

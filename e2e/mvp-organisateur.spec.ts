@@ -50,17 +50,20 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   await page.getByRole('button', { name: 'Lancer l’analyse' }).click();
   await expect(page.getByText(/6\s*nouvelle\(s\)/)).toBeVisible();
   await expect(page.locator('ul.items li')).toHaveCount(6);
-  await page.locator('ul.items li', { hasText: 'Carrefour' }).click();
+  // Un point par accès entrant : la rue B (double sens) donne un accès au nord et un au sud.
+  await expect(page.locator('ul.items li', { hasText: /Rue B côté (nord|sud)/ })).toHaveCount(2);
+  await page.locator('ul.items li', { hasText: 'Rue B côté nord' }).click();
   await expect(page.getByText('Motif de la détection')).toBeVisible();
   await expect(page.locator('.detail').getByText(/Rue B/).first()).toBeVisible();
   // La suggestion sélectionnée s'ouvre aussi en bulle sur la carte : on la valide depuis la carte.
   const bubble = page.getByTestId('suggestion-popup');
-  await expect(bubble).toContainText('Carrefour');
+  await expect(bubble).toContainText('Accès véhicules');
+  await expect(bubble).toContainText('Rue B côté nord');
   await expect(bubble).toContainText('Rue B');
   await bubble.getByRole('button', { name: 'Valider' }).click();
   await expect(page.getByText('point de mission créé')).toBeVisible();
   // Le point créé s'ouvre directement en modification.
-  await expect(page.getByTestId('point-editor').getByLabel('Nom')).toHaveValue(/Carrefour/);
+  await expect(page.getByTestId('point-editor').getByLabel('Nom')).toHaveValue('Accès véhicules — Rue B côté nord (Rue A)');
   await page.getByTestId('point-editor').getByRole('button', { name: 'Annuler' }).click();
 
   // 5. Écarter un point inutile, depuis sa bulle.
@@ -134,7 +137,7 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   await page.getByPlaceholder('Nom de la nouvelle équipe').fill('Équipe Nord');
   await page.getByRole('button', { name: 'Créer' }).click();
   await expect(page.getByRole('heading', { name: 'Équipe Nord' })).toBeVisible();
-  for (const name of [/Point 1/, /Carrefour/]) {
+  for (const name of [/Point 1/, /Rue B côté nord/]) {
     const select = page.getByLabel('Point à affecter');
     const value = await select.locator('option', { hasText: name }).getAttribute('value');
     await select.selectOption(value!);
@@ -145,7 +148,7 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   await expect(missions).toHaveCount(2);
   await expect(missions.first()).toContainText('Point 1');
   await missions.nth(1).getByRole('button', { name: 'Monter' }).click();
-  await expect(missions.first()).toContainText('Carrefour');
+  await expect(missions.first()).toContainText('Rue B côté nord');
 
   // Synthèse : il reste un point validé sans équipe.
   await page.getByRole('tab', { name: 'Synthèse' }).click();

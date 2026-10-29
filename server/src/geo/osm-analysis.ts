@@ -60,6 +60,16 @@ export interface Suggestion {
   nodeIds: number[];
   reasons: string[];
   uncertainties: string[];
+  /** Point proposé pour un accès d'un carrefour (mode « un point par accès entrant »). */
+  junction?: {
+    /** Nœud OSM représentatif du carrefour. */
+    nodeId: number;
+    position: Position;
+    /** Côté de l'accès vu depuis le carrefour (nord, sud-est…). */
+    side: string;
+    /** Nombre de points d'accès proposés pour ce carrefour. */
+    accesses: number;
+  };
 }
 
 export interface IgnoredCrossing { wayIds: [number, number]; position: Position; distance: number; reason: string }
@@ -86,6 +96,12 @@ export interface AnalysisOptions {
   includeNonMotor: boolean;
   /** Inclure les rues sortantes : voie à sens unique depuis le parcours, d'où aucun véhicule ne peut arriver. */
   includeOutgoing: boolean;
+  /**
+   * Un point par accès entrant (chaque côté d'où l'on peut arriver sur le parcours), placé dans la rue à
+   * `accessOffset` m du carrefour ; sinon un seul point par carrefour.
+   */
+  perAccess: boolean;
+  accessOffset: number;
 }
 
 export const DEFAULT_OPTIONS: AnalysisOptions = {
@@ -93,7 +109,9 @@ export const DEFAULT_OPTIONS: AnalysisOptions = {
   maxAngle: 35,
   clusterRadius: 25,
   includeNonMotor: true,
-  includeOutgoing: true,
+  includeOutgoing: false,
+  perAccess: true,
+  accessOffset: 20,
 };
 
 // --- Classement des voies ------------------------------------------------------------------------------------
@@ -176,6 +194,14 @@ const layer = (t: Tags) => Number.parseInt(t.layer ?? '0', 10) || 0;
 // --- Analyse -------------------------------------------------------------------------------------------------
 
 interface Edge { way: OsmWay; a: number; b: number; onRoute: boolean }
+/** Accès d'un carrefour : une voie quittant le parcours depuis un nœud, dans une direction. */
+interface Arm { node: number; neighbor: number; way: OsmWay; dir: 'in' | 'out' }
+
+const CARDINAUX = ['nord', 'nord-est', 'est', 'sud-est', 'sud', 'sud-ouest', 'ouest', 'nord-ouest'];
+/** Direction en toutes lettres pour un cap en degrés. */
+export function cardinal(deg: number): string {
+  return CARDINAUX[Math.round((((deg % 360) + 360) % 360) / 45) % 8]!;
+}
 
 /** Intersection de deux segments en coordonnées locales (approximation plane suffisante à l'échelle d'une rue). */
 function segmentIntersection(p1: Position, p2: Position, q1: Position, q2: Position): Position | null {
@@ -354,8 +380,12 @@ export function analyse(
 
   const suggestions: Suggestion[] = [];
   for (const cluster of clusters) {
-    const s = buildSuggestion(route, cluster, restrictionsByNode, opt);
-    if (s) suggestions.push(s);
+    const built = buildSuggestion(route, cluster, restrictionsByNode, opt);
+    if (!built) continue;
+    if (opt.perAccess) suggestions.push(...accessSuggestions(built));
+    else if (!(built.s.type === 'acces_pieton_cycle' && !opt.includeNonMotor) && !(built.s.type === 'rue_laterale' && !opt.includeOutgoing)) {
+      suggestions.push(built.s);
+    }
   }
   // Un croisement sans nœud situé dans un carrefour déjà proposé y est rattaché plutôt que dupliqué.
   for (const cs of crossingSuggestions) {
@@ -385,8 +415,17 @@ export function analyse(
     cluster: Candidate[],
     restrictionsByNode: Map<number, Restriction[]>,
     o: AnalysisOptions,
-  ): Suggestion | null {
+  ): { s: Suggestion; arms: Arm[]; byWay: Map<number, string[]>; general: string[] } | null {
     const uncertainties: string[] = [];
+    // Incertitudes propres à une voie (reprises dans le point de chacun de ses accès) et générales.
+    const byWay = new Map<number, string[]>();
+    const general: string[] = [];
+    const note = (wayId: number | null, text: string) => {
+      uncertainties.push(text);
+      if (wayId === null) general.push(text);
+      else byWay.set(wayId, [...(byWay.get(wayId) ?? []), text]);
+    };
+    const arms: Arm[] = [];
     // Une branche par voie (une voie qui traverse le parcours donne deux arêtes au même nœud).
     const branchByWay = new Map<number, { branch: Branch; directions: Set<'in' | 'out'>; node: number }>();
     const clusterNodes = new Set(cluster.map((c) => c.node));
@@ -396,6 +435,7 @@ export function analyse(
         // Arête interne au regroupement (ex. passage piéton entre trottoir et chaussée) : pas une branche.
         if (clusterNodes.has(e.a) && clusterNodes.has(e.b)) continue;
         const dir: 'in' | 'out' = e.a === c.node ? 'out' : 'in';
+        arms.push({ node: c.node, neighbor: e.a === c.node ? e.b : e.a, way: e.way, dir });
         const existing = branchByWay.get(e.way.id);
         if (existing) {
           existing.directions.add(dir);
@@ -403,7 +443,7 @@ export function analyse(
         }
         const unc: string[] = [];
         const motor = motorAccess(tags, unc);
-        uncertainties.push(...unc.map((u) => (tags.name ? tags.name + ' : ' : 'Voie ' + e.way.id + ' : ') + u));
+        for (const u of unc) note(e.way.id, (tags.name ? tags.name + ' : ' : 'Voie ' + e.way.id + ' : ') + u);
         branchByWay.set(e.way.id, {
           branch: { wayId: e.way.id, name: tags.name ?? null, highway: tags.highway ?? '?', flow: 'double_sens', motor, crossing: false, tags: usefulTags(tags) },
           directions: new Set([dir]),
@@ -420,7 +460,7 @@ export function analyse(
       const ow = onewayDirection(tags);
       if (ow === null) {
         branch.flow = 'variable';
-        uncertainties.push(describeBranch(branch) + ' : sens de circulation variable (oneway=' + tags.oneway + ').');
+        note(branch.wayId, describeBranch(branch) + ' : sens de circulation variable (oneway=' + tags.oneway + ').');
       } else if (ow === 0 || directions.size === 2) {
         // Voie traversante : à sens unique, elle amène quand même des véhicules d'un côté.
         branch.flow = ow === 0 ? 'double_sens' : 'entrant';
@@ -429,12 +469,12 @@ export function analyse(
         const leaves = directions.has('out') ? ow === 1 : ow === -1;
         branch.flow = leaves ? 'sortant' : 'entrant';
       }
-      if (tags.highway === 'construction' || tags.construction) uncertainties.push(describeBranch(branch) + ' : voie en travaux dans OSM.');
-      if (tags.highway === 'road') uncertainties.push(describeBranch(branch) + ' : type de voie non précisé (highway=road).');
+      if (tags.highway === 'construction' || tags.construction) note(branch.wayId, describeBranch(branch) + ' : voie en travaux dans OSM.');
+      if (tags.highway === 'road') note(branch.wayId, describeBranch(branch) + ' : type de voie non précisé (highway=road).');
       if (UNCERTAIN_HIGHWAYS.has(tags.highway ?? '') && branch.motor === 'oui' && tags.highway !== 'road') branch.motor = 'incertain';
-      if (tags.fixme || tags.FIXME) uncertainties.push(describeBranch(branch) + ' : note de correction OSM (fixme=' + (tags.fixme ?? tags.FIXME) + ').');
+      if (tags.fixme || tags.FIXME) note(branch.wayId, describeBranch(branch) + ' : note de correction OSM (fixme=' + (tags.fixme ?? tags.FIXME) + ').');
       // Sans « oneway » (ni giratoire), une voie est à double sens : c'est la convention OSM, pas une incertitude.
-      if (tags.barrier) uncertainties.push(describeBranch(branch) + ' : barrière indiquée (barrier=' + tags.barrier + ').');
+      if (tags.barrier) note(branch.wayId, describeBranch(branch) + ' : barrière indiquée (barrier=' + tags.barrier + ').');
       branches.push(branch);
     }
 
@@ -453,8 +493,6 @@ export function analyse(
     else if (privateOnly.length) type = 'voie_privee';
     else type = 'acces_pieton_cycle';
 
-    if (type === 'acces_pieton_cycle' && !o.includeNonMotor) return null;
-    if (type === 'rue_laterale' && !o.includeOutgoing) return null;
 
     const major = motorOpen.some((b) => MAJOR_HIGHWAYS.has(b.highway));
     const minorService = motorOpen.length > 0 && motorOpen.every((b) => b.highway === 'service' || b.highway === 'track');
@@ -477,7 +515,8 @@ export function analyse(
 
     const passages = route.passages(main.position, o.routeTolerance).map((p) => p.distance);
     if (passages.length > 1) {
-      uncertainties.push(
+      note(
+        null,
         'Le parcours passe ' + passages.length + ' fois à cet endroit (à ' + passages.map((d) => (d / 1000).toFixed(2) + ' km').join(', ') +
           ') : préciser le passage concerné.',
       );
@@ -485,7 +524,7 @@ export function analyse(
 
     const restrictions = cluster.flatMap((c) => restrictionsByNode.get(c.node) ?? []);
     const routeNames = [...new Set(cluster.flatMap((c) => c.onRouteWays.map((w) => w.tags?.name).filter((n): n is string => !!n)))];
-    if (!routeNames.length) uncertainties.push('Nom de la voie du parcours absent dans OSM.');
+    if (!routeNames.length) note(null, 'Nom de la voie du parcours absent dans OSM.');
 
     const reasons: string[] = [];
     const typeText: Record<SuggestionType, string> = {
@@ -503,7 +542,7 @@ export function analyse(
     if (cluster.length > 1) reasons.push(cluster.length + ' nœuds OSM regroupés à moins de ' + o.clusterRadius + ' m.');
     for (const r of restrictions) reasons.push('Restriction de tournant ' + r.restriction + ' (relation OSM ' + r.relationId + ').');
 
-    return {
+    const s: Suggestion = {
       stableKey: 'osm:n' + main.node,
       type,
       pertinence,
@@ -517,6 +556,102 @@ export function analyse(
       reasons,
       uncertainties: [...new Set(uncertainties)],
     };
+    return { s, arms, byWay, general };
+  }
+
+  /**
+   * Un point par accès d'un carrefour d'où l'on peut arriver sur le parcours. Chaque voie qui rejoint le
+   * parcours donne un accès par côté (deux pour une voie qui le traverse). Un accès en sens unique sortant n'a pas
+   * de point, sauf option contraire.
+   */
+  function accessSuggestions(built: { s: Suggestion; arms: Arm[]; byWay: Map<number, string[]>; general: string[] }): Suggestion[] {
+    const { s, arms, byWay, general } = built;
+    const branchOf = new Map(s.branches.map((b) => [b.wayId, b]));
+    const junctionName = [...s.routeNames.slice(0, 1), ...new Set(s.branches.map((b) => b.name).filter((n): n is string => !!n))].join(' / ');
+    const out: Suggestion[] = [];
+    const seen = new Set<string>();
+    for (const arm of arms) {
+      const key = 'osm:n' + arm.node + '-n' + arm.neighbor;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const base = branchOf.get(arm.way.id);
+      if (!base) continue;
+      const ow = onewayDirection(base.tags);
+      let flow: Flow;
+      if (ow === null) flow = 'variable';
+      else if (ow === 0) flow = 'double_sens';
+      else flow = (arm.dir === 'out' ? ow === 1 : ow === -1) ? 'sortant' : 'entrant';
+      const branch: Branch = { ...base, flow, crossing: false };
+
+      let type: SuggestionType;
+      if (branch.motor === 'non') type = 'acces_pieton_cycle';
+      else if (branch.motor === 'prive') type = 'voie_privee';
+      else if (branch.motor === 'incertain' || flow === 'variable') type = 'verification';
+      else if (flow === 'sortant') type = 'rue_laterale';
+      else type = 'acces_vehicule_entrant';
+      if (type === 'acces_pieton_cycle' && !opt.includeNonMotor) continue;
+      if (type === 'rue_laterale' && !opt.includeOutgoing) continue;
+
+      let pertinence: Suggestion['pertinence'];
+      if (type === 'acces_vehicule_entrant') {
+        pertinence = MAJOR_HIGHWAYS.has(branch.highway) ? 'elevee' : branch.highway === 'service' || branch.highway === 'track' ? 'faible' : 'moyenne';
+      } else pertinence = type === 'verification' ? 'moyenne' : 'faible';
+
+      const start = nodes.get(arm.node)!;
+      const position = pointAlongWay(arm, opt.accessOffset);
+      const side = cardinal(bearing(start, position));
+      const typeText: Record<SuggestionType, string> = {
+        carrefour: '',
+        acces_vehicule_entrant: 'Accès entrant : des véhicules peuvent arriver sur le parcours par ici.',
+        rue_laterale: 'Rue sortante : sens unique depuis le parcours selon OSM, à vérifier sur place.',
+        acces_pieton_cycle: 'Accès piéton ou cyclable au parcours.',
+        voie_privee: 'Accès par une voie privée.',
+        verification: 'Accès dont les caractéristiques sont incertaines : vérification manuelle nécessaire.',
+      };
+      out.push({
+        ...s,
+        stableKey: key,
+        type,
+        pertinence,
+        position,
+        branches: [branch],
+        nodeIds: [arm.node, arm.neighbor],
+        reasons: [
+          typeText[type],
+          'Côté ' + side + ' du carrefour ' + (junctionName || 'sans nom') + ' (nœud OSM ' + arm.node + '), à ' + opt.accessOffset + ' m dans la voie.',
+          'Voie : ' + describeBranch(branch) + '.',
+          ...s.restrictions.map((r) => 'Restriction de tournant ' + r.restriction + ' (relation OSM ' + r.relationId + ').'),
+        ],
+        uncertainties: [...new Set([...(byWay.get(arm.way.id) ?? []), ...general])],
+        junction: { nodeId: Number(s.stableKey.slice('osm:n'.length)), position: s.position, side, accesses: 0 },
+      });
+    }
+    for (const a of out) {
+      a.junction!.accesses = out.length;
+      if (out.length > 1) a.reasons.push('Ce carrefour compte ' + out.length + ' accès : un point est proposé pour chacun.');
+    }
+    return out;
+  }
+
+  /** Point situé à `offset` m du carrefour en suivant la voie de l'accès (ou son extrémité si elle est plus courte). */
+  function pointAlongWay(arm: Arm, offset: number): Position {
+    const ids = arm.way.nodes;
+    let i = ids.findIndex((n, k) => n === arm.node && (ids[k + 1] === arm.neighbor || ids[k - 1] === arm.neighbor));
+    const step = ids[i + 1] === arm.neighbor ? 1 : -1;
+    let rest = offset;
+    let prev = nodes.get(arm.node)!;
+    for (i += step; i >= 0 && i < ids.length; i += step) {
+      const next = nodes.get(ids[i]!);
+      if (!next) break;
+      const d = haversine(prev, next);
+      if (d >= rest) {
+        const t = rest / d;
+        return [prev[0] + t * (next[0] - prev[0]), prev[1] + t * (next[1] - prev[1])];
+      }
+      rest -= d;
+      prev = next;
+    }
+    return prev;
   }
 }
 

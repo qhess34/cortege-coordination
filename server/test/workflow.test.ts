@@ -3,6 +3,9 @@ import type { OverpassResponse } from '../src/geo/osm-analysis.js';
 import { Agent, createUser, setup, type TestContext } from './helpers/app.js';
 import { at, gpxFrom, referenceNetwork } from './helpers/osm.js';
 
+/** Mode « un point par carrefour » avec rues sortantes : ce fichier teste la fusion non destructive. */
+const CLUSTER = { perAccess: false, includeOutgoing: true };
+
 let ctx: TestContext;
 let orga: Agent;
 let eventId: number;
@@ -42,7 +45,7 @@ describe('import GPX', () => {
 
 describe('analyse OSM', () => {
   it('propose des suggestions explicables', async () => {
-    const r = await orga.post('/api/events/' + eventId + '/analyses', {});
+    const r = await orga.post('/api/events/' + eventId + '/analyses', CLUSTER);
     expect(r.statusCode).toBe(201);
     expect(ctx.osm.queries[0]).toMatch(/way\(around:40,/);
     const report = r.json();
@@ -95,7 +98,7 @@ describe('analyse OSM', () => {
     if (way8.type === 'way') way8.nodes = [777, 80];
     ctx.osm.data = data;
 
-    const r = await orga.post('/api/events/' + eventId + '/analyses', {});
+    const r = await orga.post('/api/events/' + eventId + '/analyses', CLUSTER);
     expect(r.statusCode).toBe(201);
     const m = r.json().merge;
     expect(m.added.map((a: { stableKey: string }) => a.stableKey)).toEqual(['osm:n90']);
@@ -135,7 +138,7 @@ describe('analyse OSM', () => {
     const wayA = data.elements.find((e) => e.type === 'way' && e.id === 1)!;
     if (wayA.type === 'way') wayA.nodes = [1, 2, 3, 90, 4, 5, 6, 95, 777, 8];
     ctx.osm.data = data;
-    const m = (await orga.post('/api/events/' + eventId + '/analyses', {})).json().merge;
+    const m = (await orga.post('/api/events/' + eventId + '/analyses', CLUSTER)).json().merge;
     expect(m.added).toHaveLength(1);
     expect(m.added[0].duplicateOfPoint).toMatchObject({ name: 'Point manuel' });
   });
@@ -143,7 +146,7 @@ describe('analyse OSM', () => {
   it("signale l'indisponibilité d'Overpass sans rien modifier", async () => {
     const before = (await suggestions()).length;
     ctx.osm.fail = new Error('Serveur Overpass saturé (HTTP 429)');
-    const r = await orga.post('/api/events/' + eventId + '/analyses', {});
+    const r = await orga.post('/api/events/' + eventId + '/analyses', CLUSTER);
     ctx.osm.fail = null;
     expect(r.statusCode).toBe(502);
     expect((await suggestions()).length).toBe(before);
@@ -192,7 +195,7 @@ describe('points de mission', () => {
     expect((await points()).some((x) => x.id === p.id)).toBe(false);
     // La suggestion d'origine est écartée : elle ne réapparaîtra pas.
     expect((await byKey('osm:n3')).status).toBe('ecartee');
-    const m = (await orga.post('/api/events/' + eventId + '/analyses', {})).json().merge;
+    const m = (await orga.post('/api/events/' + eventId + '/analyses', CLUSTER)).json().merge;
     expect(m.ignoredDismissed.map((x: { stableKey: string }) => x.stableKey)).toContain('osm:n3');
     expect(m.added).toEqual([]);
   });

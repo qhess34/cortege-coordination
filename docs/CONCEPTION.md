@@ -134,6 +134,10 @@ Le schéma exact est dans `server/migrations/`.
    suggestion.
 8. **Incertitudes** listées explicitement : `highway` imprécis (`road`, `unclassified` sans nom), accès conditionnel, `fixme`, voie en construction, croisement sans nœud, point à
    plusieurs passages du parcours (boucles).
+8 bis. **Un point par accès entrant** (par défaut). Chaque voie qui rejoint le parcours donne un accès par côté (deux
+   pour une voie traversante). Pour chaque accès d'où l'on peut arriver (double sens, ou sens unique vers le
+   parcours), un point est proposé à 20 m dans la voie, avec son côté (nord, sud-est…). Clé stable :
+   `osm:n<nœud du carrefour>-n<nœud voisin dans la voie>`. Option : un point par carrefour.
 9. **Identifiant stable.** `stable_key = "osm:n<id nœud>"` pour une connexion ; `"osm:x<id voie A>-<id voie B>"`
    (ordonnés) pour un croisement sans nœud. Lors d'une nouvelle analyse, une suggestion est reconnue par sa clé, ou à
    défaut par une voie latérale commune à moins de 15 m (nœud renuméroté dans OSM). Les suggestions écartées gardent

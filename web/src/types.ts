@@ -20,6 +20,8 @@ export interface Suggestion {
   position: Position; distance: number | null; passages: number[]; routeNames: string[]; branches: Branch[];
   restrictions: { relationId: number; restriction: string }[]; nodeIds: number[]; reasons: string[]; uncertainties: string[];
   pendingUpdate: unknown; dismissedReason: string | null; pointId: number | null; teams: { id: number; name: string; color: string }[];
+  /** Point d'accès d'un carrefour (mode « un point par accès entrant »). */
+  junction?: { nodeId: number; side: string; accesses: number } | null;
 }
 
 export interface PointMission { missionId: number; teamId: number; teamName: string; color: string; position: number; status: string }
@@ -41,7 +43,7 @@ export interface Summary {
   suggestions: Record<string, number>; points: Record<string, number>; teams: { active: number; total: number };
   missions: Record<string, number>; unassignedPoints: { id: number; name: string; distance: number | null }[];
   track: { id: number; version: number; length: number; closed: boolean; warnings: string[] } | null;
-  lastAnalysis: { id: number; at: string; osmTimestamp: string | null; outdated: boolean; options?: { includeNonMotor?: boolean; includeOutgoing?: boolean } } | null;
+  lastAnalysis: { id: number; at: string; osmTimestamp: string | null; outdated: boolean; options?: { includeNonMotor?: boolean; includeOutgoing?: boolean; perAccess?: boolean } } | null;
 }
 
 export interface HistoryEntry { id: number; at: string; entity: string; entityId: number | null; action: string; details: unknown; actor: string | null }

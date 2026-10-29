@@ -16,6 +16,8 @@ const AnalysisBody = z
     clusterRadius: z.number().min(0).max(80),
     includeNonMotor: z.boolean(),
     includeOutgoing: z.boolean(),
+    perAccess: z.boolean(),
+    accessOffset: z.number().min(5).max(60),
     corridor: z.number().min(10).max(150),
   })
   .partial()
@@ -47,6 +49,7 @@ export function publicSuggestion(r: Record<string, unknown>) {
     nodeIds: data.nodeIds,
     reasons: data.reasons,
     uncertainties: data.uncertainties,
+    junction: data.junction ? { nodeId: data.junction.nodeId, side: data.junction.side, accesses: data.junction.accesses } : null,
     pendingUpdate: r.pending_data ?? null,
     dismissedReason: r.dismissed_reason,
     decidedAt: r.decided_at,
@@ -157,8 +160,11 @@ export async function suggestionRoutes(app: FastifyInstance) {
       const existing = await c.query('SELECT id FROM mission_points WHERE suggestion_id = $1', [id]);
       if (existing.rowCount) throw conflict('Un point issu de cette suggestion existe déjà (éventuellement supprimé).');
       const data = s.data as Suggestion;
-      const name = b.name ?? (TYPE_LABEL[s.type] ?? s.type) + (data.routeNames[0] ? ' — ' + data.routeNames[0] : '') +
-        (data.branches[0]?.name ? ' / ' + data.branches[0].name : '');
+      const name = b.name ?? (data.junction
+        ? (TYPE_LABEL[s.type] ?? s.type) + ' — ' + (data.branches[0]?.name ?? 'voie sans nom') + ' côté ' + data.junction.side +
+          (data.routeNames[0] ? ' (' + data.routeNames[0] + ')' : '')
+        : (TYPE_LABEL[s.type] ?? s.type) + (data.routeNames[0] ? ' — ' + data.routeNames[0] : '') +
+          (data.branches[0]?.name ? ' / ' + data.branches[0].name : ''));
       let distance = s.distance_m as number | null;
       if (b.position) distance = (await currentTrack(c, eventId))?.route.locate(b.position)?.distance ?? null;
       const p = (
