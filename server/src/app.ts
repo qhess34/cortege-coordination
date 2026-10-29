@@ -12,6 +12,7 @@ import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { eventRoutes } from './routes/events.js';
 import { pointRoutes } from './routes/points.js';
+import { roadbookRoutes } from './routes/roadbook.js';
 import { suggestionRoutes } from './routes/suggestions.js';
 import { teamRoutes } from './routes/teams.js';
 import { trackRoutes } from './routes/tracks.js';
@@ -98,6 +99,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(suggestionRoutes);
   await app.register(pointRoutes);
   await app.register(teamRoutes);
+  await app.register(roadbookRoutes);
   return app;
 }
 

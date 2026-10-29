@@ -1,5 +1,6 @@
 // Déplacer un point en le faisant glisser directement, sans le sélectionner d'abord.
 import { expect, test } from '@playwright/test';
+import { gpxFrom } from '../server/test/helpers/osm';
 
 const H = { 'x-requested-with': 'cortege' };
 
@@ -75,4 +76,48 @@ test('déplacement en passant au-dessus du panneau Panoramax ouvert', async ({ p
   // Après le geste, le panneau redevient cliquable.
   await page.getByRole('button', { name: 'Fermer la vue Panoramax' }).click();
   await expect(page.getByTestId('panoramax')).toHaveCount(0);
+});
+
+test('glisser une suggestion la valide à la position choisie ; un point se saisit aussi par son nom, même en mode ajout', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('cortege.fond', 'osm'));
+  await page.request.post('/api/auth/login', { data: { login: 'admin', password: 'admin-e2e-motdepasse' }, headers: H });
+  const ev = await (await page.request.post('/api/events', { data: { name: 'Suggestion déplacée' }, headers: H })).json();
+  await page.request.post('/api/events/' + ev.id + '/tracks', {
+    headers: H, multipart: { file: { name: 'a.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(gpxFrom([[[0, 3], [250, -2], [500, 2]]])) } },
+  });
+  await page.request.post('/api/events/' + ev.id + '/analyses', { data: {}, headers: H });
+  await page.goto('/#/evenements/' + ev.id);
+  await page.getByRole('tab', { name: /Suggestions/ }).click();
+  await page.locator('ul.items li', { hasText: 'Carrefour' }).click();
+
+  // La bulle est posée juste au-dessus de la suggestion : on en déduit la position de la suggestion à l'écran.
+  const bubble = page.getByTestId('suggestion-popup');
+  await expect(bubble).toBeVisible();
+  const bb = (await page.getByTestId('map-bubble').boundingBox())!;
+  const sx = bb.x + bb.width / 2;
+  const sy = bb.y + bb.height + 16;
+  await page.getByRole('button', { name: 'Fermer' }).first().click();
+
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  await page.mouse.move(sx + 60, sy - 90, { steps: 12 });
+  await page.mouse.up();
+  await expect(bubble).toContainText('Déplacée de');
+  await expect(page.locator('.point-marker.draft')).toHaveCount(1);
+  await bubble.getByRole('button', { name: 'Valider à cette position' }).click();
+  await expect(page.getByText('Suggestion validée à la position choisie')).toBeVisible();
+  await page.getByTestId('point-editor').getByRole('button', { name: 'Annuler' }).click();
+  const marker = page.locator('.point-marker', { hasText: /Carrefour/ });
+  const mb = (await marker.locator('.point-dot').boundingBox())!;
+  expect(Math.abs(mb.x + mb.width / 2 - (sx + 60))).toBeLessThan(6);
+  expect(Math.abs(mb.y + mb.height / 2 - (sy - 90))).toBeLessThan(6);
+
+  // Le nom du point sert aussi de poignée ; le mode ajout n'empêche pas de déplacer un point existant.
+  await page.getByRole('button', { name: '+ Ajouter des points' }).click();
+  const label = (await marker.locator('.point-label').boundingBox())!;
+  await page.mouse.move(label.x + 10, label.y + label.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(label.x + 10, label.y + label.height / 2 + 70, { steps: 10 });
+  await page.mouse.up();
+  await expect(page.getByTestId('point-editor')).toContainText('position modifiée');
 });

@@ -132,8 +132,7 @@ Le schéma exact est dans `server/migrations/`.
    les clés `*:conditional` (restrictions temporelles, affichées telles quelles et marquées incertaines).
 7. **Restrictions de tournant.** Les relations `restriction` dont le `via` est le nœud de connexion sont jointes à la
    suggestion.
-8. **Incertitudes** listées explicitement : `highway` imprécis (`road`, `unclassified` sans nom), sens non renseigné
-   sur une voie importante, accès conditionnel, `fixme`, voie en construction, croisement sans nœud, point à
+8. **Incertitudes** listées explicitement : `highway` imprécis (`road`, `unclassified` sans nom), accès conditionnel, `fixme`, voie en construction, croisement sans nœud, point à
    plusieurs passages du parcours (boucles).
 9. **Identifiant stable.** `stable_key = "osm:n<id nœud>"` pour une connexion ; `"osm:x<id voie A>-<id voie B>"`
    (ordonnés) pour un croisement sans nœud. Lors d'une nouvelle analyse, une suggestion est reconnue par sa clé, ou à

@@ -211,3 +211,16 @@ describe('analyse du réseau', () => {
     expect(r.coverage).toBeLessThan(0.6);
   });
 });
+
+describe('sens de circulation non précisé', () => {
+  it("une voie sans « oneway » est à double sens, sans incertitude", () => {
+    const b = new OsmBuilder();
+    b.node(1, 0, 0); b.node(2, 100, 0); b.node(3, 200, 0); b.node(4, 100, 100);
+    b.way(1, [1, 2, 3], { highway: 'residential', name: 'Rue A' });
+    b.way(2, [2, 4], { highway: 'primary', name: 'Avenue sans sens indiqué' });
+    const r = analyse(new Route([[at(0, 0), at(200, 0)]]), b.build());
+    expect(r.suggestions[0]!.branches[0]!.flow).toBe('double_sens');
+    expect(r.suggestions[0]!.uncertainties.join(' ')).not.toMatch(/sens/i);
+    expect(r.suggestions[0]!.type).toBe('acces_vehicule_entrant');
+  });
+});

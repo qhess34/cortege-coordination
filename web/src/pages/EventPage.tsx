@@ -82,8 +82,10 @@ export function EventPage({ eventId }: { eventId: number }) {
   // Menu ouvert par un clic sur la carte, et bulle de la suggestion sélectionnée.
   const [menuAt, setMenuAt] = useState<Position | null>(null);
   const [suggestionPopup, setSuggestionPopup] = useState(false);
+  // Suggestion glissée sur la carte : position proposée pour la valider ailleurs que sur le nœud OSM.
+  const [suggestionMove, setSuggestionMove] = useState<{ id: number; position: Position } | null>(null);
   const closeMenu = useCallback(() => setMenuAt(null), []);
-  const closeSuggestion = useCallback(() => setSuggestionPopup(false), []);
+  const closeSuggestion = useCallback(() => { setSuggestionPopup(false); setSuggestionMove(null); }, []);
   const route = useMemo(() => (data?.track ? new Route(data.track.geometry.coordinates) : null), [data?.track]);
   const chooseBasemap = (id: string) => {
     setBasemap(id);
@@ -139,6 +141,7 @@ export function EventPage({ eventId }: { eventId: number }) {
   const select = (s: Selection) => {
     setSelection(s);
     setMenuAt(null);
+    setSuggestionMove(null);
     setSuggestionPopup(s?.kind === 'suggestion');
     if (s?.kind === 'suggestion') setTab('suggestions');
     if (s?.kind === 'point') setTab('points');
@@ -235,11 +238,13 @@ export function EventPage({ eventId }: { eventId: number }) {
       : selectedSuggestion && suggestionPopup
         ? {
             key: 'suggestion:' + selectedSuggestion.id,
-            position: selectedSuggestion.position,
+            position: suggestionMove?.id === selectedSuggestion.id ? suggestionMove.position : selectedSuggestion.position,
             content: (
               <SuggestionPopup
                 key={selectedSuggestion.id}
                 s={selectedSuggestion}
+                moveTo={suggestionMove?.id === selectedSuggestion.id ? suggestionMove.position : null}
+                onResetMove={() => setSuggestionMove(null)}
                 canEdit={canEdit}
                 onClose={closeSuggestion}
                 onPhotos={() => openPhotos(selectedSuggestion.position)}
@@ -248,6 +253,7 @@ export function EventPage({ eventId }: { eventId: number }) {
                   setToast({ kind: 'ok', text: message });
                   await reload();
                   setSuggestionPopup(false);
+                  setSuggestionMove(null);
                   if (pointId) {
                     // La suggestion validée devient un point : on ouvre directement sa bulle de modification.
                     setSelection({ kind: 'point', id: pointId });
@@ -278,6 +284,8 @@ export function EventPage({ eventId }: { eventId: number }) {
           addMode={addMode && canEdit}
           onSelect={select}
           onMapClick={mapClick}
+          onSuggestionDrop={(id, p) => { select({ kind: 'suggestion', id }); setSuggestionMove({ id, position: p }); }}
+          ghost={suggestionMove && suggestionPopup ? suggestionMove.position : null}
           onEditMove={(p) => setEdit((prev) => (prev ? { ...prev, position: p } : prev))}
           edit={canEdit ? edit : null}
           canEdit={canEdit}

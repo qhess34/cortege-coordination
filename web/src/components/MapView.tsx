@@ -1,5 +1,5 @@
 import * as maplibregl from 'maplibre-gl';
-import type { GeoJSONSource, Map as MlMap, MapMouseEvent } from 'maplibre-gl';
+import type { GeoJSONSource, Map as MlMap, MapLayerMouseEvent, MapLayerTouchEvent, MapMouseEvent, MapTouchEvent } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 // MapLibre 6 charge son worker depuis un fichier séparé : on le fait empaqueter par Vite.
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
@@ -31,6 +31,10 @@ interface Props {
   selection: Selection;
   addMode: boolean;
   onSelect: (s: Selection) => void;
+  /** Suggestion glissée puis lâchée ailleurs (organisateur) : proposer de la valider à cette position. */
+  onSuggestionDrop?: (id: number, p: Position) => void;
+  /** Position provisoire d'une suggestion déplacée, affichée en pointillés. */
+  ghost?: Position | null;
   onMapClick: (p: Position) => void;
   /** Le point en cours d'édition a été glissé à une nouvelle position (non enregistrée). */
   onEditMove: (p: Position) => void;
@@ -88,6 +92,8 @@ export function MapView(props: Props) {
   const latest = useRef(props);
   latest.current = props;
   const fitted = useRef<number | null>(null);
+  /** Fin du dernier glisser-déposer (point ou suggestion) : le clic qui suit est ignoré. */
+  const lastDragEnd = useRef(0);
 
   useEffect(() => {
     if (!container.current) return;
@@ -151,7 +157,52 @@ export function MapView(props: Props) {
       });
       setReady(true);
     });
+    // Glisser une suggestion à examiner (organisateur) : à la fin du geste, proposer de la valider à cet endroit.
+    const startSuggestionDrag = (e: MapLayerMouseEvent | MapLayerTouchEvent) => {
+      const f = e.features?.[0];
+      if (!latest.current.canEdit || !f || f.properties.status !== 'a_examiner') return;
+      if ('originalEvent' in e && e.originalEvent instanceof MouseEvent && e.originalEvent.button !== 0) return;
+      e.preventDefault(); // la carte ne défile pas pendant le geste
+      const id = Number(f.properties.id);
+      const start = e.point;
+      let last: Position = [e.lngLat.lng, e.lngLat.lat];
+      let ghost: maplibregl.Marker | null = null;
+      const pane = m.getContainer().parentElement;
+      const onMove = (ev: MapMouseEvent | MapTouchEvent) => {
+        if (!ghost && Math.hypot(ev.point.x - start.x, ev.point.y - start.y) < 5) return;
+        last = [ev.lngLat.lng, ev.lngLat.lat];
+        if (!ghost) {
+          const el = document.createElement('div');
+          el.className = 'point-marker draft selected';
+          el.innerHTML = '<span class="point-dot"></span>';
+          ghost = new maplibregl.Marker({ element: el }).setLngLat(last).addTo(m);
+          pane?.classList.add('glisser-en-cours');
+          m.getCanvas().style.cursor = 'grabbing';
+        }
+        ghost.setLngLat(last);
+      };
+      const onUp = () => {
+        m.off('mousemove', onMove);
+        m.off('touchmove', onMove);
+        m.off('mouseup', onUp);
+        m.off('touchend', onUp);
+        pane?.classList.remove('glisser-en-cours');
+        m.getCanvas().style.cursor = '';
+        if (!ghost) return;
+        ghost.remove();
+        lastDragEnd.current = Date.now();
+        latest.current.onSuggestionDrop?.(id, last);
+      };
+      m.on('mousemove', onMove);
+      m.on('touchmove', onMove);
+      m.on('mouseup', onUp);
+      m.on('touchend', onUp);
+    };
+    m.on('mousedown', 'suggestions', startSuggestionDrag);
+    m.on('touchstart', 'suggestions', startSuggestionDrag);
     m.on('click', (e: MapMouseEvent) => {
+      // Le relâchement d'un glisser-déposer ne compte pas comme un clic.
+      if (Date.now() - lastDragEnd.current < 400) return;
       const hits = m.queryRenderedFeatures(e.point, { layers: ['suggestions'] });
       const f = hits[0];
       const clicked: Position = [e.lngLat.lng, e.lngLat.lat];
@@ -255,7 +306,6 @@ export function MapView(props: Props) {
   // affiche les valeurs saisies, avant enregistrement : ce qu'on voit est ce qui sera enregistré.
   const markers = useRef(new Map<string, { marker: maplibregl.Marker; el: HTMLDivElement }>());
   const dragging = useRef<string | null>(null);
-  const lastDragEnd = useRef(0);
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
@@ -269,10 +319,13 @@ export function MapView(props: Props) {
         color: p.missions[0]?.color ?? '#495057',
         selected: editing || (props.selection?.kind === 'point' && props.selection.id === p.id),
         // Organisateur : tout point se glisse directement (hors mode ajout) ; sa bulle s'ouvre alors.
-        draggable: editing || (props.canEdit && !props.addMode),
+        draggable: editing || props.canEdit,
         draft: false,
         id: p.id,
       });
+    }
+    if (props.ghost) {
+      wanted.set('ghost', { position: props.ghost, name: 'Nouvelle position', color: '#ffffff', selected: true, draggable: false, draft: true, id: null });
     }
     if (edit?.kind === 'new') {
       wanted.set('draft', { position: edit.position, name: edit.name, color: '#ffffff', selected: true, draggable: true, draft: true, id: null });
@@ -338,7 +391,7 @@ export function MapView(props: Props) {
       if (dragging.current !== key) marker.setLngLat(w.position);
       marker.setDraggable(w.draggable);
     }
-  }, [props.points, props.edit, props.selection, props.canEdit, props.addMode, ready]);
+  }, [props.points, props.edit, props.selection, props.canEdit, props.ghost, ready]);
 
   // Bulle (menu, suggestion, édition) : rendue À CÔTÉ de la carte, en superposition placée sur le point.
   // Si elle était dans le conteneur de la carte, MapLibre intercepterait souris et toucher (déplacement de la

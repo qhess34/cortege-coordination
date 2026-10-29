@@ -158,7 +158,7 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 .point-marker .point-label {
   position: absolute; left: 24px; top: 50%; transform: translateY(-50%); white-space: nowrap; max-width: 220px;
   overflow: hidden; text-overflow: ellipsis; font-size: 12px; font-weight: 600; color: #1b1f24;
-  background: rgba(255,255,255,.88); padding: 0 4px; border-radius: 3px; pointer-events: none;
+  background: rgba(255,255,255,.88); padding: 0 4px; border-radius: 3px;
 }
 .point-marker.selected .point-dot { border-color: #000; box-shadow: 0 0 0 3px rgba(255,255,255,.9); }
 .point-marker.draggable { cursor: grab; }

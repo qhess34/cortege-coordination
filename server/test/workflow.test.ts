@@ -223,3 +223,16 @@ describe('remplacement du GPX', () => {
     expect(summary.lastAnalysis.outdated).toBe(true);
   });
 });
+
+describe('suggestion déplacée sur la carte', () => {
+  it('valider à une autre position crée le point à cet endroit, avec sa distance recalculée', async () => {
+    const s = ((await orga.get('/api/events/' + eventId + '/suggestions?status=a_examiner')).json() as { id: number; stableKey: string }[])[0]!;
+    const r = await orga.post('/api/suggestions/' + s.id + '/validate', { position: at(150, 12) });
+    expect(r.statusCode).toBe(201);
+    const p = (await orga.get('/api/points/' + r.json().pointId)).json();
+    expect(p.position[0]).toBeCloseTo(at(150, 12)[0], 6);
+    expect(p.distance).toBeGreaterThan(0);
+    expect((await orga.post('/api/suggestions/' + s.id + '/validate', { position: at(160, 12) })).statusCode).toBe(409);
+    expect((await orga.post('/api/events/' + eventId + '/points', { name: 'x', position: [200, 0] })).statusCode).toBe(400);
+  });
+});

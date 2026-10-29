@@ -142,7 +142,14 @@ export async function suggestionRoutes(app: FastifyInstance) {
   app.post('/api/suggestions/:id/validate', async (req, reply) => {
     const u = requireUser(req);
     const id = idParam(req);
-    const b = z.object({ name: z.string().trim().min(1).max(200).optional(), description: z.string().max(5000).optional() }).parse(req.body ?? {});
+    const b = z
+      .object({
+        name: z.string().trim().min(1).max(200).optional(),
+        description: z.string().max(5000).optional(),
+        /** Position choisie par l'organisateur (suggestion déplacée sur la carte) ; sinon celle d'OSM. */
+        position: z.tuple([z.number().min(-180).max(180), z.number().min(-90).max(90)]).optional(),
+      })
+      .parse(req.body ?? {});
     return tx(app.db, async (c) => {
       const eventId = await requireEntityAccess(c, u, 'map_suggestions', id, 'organisation');
       const s = (await c.query('SELECT *, ST_X(geom) AS lon, ST_Y(geom) AS lat FROM map_suggestions WHERE id = $1 FOR UPDATE', [id])).rows[0];
@@ -152,15 +159,20 @@ export async function suggestionRoutes(app: FastifyInstance) {
       const data = s.data as Suggestion;
       const name = b.name ?? (TYPE_LABEL[s.type] ?? s.type) + (data.routeNames[0] ? ' — ' + data.routeNames[0] : '') +
         (data.branches[0]?.name ? ' / ' + data.branches[0].name : '');
+      let distance = s.distance_m as number | null;
+      if (b.position) distance = (await currentTrack(c, eventId))?.route.locate(b.position)?.distance ?? null;
       const p = (
         await c.query(
           `INSERT INTO mission_points(event_id, origin, suggestion_id, name, description, type, geom, distance_m, created_by)
-           VALUES ($1, 'suggestion', $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-          [eventId, id, name.slice(0, 200), b.description ?? data.reasons.join('\n'), s.type, s.geom, s.distance_m, u.id],
+           VALUES ($1, 'suggestion', $2, $3, $4, $5,
+                   CASE WHEN $9::float8 IS NULL THEN $6::geometry ELSE ST_SetSRID(ST_MakePoint($9, $10), 4326) END, $7, $8)
+           RETURNING id`,
+          [eventId, id, name.slice(0, 200), b.description ?? data.reasons.join('\n'), s.type, s.geom, distance, u.id,
+            b.position?.[0] ?? null, b.position?.[1] ?? null],
         )
       ).rows[0];
       await c.query("UPDATE map_suggestions SET status = 'validee', decided_at = now(), decided_by = $2 WHERE id = $1", [id, u.id]);
-      await audit(c, { actorId: u.id, eventId, entity: 'map_suggestion', entityId: id, action: 'validation', details: { pointId: p.id } });
+      await audit(c, { actorId: u.id, eventId, entity: 'map_suggestion', entityId: id, action: 'validation', details: { pointId: p.id, position: b.position } });
       await audit(c, { actorId: u.id, eventId, entity: 'mission_point', entityId: p.id, action: 'creation', details: { origin: 'suggestion', suggestionId: id, name } });
       return reply.status(201).send({ pointId: p.id });
     });

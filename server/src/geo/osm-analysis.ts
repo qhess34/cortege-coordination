@@ -433,8 +433,7 @@ export function analyse(
       if (tags.highway === 'road') uncertainties.push(describeBranch(branch) + ' : type de voie non précisé (highway=road).');
       if (UNCERTAIN_HIGHWAYS.has(tags.highway ?? '') && branch.motor === 'oui' && tags.highway !== 'road') branch.motor = 'incertain';
       if (tags.fixme || tags.FIXME) uncertainties.push(describeBranch(branch) + ' : note de correction OSM (fixme=' + (tags.fixme ?? tags.FIXME) + ').');
-      if (MAJOR_HIGHWAYS.has(tags.highway ?? '') && tags.oneway === undefined && tags.junction === undefined)
-        uncertainties.push(describeBranch(branch) + ' : sens de circulation non renseigné, double sens supposé.');
+      // Sans « oneway » (ni giratoire), une voie est à double sens : c'est la convention OSM, pas une incertitude.
       if (tags.barrier) uncertainties.push(describeBranch(branch) + ' : barrière indiquée (barrier=' + tags.barrier + ').');
       branches.push(branch);
     }
