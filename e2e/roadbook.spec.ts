@@ -33,6 +33,11 @@ test('roadbook d’équipe et roadbook complet', async ({ page }) => {
   await expect(rb.locator('.rb-point h3')).toHaveText(['1. Accès véhicules — Rue B côté nord (Rue A)', '2. Angle est']);
   await expect(rb).toContainText('Relève à 15 h');
   await expect(rb).toContainText('Rue B');
+  await expect(rb).toContainText('Voie d’accès : Rue B — double sens');
+  // Pas de données techniques OSM (types de voie, identifiants).
+  await expect(rb).not.toContainText('voie OSM');
+  await expect(rb).not.toContainText('residential');
+  await expect(rb).not.toContainText('openstreetmap.org/?');
   await expect(rb).not.toContainText('Orphelin');
   // Cartes : vue d'ensemble + une par point.
   await expect(rb.locator('img.rb-map')).toHaveCount(3, { timeout: 30_000 });

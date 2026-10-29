@@ -32,6 +32,17 @@ const TYPE_LABEL: Record<string, string> = {
   verification: 'À vérifier',
 };
 
+const FLOW_TEXT: Record<string, string> = { entrant: 'sens unique vers le cortège', sortant: 'sens unique depuis le cortège', double_sens: 'double sens', variable: 'sens variable' };
+
+/** Description initiale d'un point issu d'une suggestion : une phrase utile sur le terrain, sans données techniques. */
+export function fieldSummary(d: Suggestion): string {
+  const b = d.branches[0];
+  const voie = b ? (b.name ?? 'voie sans nom') + (b.motor === 'non' ? ' (piétons, vélos)' : ' (' + FLOW_TEXT[b.flow] + ')') : 'voie sans nom';
+  const sur = d.routeNames[0] ? ', sur ' + d.routeNames[0] : '';
+  if (d.junction) return 'Accès côté ' + d.junction.side + ' par ' + voie + sur + '.';
+  return 'Voie(s) : ' + d.branches.map((x) => x.name ?? 'voie sans nom').join(', ') + sur + '.';
+}
+
 export function publicSuggestion(r: Record<string, unknown>) {
   const data = r.data as Suggestion;
   return {
@@ -173,7 +184,7 @@ export async function suggestionRoutes(app: FastifyInstance) {
            VALUES ($1, 'suggestion', $2, $3, $4, $5,
                    CASE WHEN $9::float8 IS NULL THEN $6::geometry ELSE ST_SetSRID(ST_MakePoint($9, $10), 4326) END, $7, $8)
            RETURNING id`,
-          [eventId, id, name.slice(0, 200), b.description ?? data.reasons.join('\n'), s.type, s.geom, distance, u.id,
+          [eventId, id, name.slice(0, 200), b.description ?? fieldSummary(data), s.type, s.geom, distance, u.id,
             b.position?.[0] ?? null, b.position?.[1] ?? null],
         )
       ).rows[0];

@@ -75,3 +75,12 @@ describe('roadbook', () => {
     expect((await new Agent(ctx.app).get('/api/events/' + eventId + '/roadbook')).statusCode).toBe(401);
   });
 });
+
+describe('description initiale d’un point issu d’une suggestion', () => {
+  it('une phrase simple, sans identifiant ni type de voie OSM', async () => {
+    const rb = (await orga.get('/api/events/' + eventId + '/roadbook?team=' + nord)).json();
+    const d: string = rb.teams[0].missions[0].point.description;
+    expect(d).toBe('Accès côté nord par Rue B (double sens), sur Rue A.');
+    expect(d).not.toMatch(/OSM|residential/);
+  });
+});

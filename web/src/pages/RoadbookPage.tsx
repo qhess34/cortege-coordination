@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { ApiError, api } from '../api';
 import { DEFAULT_BASEMAP } from '../basemaps';
 import { renderSnapshots, type SnapshotPoint, type SnapshotView } from '../components/mapSnapshots';
-import { FLOW, MOTOR, SUGGESTION_TYPES, coords, dateTime, km } from '../labels';
+import { SUGGESTION_TYPES, coords, dateTime, fieldDescription, km } from '../labels';
 import type { Position } from '../types';
 
 interface RbPoint {
@@ -31,7 +31,7 @@ function readBasemap(): string {
   }
 }
 
-const osmLink = (p: Position) => 'https://www.openstreetmap.org/?mlat=' + p[1].toFixed(6) + '&mlon=' + p[0].toFixed(6) + '#map=18/' + p[1].toFixed(6) + '/' + p[0].toFixed(6);
+const FLOW_SHORT: Record<string, string> = { entrant: 'sens unique vers le cortège', sortant: 'sens unique depuis le cortège', double_sens: 'double sens', variable: 'sens variable' };
 
 export function RoadbookPage({ eventId, teamId }: { eventId: number; teamId: number | null }) {
   const [rb, setRb] = useState<Roadbook | null>(null);
@@ -65,7 +65,7 @@ export function RoadbookPage({ eventId, teamId }: { eventId: number; teamId: num
     for (const p of [...rb.teams.flatMap((t) => t.missions.map((m) => m.point)), ...rb.unassigned]) {
       if (seen.has(p.id)) continue;
       seen.add(p.id);
-      views.push({ key: 'p' + p.id, center: p.position, zoom: 17, highlight: 'p' + p.id });
+      views.push({ key: 'p' + p.id, center: p.position, zoom: 18.5, highlight: 'p' + p.id });
     }
     return { points, views };
   }, [rb]);
@@ -185,14 +185,14 @@ function PointCard({ p, order, instructions, images }: { p: RbPoint; order?: num
             <dt>Coordonnées</dt><dd>{coords(p.position)}</dd>
             {p.osm && p.osm.routeNames.length > 0 && <><dt>Voie du cortège</dt><dd>{p.osm.routeNames.join(', ')}</dd></>}
           </dl>
-          {p.description && <p className="pre">{p.description}</p>}
+          {fieldDescription(p.description) && <p className="pre">{fieldDescription(p.description)}</p>}
           {instructions && <p className="pre"><b>Consignes :</b> {instructions}</p>}
           {p.osm && p.osm.branches.length > 0 && (
-            <><h4>Voies raccordées (OSM)</h4>
-              <ul>{p.osm.branches.map((b, i) => <li key={i}>{b.name ?? 'voie sans nom'} — {MOTOR[b.motor]}{b.motor !== 'non' ? ', ' + FLOW[b.flow] : ''}</li>)}</ul></>
+            <p>
+              <b>Voie d’accès :</b>{' '}
+              {p.osm.branches.map((b) => (b.name ?? 'voie sans nom') + (b.motor === 'non' ? ' (piétons, vélos)' : ' — ' + FLOW_SHORT[b.flow])).join(' ; ')}
+            </p>
           )}
-          {p.osm && p.osm.uncertainties.length > 0 && <p className="small muted">À vérifier : {p.osm.uncertainties.join(' ')}</p>}
-          <p className="small"><a href={osmLink(p.position)}>{osmLink(p.position)}</a></p>
           <div className="rb-notes">Notes :</div>
         </div>
         <MapImage src={images['p' + p.id]} alt={'Carte du point ' + p.name} />

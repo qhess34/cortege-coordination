@@ -47,3 +47,16 @@ export function suggestionPlace(s: { routeNames: string[]; branches: { name: str
   if (s.junction) return branch + ' côté ' + s.junction.side + (s.routeNames[0] ? ' (' + s.routeNames[0] + ')' : '');
   return (s.routeNames[0] ?? 'voie sans nom') + (s.branches[0]?.name ? ' / ' + s.branches[0].name : '');
 }
+
+/**
+ * Description lisible sur le terrain : les lignes techniques générées par l'analyse OSM (identifiants, types de
+ * voie) sont retirées des descriptions enregistrées avant ce nettoyage.
+ */
+export function fieldDescription(text: string): string {
+  return text
+    .split('\n')
+    .filter((l) => !/(voie|relation|nœud|nœuds) OSM|^Raccordée :|^Voie :|nœuds OSM regroupés/i.test(l))
+    .join('\n')
+    .trim();
+}
+
