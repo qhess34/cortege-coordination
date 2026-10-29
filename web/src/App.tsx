@@ -54,7 +54,7 @@ export function App() {
 
   // Lien d'invitation (/rejoindre/<jeton>) : accessible sans connexion.
   const joinToken = window.location.pathname.match(/^\/rejoindre\/([A-Za-z0-9_-]+)$/)?.[1];
-  if (joinToken) return <JoinPage token={joinToken} onJoined={loadMe} />;
+  if (joinToken) return <JoinPage token={joinToken} />;
 
   if (me === undefined) return <div className="center">Chargement…</div>;
   if (me === null) return <LoginPage onLogin={loadMe} />;

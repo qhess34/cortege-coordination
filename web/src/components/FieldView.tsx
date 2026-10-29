@@ -1,5 +1,5 @@
 // Vue terrain (téléphone) d'une équipe : ma mission, grands boutons de statut, itinéraire, messages, incidents.
-import { useCallback, useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError, api } from '../api';
 import { MISSION_STATUS, SUGGESTION_TYPES, km } from '../labels';
 import type { Position } from '../types';
@@ -47,11 +47,33 @@ type Tab = 'mission' | 'messages' | 'incidents';
 
 const meters = (m: number) => (m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km');
 const minutes = (s: number) => Math.max(1, Math.round(s / 60)) + ' min';
+/**
+ * Lien qui ouvre l'application de navigation du téléphone vers un point : Android propose le choix de l'application
+ * (lien geo:), iPhone ouvre Plans en itinéraire à pied, un ordinateur ouvre Google Maps dans le navigateur.
+ */
+export function gpsLink(to: Position, label: string, ua = navigator.userAgent): { href: string; external: boolean } {
+  const [lon, lat] = to.map((v) => v.toFixed(6));
+  if (/android/i.test(ua)) return { href: 'geo:' + lat + ',' + lon + '?q=' + lat + ',' + lon + '(' + encodeURIComponent(label) + ')', external: false };
+  if (/iphone|ipad|ipod/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) {
+    return { href: 'https://maps.apple.com/?daddr=' + lat + ',' + lon + '&dirflg=w&q=' + encodeURIComponent(label), external: true };
+  }
+  return { href: 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lon + '&travelmode=walking', external: true };
+}
+
+function GpsButton({ to, label, big }: { to: Position; label: string; big?: boolean }) {
+  const l = gpsLink(to, label);
+  return (
+    <a className={'button' + (big ? ' big' : '')} href={l.href} {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+      aria-label={'Ouvrir l’application GPS vers ' + label}>🧭 GPS</a>
+  );
+}
+
 const osmDirections = (from: Position | null, to: Position) =>
   'https://www.openstreetmap.org/directions?engine=fossgis_osrm_foot&route=' +
   (from ? from[1] + '%2C' + from[0] : '') + '%3B' + to[1] + '%2C' + to[0] + '#map=17/' + to[1] + '/' + to[0];
 
-export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; header?: ReactNode; onUnauthorized?: () => void }) {
+export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: number; header?: ReactNode; footer?: ReactNode; onUnauthorized?: () => void }) {
+  const scroller = useRef<HTMLElement>(null);
   const [data, setData] = useState<Terrain | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [toast, setToast] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
@@ -141,7 +163,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
   const progressTo = (m: FieldMission) => (data.progress && m.point.distance !== null ? m.point.distance - data.progress.distance : null);
 
   return (
-    <main className="field" data-testid="vue-terrain" style={{ ['--team' as string]: data.team.color }}>
+    <main ref={scroller} className="field" data-testid="vue-terrain" style={{ ['--team' as string]: data.team.color }}>
       <header className="field-header">
         {header}
         <div className="row">
@@ -197,6 +219,9 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
                 }), 'Demande d’aide envoyée à l’organisation.')}>🆘 Aide</button>
                 <button className="big" onClick={() => setTab('incidents')}>Signaler un incident</button>
               </div>
+              <div className="row">
+                <GpsButton to={current.point.position} label={current.point.name} big />
+              </div>
             </div>
           )}
 
@@ -222,7 +247,12 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
             </div>
           )}
 
-          {next && <p className="card small">Point suivant : <b>{next.point.name}</b> <span className="muted">({km(next.point.distance)})</span></p>}
+          {next && (
+            <div className="card small row" data-testid="point-suivant">
+              <span className="grow">Point suivant : <b>{next.point.name}</b> <span className="muted">({km(next.point.distance)})</span></span>
+              <GpsButton to={next.point.position} label={next.point.name} />
+            </div>
+          )}
 
           {(data.event.instructions || data.team.instructions) && (
             <details className="card">
@@ -237,7 +267,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
             <ol className="missions">
               {data.missions.map((m) => (
                 <li key={m.id}>
-                  <button className="link" onClick={() => { setSelected(m.id); window.scrollTo({ top: 0, behavior: 'smooth' }); }}>{m.point.name}</button>
+                  <button className="link" onClick={() => { setSelected(m.id); scroller.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}>{m.point.name}</button>
                   <span className="muted small"> — {MISSION_STATUS[m.status] ?? m.status}{m.id === current?.id ? ' (affichée)' : ''}</span>
                 </li>
               ))}
@@ -249,6 +279,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
       {tab === 'messages' && <Messages data={data} teamId={teamId} act={act} busy={busy} />}
       {tab === 'incidents' && <Incidents data={data} teamId={teamId} current={current} me={me} locate={locate} act={act} busy={busy} />}
 
+      {footer && <footer className="field-footer">{footer}</footer>}
       {toast && <div className={'toast ' + toast.kind} role="status">{toast.text}</div>}
     </main>
   );

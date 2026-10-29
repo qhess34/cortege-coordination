@@ -104,3 +104,56 @@ test('application installable : manifeste, icône et service worker servis', asy
   expect(await sw.text()).toContain("startsWith('/api/')");
   expect((await request.get('/icone.svg')).ok()).toBe(true);
 });
+
+test('vue terrain sur téléphone : la page défile, bouton GPS, tuiles de carte avec Referer', async ({ page, browser }) => {
+  await page.request.post('/api/auth/login', { data: { login: 'admin', password: 'admin-e2e-motdepasse' }, headers: H });
+  const ev = await (await page.request.post('/api/events', { data: { name: 'Téléphone', instructions: 'Consignes.\n'.repeat(40) }, headers: H })).json();
+  await page.request.post('/api/events/' + ev.id + '/tracks', {
+    headers: H, multipart: { file: { name: 'a.gpx', mimeType: 'application/gpx+xml', buffer: Buffer.from(gpxFrom([[[0, 0], [500, 0]]])) } },
+  });
+  const team = await (await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Sud', color: '#e63946' }, headers: H })).json();
+  for (const [name, x] of [['Rond-point', 100], ['Place du marché', 300]] as const) {
+    const p = await (await page.request.post('/api/events/' + ev.id + '/points', { data: { name, position: at(x, 0) }, headers: H })).json();
+    await page.request.post('/api/teams/' + team.id + '/missions', { data: { pointId: p.id }, headers: H });
+  }
+  const inv = await (await page.request.post('/api/teams/' + team.id + '/invitations', { data: { kind: 'equipe', admission: 'immediate' }, headers: H })).json();
+
+  const ctx = await browser.newContext({
+    viewport: { width: 390, height: 700 }, locale: 'fr-FR', serviceWorkers: 'block', hasTouch: true, isMobile: true,
+    userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Mobile Safari/537.36',
+  });
+  // Plan vectoriel indisponible : la carte se rabat sur les tuiles OSM, qui exigent un Referer.
+  await ctx.route('https://tiles.openfreemap.org/**', (r) => r.fulfill({ status: 503, body: '' }));
+  const referers: (string | undefined)[] = [];
+  await ctx.route('https://tile.openstreetmap.org/**', (r) => {
+    referers.push(r.request().headers()['referer']);
+    return r.fulfill({ status: 204, body: '' });
+  });
+  const phone = await ctx.newPage();
+  await phone.goto(inv.path);
+  await phone.getByLabel('Votre nom ou pseudonyme').fill('Lou');
+  await phone.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
+  const field = phone.getByTestId('vue-terrain');
+  await expect(field.getByTestId('ma-mission')).toContainText('Rond-point');
+
+  // Tuiles demandées avec l'origine du site comme Referer (sinon 403 chez OpenStreetMap).
+  await expect.poll(() => referers.length).toBeGreaterThan(0);
+  expect(referers.every((r) => r && new URL(r).pathname === '/')).toBe(true);
+
+  // GPS : lien geo: sur Android, vers le point en cours et le point suivant.
+  const gps = field.getByTestId('ma-mission').getByRole('link', { name: /GPS vers Rond-point/ });
+  expect(await gps.getAttribute('href')).toMatch(/^geo:48\.85\d+,2\.35\d+\?q=.*\(Rond-point\)$/);
+  await expect(field.getByTestId('point-suivant').getByRole('link', { name: /GPS vers Place du marché/ })).toBeVisible();
+
+  // La vue défile jusqu'en bas, sur un écran de téléphone comme sur un grand écran.
+  const last = field.locator('summary', { hasText: 'Toutes les missions' });
+  for (const size of [{ width: 390, height: 700 }, { width: 1280, height: 700 }]) {
+    await phone.setViewportSize(size);
+    await expect(last).not.toBeInViewport();
+    await phone.mouse.move(size.width / 2, 200);
+    await phone.mouse.wheel(0, 4000);
+    await expect(last).toBeInViewport();
+    await phone.mouse.wheel(0, -8000);
+  }
+  await ctx.close();
+});

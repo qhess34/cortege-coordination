@@ -12,7 +12,7 @@ interface Info {
   connectedAs: string | null;
 }
 
-export function JoinPage({ token, onJoined }: { token: string; onJoined: () => void }) {
+export function JoinPage({ token }: { token: string }) {
   const [info, setInfo] = useState<Info | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pseudonym, setPseudonym] = useState('');
@@ -30,8 +30,9 @@ export function JoinPage({ token, onJoined }: { token: string; onJoined: () => v
     try {
       await api.post('/api/rejoindre/' + encodeURIComponent(token), info?.recovery ? {} : { pseudonym });
       // Le lien ne sert plus : on le retire de l'adresse (historique compris), la session prend le relais.
-      window.history.replaceState(null, '', '/#/moi');
-      onJoined();
+      // Vrai rechargement (et pas history.replaceState) : la page /rejoindre/… est servie sans Referer, ce que les
+      // serveurs de tuiles refusent (403) ; la page d'accueil retrouve la politique normale.
+      window.location.replace('/#/moi');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : 'Impossible de rejoindre l’équipe.');
       setBusy(false);

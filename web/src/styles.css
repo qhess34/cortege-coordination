@@ -257,15 +257,16 @@ button.big { font-size: 1.1rem; padding: .7rem 1.2rem; width: 100%; }
 .page.participant .missions li { padding: .4rem 0; }
 
 /* Lot 3 : vue terrain (téléphone) et coordination */
-.field { max-width: 40rem; margin: 0 auto; padding: .75rem .75rem 4rem; }
+/* La vue terrain est la zone qui défile (l'application occupe tout l'écran sans défiler elle-même). */
+.field { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 max(.75rem, calc((100% - 40rem) / 2)) 3rem; }
 .field h1 { font-size: 1.3rem; margin: 0; }
 .field h2 { font-size: 1.2rem; margin: .2rem 0 .4rem; }
-.field-header { margin-bottom: .5rem; }
+.field-header { margin-bottom: .5rem; padding-top: .75rem; }
 .field-tabs { display: flex; gap: .25rem; position: sticky; top: 0; z-index: 5; background: var(--bg, #f4f6f8); padding: .35rem 0; margin-bottom: .5rem; }
 .field-tabs button { flex: 1; font-size: 1rem; padding: .6rem .3rem; }
 .field-tabs button[aria-selected='true'] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
 .field-tabs .count { display: inline-block; min-width: 1.3em; margin-left: .3rem; padding: 0 .35rem; border-radius: 999px; background: var(--danger); color: #fff; font-size: .8rem; }
-.field-footer { text-align: center; padding: 1rem; }
+.field-footer { text-align: center; padding: 1.5rem 0 0; }
 .sync { font-size: .8rem; white-space: nowrap; }
 .sync.on { color: #2a7d3f; }
 .sync.off { color: var(--muted); }
@@ -294,3 +295,4 @@ button.big { font-size: 1.1rem; padding: .7rem 1.2rem; width: 100%; }
 .coord-team p { margin: .2rem 0; }
 .stat b.alert { color: var(--danger); }
 .event-title .sync { margin-left: .5rem; }
+a.button.big { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 3.2rem; font-weight: 600; text-decoration: none; }

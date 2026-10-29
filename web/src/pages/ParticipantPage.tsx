@@ -45,10 +45,8 @@ export function ParticipantPage({ onLogout }: { onLogout: () => void }) {
   // Membre admis : la vue terrain (mission, messages, incidents).
   if (moi.team) {
     return (
-      <>
-        <FieldView teamId={moi.team.id} onUnauthorized={() => void load()} />
-        <footer className="field-footer"><button className="link small" onClick={() => void leave()}>Se connecter avec un compte d’organisation</button></footer>
-      </>
+      <FieldView teamId={moi.team.id} onUnauthorized={() => void load()}
+        footer={<button className="link small" onClick={() => void leave()}>Se connecter avec un compte d’organisation</button>} />
     );
   }
   return (

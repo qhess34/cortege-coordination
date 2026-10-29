@@ -5,6 +5,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
 import { useEffect, useRef } from 'react';
 import { BASEMAPS } from '../basemaps';
+import { loadVectorBasemap } from './vectorBasemap';
 import type { Position } from '../types';
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -50,12 +51,15 @@ export function FieldMap({ track, points, me, route, color }: Props) {
       style: {
         version: 8,
         sources: { fond: { type: 'raster', tiles: [osm.tiles!], tileSize: 256, maxzoom: osm.maxzoom, attribution: osm.attribution } },
-        layers: [{ id: 'fond', type: 'raster', source: 'fond' }],
+        // Tuiles OSM en images : seulement en secours si le plan vectoriel échoue.
+        layers: [{ id: 'fond', type: 'raster', source: 'fond', layout: { visibility: 'none' } }],
       },
       center: current?.position ?? latest.current.track[0]?.[0] ?? [2.35, 48.85],
       zoom: current ? 17 : 14,
       attributionControl: { compact: true },
       dragRotate: false,
+      // Sur téléphone : un doigt fait défiler la page, deux doigts déplacent la carte.
+      cooperativeGestures: true,
       pitchWithRotate: false,
     });
     map.current = m;
@@ -79,6 +83,10 @@ export function FieldMap({ track, points, me, route, color }: Props) {
       });
       ready.current = true;
       sync();
+      const vector = BASEMAPS.find((b) => b.style);
+      const fallback = () => { if (m.getLayer('fond')) m.setLayoutProperty('fond', 'visibility', 'visible'); };
+      if (vector?.style) loadVectorBasemap(m, vector.style, 'parcours').catch(fallback);
+      else fallback();
     });
     return () => { ready.current = false; m.remove(); map.current = null; };
     // La carte est créée une fois ; les données suivent par sync().
