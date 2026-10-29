@@ -4,10 +4,9 @@ import { idParam, requireUser } from '../app.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
 import { badRequest, conflict, HttpError } from '../errors.js';
-import { DEFAULT_OPTIONS, analyse, excludedTypes, mergeOverpass, overpassQueries, type OverpassResponse, type Suggestion } from '../geo/osm-analysis.js';
-import { simplify } from '../geo/route.js';
+import type { Suggestion } from '../geo/osm-analysis.js';
 import { requireEntityAccess, requireEventRole } from '../permissions.js';
-import { mergeSuggestions } from '../services/merge.js';
+import { getAnalysisJob, runAnalysis, startAnalysisJob } from '../services/analysis.js';
 import { currentTrack } from '../services/track.js';
 
 const AnalysisBody = z
@@ -79,53 +78,26 @@ const SUGGESTION_SELECT = `
     LEFT JOIN mission_points p ON p.suggestion_id = s.id AND p.deleted_at IS NULL`;
 
 export async function suggestionRoutes(app: FastifyInstance) {
+  // Analyse OSM. `?async=1` : lancée en tâche de fond, réponse immédiate avec l'identifiant à suivre.
   app.post('/api/events/:id/analyses', async (req, reply) => {
     const u = requireUser(req);
     const eventId = idParam(req);
     await requireEventRole(app.db, u, eventId, 'organisation');
     const b = AnalysisBody.parse(req.body ?? {});
-    const track = await currentTrack(app.db, eventId);
-    if (!track) throw badRequest("Importez d'abord un parcours GPX.");
-    const options = { ...DEFAULT_OPTIONS, ...b };
-    const corridor = b.corridor ?? 40;
-    // Tracé simplifié à 10 m (le couloir de 40 m reste couvert), interrogé par tronçons successifs :
-    // une seule grosse requête fait souvent échouer les serveurs publics (502, 504).
-    const queries = overpassQueries(corridor, track.route.segments.map((s) => simplify(s, 10)));
-
-    let data;
-    try {
-      const responses: OverpassResponse[] = [];
-      for (const q of queries) responses.push(await app.osm(q));
-      data = mergeOverpass(responses);
-    } catch (e) {
-      req.log.warn({ err: (e as Error).message, queries: queries.length }, 'échec Overpass');
-      throw new HttpError(502, 'Données OSM indisponibles. ' + (e as Error).message);
+    if ((req.query as Record<string, string>).async === '1') {
+      if (!(await currentTrack(app.db, eventId))) throw badRequest("Importez d'abord un parcours GPX.");
+      const job = startAnalysisJob(app, u.id, eventId, b);
+      return reply.status(202).send({ jobId: job.id, status: job.status, progress: job.progress });
     }
-    const result = analyse(track.route, data, options);
+    return reply.status(201).send(await runAnalysis(app, u.id, eventId, b));
+  });
 
-    return tx(app.db, async (c) => {
-      await c.query('SELECT 1 FROM events WHERE id = $1 FOR UPDATE', [eventId]);
-      const a = (
-        await c.query(
-          `INSERT INTO osm_analyses(event_id, track_id, options, osm_timestamp, source, stats, report, created_by)
-           VALUES ($1, $2, $3, $4, $5, $6, '{}', $7) RETURNING id, created_at`,
-          [eventId, track.id, JSON.stringify({ ...options, corridor }), result.osmTimestamp, app.config.overpassUrls.join(', '), JSON.stringify(result.stats), u.id],
-        )
-      ).rows[0];
-      const merge = await mergeSuggestions(c, eventId, a.id, result.suggestions, excludedTypes(options));
-      const report = {
-        merge,
-        ignoredCrossings: result.ignoredCrossings,
-        unmatched: result.unmatched,
-        coverage: result.coverage,
-      };
-      await c.query('UPDATE osm_analyses SET report = $2 WHERE id = $1', [a.id, JSON.stringify(report)]);
-      await audit(c, {
-        actorId: u.id, eventId, entity: 'osm_analysis', entityId: a.id, action: 'analyse',
-        details: { added: merge.added.length, alreadyPresent: merge.alreadyPresent.length, modified: merge.modified.length, missing: merge.missing.length },
-      });
-      return reply.status(201).send({ id: a.id, createdAt: a.created_at, osmTimestamp: result.osmTimestamp, stats: result.stats, ...report });
-    });
+  app.get('/api/analyses/taches/:jobId', async (req) => {
+    const u = requireUser(req);
+    const job = getAnalysisJob(String((req.params as Record<string, string>).jobId));
+    if (!job) throw new HttpError(404, 'Analyse introuvable (terminée depuis plus d’une heure ou serveur redémarré).');
+    await requireEventRole(app.db, u, job.eventId, 'organisation');
+    return { jobId: job.id, status: job.status, progress: job.progress, result: job.result ?? null, error: job.error ?? null };
   });
 
   app.get('/api/events/:id/analyses', async (req) => {

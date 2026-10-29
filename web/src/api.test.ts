@@ -21,3 +21,13 @@ describe('client API', () => {
     expect(err).toMatchObject({ status: 409, message: 'Conflit', details: { missions: [1] } });
   });
 });
+
+describe('réponses non JSON', () => {
+  it("page d'erreur d'un proxy (504) : message clair, sans plantage", async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue(new Response('<html>504 Gateway Time-out</html>', { status: 504 })));
+    const err = (await api.post('/api/x').catch((e: unknown) => e)) as ApiError;
+    expect(err).toBeInstanceOf(ApiError);
+    expect(err.status).toBe(504);
+    expect(err.message).toMatch(/n’a pas répondu à temps \(HTTP 504\)/);
+  });
+});

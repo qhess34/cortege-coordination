@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { api } from '../../api';
+import { ApiError, api } from '../../api';
 import { TYPE_COLORS } from '../../components/MapView';
 import { FLOW, MOTOR, PERTINENCE, SUGGESTION_STATUS, SUGGESTION_TYPES, coords, km, suggestionPlace } from '../../labels';
 import type { Suggestion } from '../../types';
@@ -15,7 +15,9 @@ interface MergeReport {
 interface AnalysisReport {
   merge: MergeReport; coverage: number; unmatched: [number, number][]; osmTimestamp: string | null;
   ignoredCrossings: { wayIds: [number, number]; distance: number; reason: string }[];
+  warnings?: string[];
 }
+interface AnalysisJob { jobId: string; status: 'en_cours' | 'termine' | 'echec'; progress: { done: number; total: number }; result: AnalysisReport | null; error: string | null }
 
 export function SuggestionsPanel({ data, canEdit, run, selection, select }: PanelProps) {
   const [status, setStatus] = useState('a_examiner');
@@ -35,9 +37,22 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
   const list = data.suggestions.filter((s) => (!status || s.status === status) && (!type || s.type === type) && (!pertinence || s.pertinence === pertinence));
   const current = selection?.kind === 'suggestion' ? data.suggestions.find((s) => s.id === selection.id) : undefined;
 
+  // Analyse en tâche de fond (elle peut durer plus longtemps que ce qu'accepte un proxy HTTPS), avec avancement.
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const analyse = async () => {
     setBusy(true);
-    await run(async () => setReport(await api.post<AnalysisReport>('/api/events/' + data.event.id + '/analyses', { includeNonMotor, includeOutgoing, perAccess })), 'Analyse terminée.');
+    setReport(null);
+    await run(async () => {
+      let job = await api.post<AnalysisJob>('/api/events/' + data.event.id + '/analyses?async=1', { includeNonMotor, includeOutgoing, perAccess });
+      while (job.status === 'en_cours') {
+        setProgress(job.progress);
+        await new Promise((r) => setTimeout(r, 1500));
+        job = await api.get<AnalysisJob>('/api/analyses/taches/' + job.jobId);
+      }
+      if (job.status === 'echec') throw new ApiError(502, job.error ?? 'Analyse impossible.');
+      setReport(job.result);
+    }, 'Analyse terminée.');
+    setProgress(null);
     setBusy(false);
   };
 
@@ -57,7 +72,7 @@ export function SuggestionsPanel({ data, canEdit, run, selection, select }: Pane
           <label className="check" title="Décoché : un seul point au centre de chaque carrefour">
             <input type="checkbox" checked={perAccess} onChange={(e) => setPerAccess(e.target.checked)} /> Un point par accès entrant (chaque côté d’où l’on peut arriver)
           </label>
-          <button className="primary" disabled={busy || !data.track} onClick={analyse}>{busy ? 'Analyse en cours…' : data.summary.lastAnalysis ? 'Relancer l’analyse' : 'Lancer l’analyse'}</button>
+          <button className="primary" disabled={busy || !data.track} onClick={analyse}>{busy ? (progress && progress.total ? 'Interrogation d’Overpass : tronçon ' + Math.min(progress.done + 1, progress.total) + '/' + progress.total + '…' : 'Analyse en cours…') : data.summary.lastAnalysis ? 'Relancer l’analyse' : 'Lancer l’analyse'}</button>
           {!data.track && <p className="muted">Importez d’abord un parcours.</p>}
           <p className="muted small">
             Ces options s’appliquent aux prochaines analyses : les suggestions déjà proposées restent jusqu’à ce que vous
@@ -118,6 +133,13 @@ function AnalysisSummary({ report, select }: { report: AnalysisReport; select: P
   const m = report.merge;
   return (
     <div className="report">
+      {(report.warnings ?? []).map((w, i) => <p key={i} className="warning">{w}</p>)}
+      {m.added.length === 0 && m.alreadyPresent.length === 0 && m.modified.length === 0 && (
+        <p className="warning">
+          Aucune suggestion : aucun accès n’a été trouvé dans les données OSM reçues
+          (parcours reconnu à {Math.round(report.coverage * 100)} %). Si c’est inattendu, relancez l’analyse plus tard.
+        </p>
+      )}
       <p>
         <b>{m.added.length}</b> nouvelle(s), <b>{m.alreadyPresent.length}</b> déjà présente(s), <b>{m.ignoredDismissed.length}</b> écartée(s) ignorée(s).
         Parcours reconnu sur les voies OSM à {Math.round(report.coverage * 100)} %.

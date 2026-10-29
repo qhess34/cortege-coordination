@@ -83,6 +83,7 @@ export function EventPage({ eventId }: { eventId: number }) {
   const closeEdit = useCallback(() => setEdit(null), []);
   // Équipes dont les points sont masqués sur la carte (0 = points sans équipe).
   const [hiddenTeams, setHiddenTeams] = useState<Set<number>>(new Set());
+  const [recenter, setRecenter] = useState(0);
   // Menu ouvert par un clic sur la carte, et bulle de la suggestion sélectionnée.
   const [menuAt, setMenuAt] = useState<Position | null>(null);
   const [suggestionPopup, setSuggestionPopup] = useState(false);
@@ -309,6 +310,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           popup={popup}
           onBasemapError={(text) => setToast({ kind: 'error', text })}
           focus={focus}
+          recenter={recenter}
           basemap={basemap}
           panoramax={{ enabled: panoramax, tilesUrl: PANORAMAX_API + '/map/{z}/{x}/{y}.mvt', clicked: inspectAt, photo: photoView ? null : photoAt, view: photoView }}
         />
@@ -318,6 +320,7 @@ export function EventPage({ eventId }: { eventId: number }) {
               {addMode ? 'Terminer l’ajout' : '+ Ajouter des points'}
             </button>
           )}
+          {data.track && <button onClick={() => setRecenter((n) => n + 1)} title="Recentrer la carte sur le parcours">⤢ Parcours</button>}
           <label className="check"><input type="checkbox" checked={showDismissed} onChange={(e) => setShowDismissed(e.target.checked)} /> Afficher les suggestions écartées</label>
           <select className="basemap" value={basemap} onChange={(e) => chooseBasemap(e.target.value)} aria-label="Fond de carte">
             {BASEMAPS.map((b) => <option key={b.id} value={b.id}>{b.label}</option>)}

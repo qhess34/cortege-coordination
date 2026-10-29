@@ -2,7 +2,15 @@
 // identification du client, et refus des réponses tronquées.
 import type { OverpassResponse } from '../geo/osm-analysis.js';
 
-export type OsmFetcher = (query: string) => Promise<OverpassResponse>;
+export interface FetchOptions {
+  /**
+   * La réponse doit contenir au moins une voie : une réponse vide est suspecte (serveur dégradé) et le serveur
+   * suivant est essayé. Si tous répondent vide, la réponse vide est renvoyée, marquée `emptyEverywhere`.
+   */
+  requireWays?: boolean;
+}
+export type OsmResult = OverpassResponse & { emptyEverywhere?: boolean };
+export type OsmFetcher = (query: string, opts?: FetchOptions) => Promise<OsmResult>;
 
 export class OverpassError extends Error {}
 
@@ -38,8 +46,9 @@ export function overpassFetcher(urls: string[], userAgent: string, opts: Overpas
   const sleep = opts.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   if (!urls.length) throw new Error('Aucun serveur Overpass configuré (OVERPASS_URL).');
 
-  return async (query) => {
+  return async (query, fetchOpts = {}) => {
     const failures: string[] = [];
+    let empty: OverpassResponse | null = null;
     for (let round = 0; round < rounds; round++) {
       if (round > 0) await sleep(delayMs * round);
       for (const url of urls) {
@@ -79,9 +88,15 @@ export function overpassFetcher(urls: string[], userAgent: string, opts: Overpas
           failures.push(host(url) + ' : réponse incomplète (' + json.remark.slice(0, 200) + ')');
           continue;
         }
+        if (fetchOpts.requireWays && !json.elements.some((e) => e.type === 'way')) {
+          failures.push(host(url) + ' : réponse vide');
+          empty = json;
+          continue;
+        }
         return json;
       }
     }
+    if (empty) return { ...empty, emptyEverywhere: true };
     throw new OverpassError(
       'Aucun serveur Overpass n’a fourni de données complètes (' + failures.join(' ; ') + '). ' +
         'Les serveurs publics sont probablement surchargés : réessayez dans quelques minutes, ou configurez ' +

@@ -14,7 +14,7 @@ export interface TestContext {
   app: FastifyInstance;
   db: Db;
   /** Réponse Overpass renvoyée par le faux client ; modifiable entre deux analyses. */
-  osm: { data: OverpassResponse; queries: string[]; fail: Error | null };
+  osm: { data: OverpassResponse; queries: string[]; fail: Error | null; respond: ((query: string, n: number) => OverpassResponse) | null };
   close: () => Promise<void>;
 }
 
@@ -27,14 +27,14 @@ export async function setup(): Promise<TestContext> {
     port: 0, host: '127.0.0.1', databaseUrl: TEST_DB, cookieSecure: false, sessionTtlHours: 12,
     overpassUrls: ['http://overpass.test'], userAgent: 'test', maxGpxBytes: 1024 * 1024, webDist: null,
   };
-  const osm: TestContext['osm'] = { data: { elements: [] }, queries: [], fail: null };
+  const osm: TestContext['osm'] = { data: { elements: [] }, queries: [], fail: null, respond: null };
   const app = await buildApp({
     db,
     config,
     osm: async (q) => {
       osm.queries.push(q);
       if (osm.fail) throw osm.fail;
-      return structuredClone(osm.data);
+      return structuredClone(osm.respond ? osm.respond(q, osm.queries.length) : osm.data);
     },
   });
   return { app, db, osm, close: async () => { await app.close(); await db.end(); } };

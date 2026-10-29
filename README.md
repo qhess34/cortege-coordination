@@ -164,7 +164,9 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - **Overpass** (`overpass-api.de`) est un service public gratuit, sans garantie, limité à quelques requêtes par
   minute et par adresse. L'application interroge un couloir de 40 m autour du parcours, découpé en tronçons envoyés
   l'un après l'autre (une seule grosse requête fait souvent répondre 502 ou 504), réessaie sur les erreurs
-  passagères en passant au serveur suivant, refuse les réponses tronquées, et conserve les résultats. Pour un usage régulier : instance Overpass auto-hébergée sur un extrait
+  passagères en passant au serveur suivant, refuse les réponses tronquées, considère une réponse sans aucune voie
+  comme suspecte (serveur suivant, puis erreur explicite plutôt que « aucune suggestion »), et conserve les
+  résultats. L'analyse tourne en tâche de fond (avancement affiché) pour ne pas être coupée par un proxy HTTPS. Pour un usage régulier : instance Overpass auto-hébergée sur un extrait
   régional (Geofabrik), puis `OVERPASS_URL`.
 - **Tuiles** `tile.openstreetmap.org` : soumises à la [politique d'usage](https://operations.osmfoundation.org/policies/tiles/)
   de la fondation OSM (usage modéré, pas de téléchargement massif). Pour un usage soutenu : fournisseur commercial

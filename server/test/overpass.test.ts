@@ -90,3 +90,21 @@ describe('client Overpass', () => {
     await expect(f('q')).resolves.toEqual({ elements: [] });
   });
 });
+
+describe('client Overpass : réponses vides', () => {
+  it('une réponse sans voie fait essayer le serveur suivant', async () => {
+    const fetchImpl = (async (url: string) => ok(url.includes('a.test') ? { elements: [] } : { elements: [{ type: 'way', id: 1, nodes: [1, 2] }] })) as unknown as typeof fetch;
+    const f = overpassFetcher(['https://a.test/api', 'https://b.test/api'], 'test', { fetchImpl, sleep: noSleep });
+    const r = await f('q', { requireWays: true });
+    expect(r.elements).toHaveLength(1);
+    expect(r.emptyEverywhere).toBeUndefined();
+  });
+
+  it('vide partout : réponse vide signalée comme telle', async () => {
+    const fetchImpl = (async () => ok({ elements: [] })) as unknown as typeof fetch;
+    const f = overpassFetcher(['https://a.test/api'], 'test', { fetchImpl, sleep: noSleep });
+    expect(await f('q', { requireWays: true })).toMatchObject({ elements: [], emptyEverywhere: true });
+    // Sans exigence, une réponse vide est acceptée telle quelle.
+    expect(await f('q')).toEqual({ elements: [] });
+  });
+});

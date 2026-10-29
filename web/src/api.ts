@@ -14,7 +14,19 @@ async function request<T>(method: string, url: string, body?: unknown): Promise<
   }
   const res = await fetch(url, init);
   const text = await res.text();
-  const json = text ? JSON.parse(text) : null;
+  let json: { error?: string; details?: unknown } | null = null;
+  try {
+    json = text ? JSON.parse(text) : null;
+  } catch {
+    // Réponse non JSON : page d'erreur d'un proxy (délai dépassé, serveur arrêté…).
+    if (res.ok) throw new ApiError(res.status, 'Réponse inattendue du serveur.');
+    throw new ApiError(
+      res.status,
+      res.status >= 502 && res.status <= 504
+        ? 'Le serveur n’a pas répondu à temps (HTTP ' + res.status + '). Réessayez dans un instant.'
+        : 'Erreur du serveur (HTTP ' + res.status + ').',
+    );
+  }
   if (!res.ok) throw new ApiError(res.status, json?.error ?? 'Erreur ' + res.status, json?.details);
   return json as T;
 }

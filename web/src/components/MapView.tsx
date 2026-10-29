@@ -46,6 +46,8 @@ interface Props {
   popup: { key: string; position: Position; content: ReactNode } | null;
   /** Le fond vectoriel n'a pas pu être chargé (le fond raster de secours est affiché). */
   onBasemapError?: (message: string) => void;
+  /** Demande de recentrage sur le parcours (change à chaque demande). */
+  recenter?: number;
   /** Demande de centrage (n change à chaque demande). */
   focus?: { position: Position; n: number } | null;
   /** Identifiant du fond de carte (voir basemaps.ts). */
@@ -251,6 +253,7 @@ export function MapView(props: Props) {
         // Le sprite du style vectoriel remplace celui de la carte : on remet nos images si besoin.
         if (!m.hasImage('arrow')) m.addImage('arrow', arrowImage());
         void showVector(true);
+        ensureTrack();
       }, (e: Error) => {
         setVectorFailed(true);
         latest.current.onBasemapError?.('Plan vectoriel indisponible (' + e.message + ') : plan OSM en images affiché.');
@@ -301,13 +304,45 @@ export function MapView(props: Props) {
 
   const route = useMemo(() => (props.track ? new Route(props.track.geometry.coordinates) : null), [props.track]);
 
+  // Tracé : données injectées dans la source, puis vérifiées quand la carte est au repos (garde-fou : un
+  // rechargement de style ou une course avec le chargement du fond vectoriel ne doit pas laisser la carte sans tracé).
+  const trackData = useRef<Parameters<GeoJSONSource['setData']>[0]>(empty);
+  const ensureTrack = useCallback(() => {
+    const m = map.current;
+    if (!m || !m.isStyleLoaded()) return;
+    if (!m.getSource('track')) return;
+    (m.getSource('track') as GeoJSONSource).setData(trackData.current);
+  }, []);
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready || !props.track) return;
+    let tries = 0;
+    const check = () => {
+      if (tries++ >= 3 || !props.track) return;
+      const drawn = m.getSource('track') && m.querySourceFeatures('track').length > 0;
+      const inView = m.getBounds().intersects?.(new maplibregl.LngLatBounds(route!.bbox().slice(0, 2) as [number, number], route!.bbox().slice(2) as [number, number])) ?? true;
+      if (!drawn && inView) {
+        ensureTrack();
+        m.once('idle', check);
+      }
+    };
+    m.once('idle', check);
+  }, [props.track, ready, ensureTrack, route]);
+
+  // Recentre la carte sur le parcours (bouton de la barre d'outils).
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready || !route || !props.recenter) return;
+    const [w, s, e, n] = route.bbox();
+    m.fitBounds([[w, s], [e, n]], { padding: 60, duration: 300 });
+  }, [props.recenter, ready]);
+
   // Tracé et repères kilométriques.
   useEffect(() => {
     const m = map.current;
     if (!m || !ready) return;
-    (m.getSource('track') as GeoJSONSource).setData(
-      props.track ? { type: 'Feature', geometry: props.track.geometry, properties: {} } : empty,
-    );
+    trackData.current = props.track ? { type: 'Feature', geometry: props.track.geometry, properties: {} } : empty;
+    (m.getSource('track') as GeoJSONSource).setData(trackData.current);
     kmMarkers.current.forEach((k) => k.remove());
     kmMarkers.current = [];
     if (!route || !props.track) return;
@@ -325,7 +360,10 @@ export function MapView(props: Props) {
     }
     if (fitted.current !== props.track.id) {
       const [w, s, e, n] = route.bbox();
-      m.fitBounds([[w, s], [e, n]], { padding: 60, duration: 0 });
+      const fit = () => m.fitBounds([[w, s], [e, n]], { padding: 60, duration: 0 });
+      // Carte pas encore dimensionnée : le cadrage serait faux (parcours hors champ) ; on le refait dès qu'elle l'est.
+      if (m.getContainer().clientWidth < 50 || m.getContainer().clientHeight < 50) m.once('resize', fit);
+      fit();
       fitted.current = props.track.id;
     }
   }, [props.track, route, ready]);
