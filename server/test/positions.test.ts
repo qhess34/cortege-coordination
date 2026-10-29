@@ -1,6 +1,6 @@
 // Partage de position en direct (facultatif) et arrivée automatique au point.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Agent, createUser, setup, type TestContext } from './helpers/app.js';
+import { Agent, createUser, memberAgent, setup, type TestContext } from './helpers/app.js';
 import { at, gpxFrom } from './helpers/osm.js';
 
 let ctx: TestContext;
@@ -30,9 +30,7 @@ beforeAll(async () => {
     await orga.post('/api/teams/' + teamA + '/missions', { pointId: p });
   }
   for (const [team, name] of [[teamA, 'Alice'], [teamB, 'Bob']] as const) {
-    const inv = (await orga.post('/api/teams/' + team + '/invitations', { kind: 'equipe', admission: 'immediate' })).json();
-    const a = new Agent(ctx.app);
-    await a.join(inv.token, name);
+    const a = await memberAgent(ctx, orga, team, name);
     if (name === 'Alice') alice = a; else bob = a;
   }
 });

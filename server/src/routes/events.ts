@@ -47,7 +47,7 @@ export async function eventRoutes(app: FastifyInstance) {
   app.get('/api/events', async (req) => {
     const u = requireUser(req);
     // Un participant voit son équipe par /api/moi, pas la liste des manifestations.
-    if (u.accountType === 'participant') return [];
+    if (u.globalRole === 'membre') return [];
     const r = u.globalRole === 'admin'
       ? await app.db.query("SELECT e.*, 'organisateur' AS role FROM events e ORDER BY coalesce(starts_at, created_at) DESC")
       : await app.db.query(
@@ -184,7 +184,7 @@ export async function eventRoutes(app: FastifyInstance) {
     await requireEventRole(app.db, u, id, 'lecture');
     const r = await app.db.query(
       `SELECT u.id, u.login, u.display_name, m.role FROM event_memberships m JOIN users u ON u.id = m.user_id
-        WHERE m.event_id = $1 AND u.account_type = 'compte' ORDER BY u.display_name`,
+        WHERE m.event_id = $1 AND u.global_role <> 'membre' ORDER BY u.display_name`,
       [id],
     );
     return r.rows.map((x) => ({ id: x.id, login: x.login, displayName: x.display_name, role: x.role }));
@@ -198,7 +198,7 @@ export async function eventRoutes(app: FastifyInstance) {
     return tx(app.db, async (c) => {
       await requireEventRole(c, u, id, 'organisation');
       // Les participants invités n'obtiennent jamais d'accès à la manifestation entière.
-      const target = await c.query("SELECT id FROM users WHERE id = $1 AND disabled_at IS NULL AND account_type = 'compte'", [b.userId]);
+      const target = await c.query("SELECT id FROM users WHERE id = $1 AND disabled_at IS NULL AND global_role <> 'membre'", [b.userId]);
       if (!target.rowCount) throw notFound('Compte');
       await c.query(
         'INSERT INTO event_memberships(event_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (event_id, user_id) DO UPDATE SET role = EXCLUDED.role',

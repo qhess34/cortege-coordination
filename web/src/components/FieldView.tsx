@@ -8,6 +8,7 @@ import guideMembre from '../../../docs/guide-membre.md?raw';
 import { FieldMap } from './FieldMap';
 import { Markdown } from './Markdown';
 import { OwnTracksCard, type OwnTracksState } from './OwnTracksCard';
+import { TeamAccess } from './TeamAccess';
 import { useSharing } from './useSharing';
 
 export interface FieldMission {
@@ -37,6 +38,8 @@ export interface Terrain {
   canDeclare: { tete: boolean; queue: boolean };
   /** Peut prendre en charge et clore les incidents affichés (volante, responsable, organisation). */
   canHandleIncidents: boolean;
+  /** Peut ajouter ou retirer des membres depuis la vue terrain (responsable autorisé, organisation). */
+  canManageMembers: boolean;
   /** Points tenus par toutes les équipes (équipes sans point fixe). */
   eventPoints: { name: string; position: Position; distance: number | null; status: string; teamName: string; color: string }[];
   routing: boolean;
@@ -312,6 +315,13 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
               <summary>Consignes</summary>
               {data.event.instructions && <><h3>Générales</h3><p className="pre">{data.event.instructions}</p></>}
               {data.team.instructions && <><h3>De l’équipe</h3><p className="pre">{data.team.instructions}</p></>}
+            </details>
+          )}
+
+          {data.canManageMembers && (
+            <details className="card">
+              <summary>Gérer les membres de l’équipe</summary>
+              <TeamAccess teamId={teamId} organizer={data.me.organizer} onChanged={load} />
             </details>
           )}
 

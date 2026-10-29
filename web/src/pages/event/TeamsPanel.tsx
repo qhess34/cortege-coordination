@@ -121,11 +121,10 @@ type Section = 'points' | 'membres' | 'reglages';
 function TeamCard(props: PanelProps & { team: Team; members: Member[]; expanded: boolean; onToggle: () => void }) {
   const { team: t, data, canEdit, expanded, onToggle } = props;
   // Le serveur reste seul juge : un responsable n'a accès aux membres que si l'organisateur l'a permis.
-  const canManage = canEdit || (data.event.role === 'responsable' && t.leaderCanInvite);
+  const canManage = canEdit || (data.event.role === 'responsable' && t.leaderCanManage);
   const [section, setSection] = useState<Section>('points');
   const held = t.missions.filter((m) => m.status === 'en_position').length;
   const alerts = [
-    t.pendingAdmissions > 0 && t.pendingAdmissions + ' demande(s) à valider',
     !t.disabled && t.kind === 'points' && t.missions.length === 0 && 'aucun point',
     !t.disabled && t.members === 0 && !t.leaderName && 'aucun membre',
   ].filter(Boolean) as string[];
@@ -149,13 +148,13 @@ function TeamCard(props: PanelProps & { team: Team; members: Member[]; expanded:
           <nav className="segmented" role="tablist" aria-label={'Équipe ' + t.name}>
             <button role="tab" aria-selected={section === 'points'} onClick={() => setSection('points')}>Points ({t.missions.length})</button>
             {canManage && !t.disabled && (
-              <button role="tab" aria-selected={section === 'membres'} onClick={() => setSection('membres')} title="Membres, QR code et liens d’invitation">Membres ({t.members}){t.pendingAdmissions ? ' •' : ''}</button>
+              <button role="tab" aria-selected={section === 'membres'} onClick={() => setSection('membres')} title="Membres de l’équipe">Membres ({t.members})</button>
             )}
             {canEdit && <button role="tab" aria-selected={section === 'reglages'} onClick={() => setSection('reglages')}>Réglages</button>}
           </nav>
           {section === 'points' && <TeamPoints {...props} />}
           {section === 'membres' && canManage && !t.disabled && (
-            <TeamAccess team={t} eventName={data.event.name} organizer={canEdit} accounts={props.members} onChanged={props.reload} />
+            <TeamAccess teamId={t.id} organizer={canEdit} onChanged={props.reload} />
           )}
           {section === 'reglages' && canEdit && <TeamSettings {...props} />}
         </div>
@@ -250,7 +249,7 @@ function MissionMenu({ mission: m, team: t, data, run, onClose }: Pick<PanelProp
 
 function TeamSettings({ team: t, members, run }: PanelProps & { team: Team; members: Member[] }) {
   const initial = () => ({
-    name: t.name, color: t.color, description: t.description, instructions: t.instructions, leaderUserId: t.leaderUserId, leaderCanInvite: t.leaderCanInvite, kind: t.kind,
+    name: t.name, color: t.color, description: t.description, instructions: t.instructions, leaderUserId: t.leaderUserId, leaderCanManage: t.leaderCanManage, kind: t.kind,
   });
   const [form, setForm] = useState(initial);
   // Les valeurs suivent l'équipe si elle est modifiée ailleurs.
@@ -276,8 +275,8 @@ function TeamSettings({ team: t, members, run }: PanelProps & { team: Team; memb
           {members.map((m) => <option key={m.id} value={m.id}>{m.displayName} ({m.role})</option>)}
         </select>
       </label>
-      <label className="check"><input type="checkbox" checked={form.leaderCanInvite} onChange={(e) => setForm({ ...form, leaderCanInvite: e.target.checked })} />
-        Les responsables de l’équipe peuvent inviter et valider des membres</label>
+      <label className="check"><input type="checkbox" checked={form.leaderCanManage} onChange={(e) => setForm({ ...form, leaderCanManage: e.target.checked })} />
+        Les responsables de l’équipe peuvent ajouter et retirer des membres</label>
       <label>Description<input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} /></label>
       <label>Consignes de l’équipe<textarea rows={3} value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} /></label>
       <div className="row">

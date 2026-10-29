@@ -12,7 +12,7 @@ Ce guide accompagne les personnes qui préparent la manifestation et coordonnent
 3. **Lancer l'analyse** des rues qui croisent le parcours, onglet *Suggestions*, puis valider ou écarter chaque suggestion.
 4. **Compléter les points** à la main sur la carte si besoin.
 5. **Créer les équipes** et leur **répartir les points**, onglet *Équipes*.
-6. **Inviter les membres** par QR code ou lien.
+6. **Ajouter les membres** à leur équipe (leurs comptes sont créés par un administrateur).
 7. **Imprimer les roadbooks** et vérifier les points sur place.
 8. Le jour J, suivre tout depuis l'onglet **Coordination**.
 
@@ -33,7 +33,7 @@ Ce guide accompagne les personnes qui préparent la manifestation et coordonnent
 Chaque manifestation de la liste propose deux boutons :
 
 - **🗺 Planifier** : l'interface complète, pensée pour un **ordinateur**. Elle sert à préparer la manifestation :
-  parcours, suggestions, points, équipes, invitations, roadbooks.
+  parcours, suggestions, points, équipes, membres, roadbooks.
 - **📱 Coordination en direct** : l'interface du jour J, pensée pour le **téléphone**. Une barre d'onglets en bas
   d'écran donne accès à :
   - *Direct* : compteurs et progression du cortège ;
@@ -47,14 +47,22 @@ Chaque manifestation de la liste propose deux boutons :
 ## Comptes et accès
 
 - Il n'y a **pas d'inscription en ligne**. Les comptes d'organisation sont créés par un administrateur (lien *Comptes*
-  dans la barre du haut, réservé aux administrateurs) : identifiant, nom affiché, mot de passe initial, rôle global.
+  dans la barre du haut, réservé aux administrateurs). Il y a deux sortes de comptes :
+  - **Membre d'équipe** : prénom, nom, e-mail facultatif. Pas d'identifiant ni de mot de passe : à la création,
+    l'administrateur obtient un **lien d'activation** (72 h, une seule fois) à transmettre à la personne (SMS, messagerie).
+    En l'ouvrant, elle est connectée sur son téléphone pour plusieurs jours. Ensuite, elle se reconnecte par lien :
+    e-mail (si elle a renseigné son adresse), QR code depuis un autre de ses appareils, ou nouveau lien envoyé par
+    l'organisation. Un membre ne voit que **ses équipes** (vue terrain), jamais la planification.
+  - **Organisateur** (ou administrateur) : identifiant et mot de passe, en plus de la connexion par lien.
+- **Expiration** (facultative) : à la date choisie, le compte est **supprimé automatiquement**. C'est pratique pour les
+  membres recrutés pour une seule manifestation. Elle se modifie dans *Comptes* → *Modifier*, où l'on peut aussi
+  désactiver ou supprimer un compte, ou le déconnecter de tous ses appareils.
 - Pour donner accès à une manifestation à un autre compte : onglet *Synthèse*, bloc **Accès des comptes**. Cherchez la
   personne et choisissez son rôle :
   - **Organisateur** : peut tout modifier ;
   - **Responsable** : consulte la manifestation et gère son équipe si l'organisation le permet ;
   - **Membre** : consulte seulement.
-- Les membres d'équipe **n'ont pas besoin de compte** : ils rejoignent leur équipe par QR code ou lien d'invitation
-  (voir *Équipes*).
+- Chaque personne gère son **profil** (prénom, nom, e-mail) depuis le lien *Profil*.
 
 ## Manifestations
 
@@ -122,30 +130,25 @@ Chaque manifestation de la liste propose deux boutons :
   - **Points** : sa liste dans l'ordre de passage (↑ ↓ pour réordonner). Le menu **⋯** permet de changer le statut, de
     confier le point à une autre équipe ou de le retirer. *+ Ajouter un point* propose d'abord les points sans équipe,
     puis ceux déjà tenus, pour un renfort.
-  - **Membres** : invitations et membres (voir ci-dessous).
+  - **Membres** : ajouter, retirer, envoyer un lien de connexion (voir ci-dessous).
   - **Réglages** : nom, couleur, type, responsable (compte), consignes de l'équipe, désactivation.
 - On peut aussi affecter une équipe depuis la **bulle d'un point** sur la carte. Les points prennent la couleur de leur
   équipe.
 
-### Inviter les membres
+### Les membres d'une équipe
 
 Dans la section **Membres** d'une équipe :
 
-- **QR code de l'équipe** : à imprimer ou afficher. Options :
-  - admission **immédiate** ou **après validation** ;
-  - nombre maximal de personnes, date limite ;
-  - suspendre, reprendre, régénérer (l'ancien QR ne marche plus) ou désactiver.
+- **Ajouter un membre** : cherchez la personne par son nom ou son e-mail, puis *Ajouter*. Vous pouvez ajouter les
+  comptes « membre d'équipe » et les comptes d'organisation qui ont accès à la manifestation. Seule l'organisation
+  désigne les **responsables**.
+- **Lien de connexion** : pour un membre qui a perdu son accès ou changé de téléphone. Le lien vaut 72 h et ne sert
+  qu'une fois ; il n'est **affiché qu'une fois**, copiez-le aussitôt et transmettez-le-lui.
+- **Retirer** : le membre perd aussitôt l'accès aux missions de l'équipe. Sa position partagée est effacée.
+- Réglage d'équipe : **« Les responsables peuvent ajouter et retirer des membres »**. Ils le font alors depuis leur vue
+  terrain (*Gérer les membres de l'équipe*).
 
-  Il ne donne que le rôle de membre.
-- **Liens individuels** : un lien à usage unique (24 h à 30 jours) pour une personne précise. Le lien n'est **affiché
-  qu'une fois** : copiez-le aussitôt. Seule l'organisation peut inviter un responsable.
-- **Demandes à valider** : *Accepter* ou *Refuser*. Un badge le signale dans la liste des équipes.
-- **Membres** : *Retirer* coupe l'accès immédiatement. *Lien de récupération* sert à un membre qui a changé de
-  téléphone : l'ancien appareil est déconnecté.
-- Réglage d'équipe : **« Les responsables peuvent inviter et valider des membres »**.
-
-> Ne testez pas vos propres QR codes dans le navigateur où vous êtes connecté : l'application le refuse pour ne pas
-> remplacer votre session. Utilisez un téléphone ou une fenêtre de navigation privée.
+> Le compte d'un membre est créé par un administrateur (page *Comptes*), qui lui transmet son lien d'activation.
 
 ## Roadbooks et exports
 
@@ -191,6 +194,7 @@ coupure, l'écran se recharge toutes les 30 secondes.
 
 - [ ] Parcours importé, analyse relancée après la dernière modification.
 - [ ] Tous les points ont une équipe (« ✓ Tous les points ont une équipe »).
+- [ ] Comptes des membres créés (avec une date d'expiration si besoin) et liens d'activation transmis.
 - [ ] Chaque équipe a des membres, et si possible un responsable.
 - [ ] Consignes générales et consignes d'équipe rédigées.
 - [ ] Roadbooks imprimés, points vérifiés sur place.
@@ -202,6 +206,8 @@ coupure, l'écran se recharge toutes les 30 secondes.
 - **« Aucune voie reçue » ou analyse très longue** : les serveurs OpenStreetMap publics sont saturés. Rien n'est
   modifié : réessayez plus tard.
 - **Le parcours ne s'affiche pas** : cliquez sur *⤢ Parcours*, ou rechargez la page.
-- **« Ressource introuvable » partout** : votre session a probablement changé, par exemple si un lien d'invitation a été
-  ouvert dans ce navigateur. Rechargez la page et reconnectez-vous.
-- **Un membre a perdu son accès** : section *Membres* de son équipe → *Lien de récupération*.
+- **« Ressource introuvable » partout** : votre session a probablement changé, par exemple si un lien de connexion d'un
+  autre compte a été ouvert dans ce navigateur. Rechargez la page et reconnectez-vous.
+- **Un membre a perdu son accès** : section *Membres* de son équipe → *Lien de connexion*.
+- **Un membre a disparu des comptes** : son compte a atteint sa date d'expiration et a été supprimé. Un administrateur
+  peut en créer un nouveau.

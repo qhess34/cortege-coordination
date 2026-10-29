@@ -6,11 +6,11 @@ import { EventPage } from './pages/EventPage';
 import { AdminPage } from './pages/AdminPage';
 import { HelpPage } from './pages/HelpPage';
 import { EventsPage } from './pages/EventsPage';
-import { JoinPage } from './pages/JoinPage';
 import { LinkLoginPage } from './pages/LinkLoginPage';
 import { LiveCoordPage } from './pages/LiveCoordPage';
 import { ConnectDevice } from './components/ConnectDevice';
-import { ParticipantPage } from './pages/ParticipantPage';
+import { MemberHome } from './pages/MemberHome';
+import { ProfilePage } from './pages/ProfilePage';
 import { RoadbookPage } from './pages/RoadbookPage';
 import { LoginPage } from './pages/LoginPage';
 import type { Me } from './types';
@@ -56,24 +56,36 @@ export function App() {
     return () => { document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check); };
   }, [meId]);
 
-  // Lien d'invitation (/rejoindre/<jeton>) : accessible sans connexion.
-  const joinToken = window.location.pathname.match(/^\/rejoindre\/([A-Za-z0-9_-]+)$/)?.[1];
-  if (joinToken) return <JoinPage token={joinToken} />;
   // Lien de connexion d'un compte (/connexion/<jeton>).
   const linkToken = window.location.pathname.match(/^\/connexion\/([A-Za-z0-9_-]+)$/)?.[1];
   if (linkToken) return <LinkLoginPage token={linkToken} />;
 
   if (me === undefined) return <div className="center">Chargement…</div>;
   if (me === null) return <LoginPage onLogin={loadMe} />;
-  // Participant (sans compte classique) : seulement son espace d'équipe.
-  if (me.accountType === 'participant') return <div className="app"><ParticipantPage onLogout={() => setMe(null)} /></div>;
+  const field = route.match(/^\/terrain\/(\d+)$/);
+
+  // Compte « membre » : ses équipes (vue terrain), son profil et l'aide ; rien de l'organisation des manifestations.
+  if (me.globalRole === 'membre') {
+    const nav = (
+      <nav className="row small member-nav">
+        <a href="#/equipes">← Mes équipes</a><a href="#/profil">Profil</a>
+      </nav>
+    );
+    return (
+      <div className="app">
+        {field ? <FieldView key={field[1]} teamId={Number(field[1])} header={nav} onUnauthorized={() => { location.hash = '#/equipes'; }} />
+          : route === '/profil' ? <ProfilePage onSaved={() => void loadMe()} onLogout={() => setMe(null)} />
+          : route === '/aide' ? <HelpPage memberOnly />
+          : <MemberHome me={me} autoOpen={route !== '/equipes'} />}
+      </div>
+    );
+  }
 
   const logout = async () => {
     await api.post('/api/auth/logout');
     setMe(null);
   };
   // Vue terrain d'une équipe dont le compte fait partie (#/terrain/<équipe>), plein écran comme sur téléphone.
-  const field = route.match(/^\/terrain\/(\d+)$/);
   if (field) {
     return (
       <div className="app">
@@ -93,6 +105,7 @@ export function App() {
         <a href="#/" className="brand">Coordination de cortège</a>
         <EventSwitcher me={me} currentId={m ? Number(m[1]) : null} />
         <span className="spacer" />
+        <a href="#/profil">Profil</a>
         <ConnectDevice />
         <a href="#/aide">Aide</a>
         {me.globalRole === 'admin' && <a href="#/admin">Comptes</a>}
@@ -103,6 +116,7 @@ export function App() {
         : m ? <EventPage key={m[1]} eventId={Number(m[1])} />
         : route === '/admin' && me.globalRole === 'admin' ? <AdminPage meId={me.id} />
         : route === '/aide' ? <HelpPage />
+        : route === '/profil' ? <ProfilePage onSaved={() => void loadMe()} onLogout={() => setMe(null)} />
         : <EventsPage me={me} />}
     </div>
   );

@@ -2,8 +2,9 @@ export type Position = [number, number];
 export type TeamKind = 'points' | 'volante' | 'ouverture' | 'fermeture';
 
 export interface Me {
-  id: number; login: string | null; displayName: string; globalRole: 'admin' | 'organisateur' | 'aucun';
-  accountType: 'compte' | 'participant'; eventId: number | null;
+  id: number; login: string | null; displayName: string;
+  /** « membre » : membre d'équipe (connexion par lien), qui ne voit que ses équipes. */
+  globalRole: 'admin' | 'organisateur' | 'membre' | 'aucun';
 }
 
 export interface EventInfo {
@@ -45,18 +46,19 @@ export interface TeamMission {
 export interface Team {
   id: number; name: string; color: string; description: string; instructions: string; leaderUserId: number | null;
   leaderName: string | null; status: string; disabled: boolean; version: number; missions: TeamMission[];
-  leaderCanInvite: boolean; members: number; pendingAdmissions: number;
+  leaderCanManage: boolean; members: number;
   kind: TeamKind;
 }
 
-export interface Invitation {
-  id: number; teamId: number; kind: 'equipe' | 'individuelle'; admission: 'immediate' | 'validation'; role: 'membre' | 'responsable';
-  label: string; maxUses: number | null; uses: number; expiresAt: string | null; suspended: boolean; revokedAt: string | null;
-  createdAt: string; participantId: number | null; token: string | null; path?: string;
-  state: 'valide' | 'revoquee' | 'suspendue' | 'expiree' | 'utilisee' | 'complete' | 'equipe_fermee';
+export interface TeamMember {
+  id: number; displayName: string; globalRole: Me['globalRole']; hasEmail: boolean; role: 'membre' | 'responsable'; joinedAt: string;
+  lastSeen: string | null; disabled: boolean; expiresAt: string | null;
 }
-
-export interface TeamMember { id: number; displayName: string; accountType: 'compte' | 'participant'; role: 'membre' | 'responsable'; joinedAt: string; lastSeen: string | null; disabled: boolean }
+/** Équipe d'un membre (page d'accueil d'un compte « membre »). */
+export interface MyTeam {
+  id: number; name: string; color: string; kind: TeamKind; role: 'membre' | 'responsable'; closed: boolean;
+  event: { id: number; name: string; startsAt: string | null; endsAt: string | null; status: string };
+}
 
 export interface Summary {
   suggestions: Record<string, number>; points: Record<string, number>; teams: { active: number; total: number };

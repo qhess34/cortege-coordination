@@ -20,10 +20,10 @@ export async function authRoutes(app: FastifyInstance) {
     if (f && f.count >= MAX_FAILURES && f.until > Date.now()) {
       throw new HttpError(429, 'Trop de tentatives. Réessayez dans quelques minutes.');
     }
-    const r = await app.db.query("SELECT id, password_hash, disabled_at FROM users WHERE login = $1 AND account_type = 'compte'", [body.login]);
+    const r = await app.db.query("SELECT id, password_hash, disabled_at, expires_at FROM users WHERE login = $1", [body.login]);
     const u = r.rows[0];
     const ok = await verifyPassword(body.password, u?.password_hash ?? null);
-    if (!u || !ok || u.disabled_at) {
+    if (!u || !ok || u.disabled_at || (u.expires_at && new Date(u.expires_at) <= new Date())) {
       // Purge des entrées expirées pour que des identifiants inventés ne remplissent pas la mémoire.
       if (failures.size > 10000) for (const [k, v] of failures) if (v.until <= Date.now()) failures.delete(k);
       const prev = failures.get(body.login);
@@ -52,7 +52,7 @@ export async function authRoutes(app: FastifyInstance) {
 
   app.get('/api/auth/me', async (req) => {
     const u = requireUser(req);
-    return { id: u.id, login: u.login, displayName: u.displayName, globalRole: u.globalRole, accountType: u.accountType, eventId: u.eventId };
+    return { id: u.id, login: u.login, displayName: u.displayName, globalRole: u.globalRole };
   });
 }
 

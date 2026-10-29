@@ -1,19 +1,17 @@
 // Équipes sans point fixe : fermeture (queue du cortège) et volante (incidents de toute la manifestation).
 import { expect, test, type Browser } from '@playwright/test';
+import { invite, signIn } from './helpers-membres';
 import { at, gpxFrom } from '../server/test/helpers/osm';
 
 const H = { 'x-requested-with': 'cortege' };
 
-async function phoneFor(browser: Browser, path: string, name: string, position: [number, number]) {
+async function phoneFor(browser: Browser, path: string, position: [number, number]) {
   const ctx = await browser.newContext({
     viewport: { width: 390, height: 844 }, locale: 'fr-FR', serviceWorkers: 'block',
     geolocation: { longitude: position[0], latitude: position[1] }, permissions: ['geolocation'],
   });
   const p = await ctx.newPage();
-  await p.goto(path);
-  await p.getByLabel('Votre nom ou pseudonyme').fill(name);
-  await p.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
-  await expect(p.getByTestId('vue-terrain')).toBeVisible();
+  await signIn(p, path);
   return { ctx, field: p.getByTestId('vue-terrain') };
 }
 
@@ -30,7 +28,7 @@ test('fermeture : « la queue est ici » ; volante : prend en charge l’inciden
   const volante = await mk('Volante 1', 'volante');
   const point = await (await page.request.post('/api/events/' + ev.id + '/points', { data: { name: 'Carrefour Poste', position: at(200, 0) }, headers: H })).json();
   await page.request.post('/api/teams/' + fixe.id + '/missions', { data: { pointId: point.id }, headers: H });
-  const invite = async (teamId: number) => (await (await page.request.post('/api/teams/' + teamId + '/invitations', { data: { kind: 'equipe', admission: 'immediate' }, headers: H })).json()).path;
+  const inviteMember = async (teamId: number, name: string) => (await invite(page, teamId, name)).path;
 
   await page.goto('/#/evenements/' + ev.id);
   await page.getByRole('tab', { name: 'Coordination' }).click();
@@ -38,7 +36,7 @@ test('fermeture : « la queue est ici » ; volante : prend en charge l’inciden
   await expect(coord.getByTestId('coord-equipe-' + fermeture.id)).toContainText('fermeture');
 
   // Fermeture : rôle expliqué, déclaration de la queue par la position du téléphone.
-  const balai = await phoneFor(browser, await invite(fermeture.id), 'Fanny', at(260, 8));
+  const balai = await phoneFor(browser, await inviteMember(fermeture.id, 'Fanny'), at(260, 8));
   await expect(balai.field.getByTestId('role-equipe')).toContainText('Fermeture');
   await balai.field.getByRole('button', { name: '📍 La queue est ici' }).click();
   await expect(balai.field.getByTestId('progression-queue')).toContainText('0,26 km');
@@ -48,12 +46,12 @@ test('fermeture : « la queue est ici » ; volante : prend en charge l’inciden
   await expect(balai.field.getByRole('button', { name: '📍 La tête est ici' })).toHaveCount(0);
 
   // L'équipe du point est prévenue.
-  const poste = await phoneFor(browser, await invite(fixe.id), 'Paul', at(200, 0));
+  const poste = await phoneFor(browser, await inviteMember(fixe.id, 'Paul'), at(200, 0));
   await expect(poste.field.getByTestId('queue-passee')).toBeVisible();
   await poste.field.getByRole('button', { name: /Aide/ }).click();
 
   // Volante : voit l'incident de l'équipe Poste et s'en charge.
-  const vol = await phoneFor(browser, await invite(volante.id), 'Victor', at(100, 0));
+  const vol = await phoneFor(browser, await inviteMember(volante.id, 'Victor'), at(100, 0));
   await expect(vol.field.getByTestId('role-equipe')).toContainText('1 incident(s) en cours');
   await vol.field.getByTestId('role-equipe').getByRole('button', { name: /incident/ }).click();
   const incidents = vol.field.getByTestId('incidents');

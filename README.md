@@ -2,7 +2,7 @@
 
 Application web de préparation du parcours d'une manifestation sur la voie publique et de coordination des équipes
 d'encadrement : import du parcours GPX, analyse du réseau viaire OpenStreetMap, points de mission, équipes et
-missions ordonnées. Une application mobile de terrain (PWA) et les invitations par QR code ou lien suivront.
+missions ordonnées, puis coordonne les équipes le jour J depuis une application mobile installable.
 
 ![Interface organisateur](docs/apercu-organisateur.png)
 
@@ -20,18 +20,18 @@ sous le tracé.*
 | Phase | Contenu | État |
 |---|---|---|
 | 1 — Prototype cartographique | Événements, GPX, carte, analyse OSM, suggestions, points, nouvelle analyse non destructive, équipes, missions ordonnées | **Fait** |
-| 2 — Comptes et invitations | Écran d'administration des comptes, accès par manifestation, QR code d'équipe, liens individuels, admission immédiate ou validée, sessions des participants, récupération d'accès | **Fait** |
+| 2 — Comptes et membres | Écran d'administration des comptes (organisation et membres d'équipe), accès par manifestation, connexion par lien, expiration et suppression automatique, membres ajoutés aux équipes par l'organisation | **Fait** |
 | 3 — Coordination mobile | Application terrain installable (PWA), vue de mission, statuts posés par les membres, itinéraire piéton, direct (WebSocket), tableau de coordination, messages, incidents, progression déclarée | **Fait** |
 | 4 — Fonctions avancées | Partage GPS facultatif (**fait** : navigateur et OwnTracks), hors ligne, relèves avancées, exports, diagnostic | En cours |
 
-La conception complète (architecture, modèle de données, écrans, flux d'invitation, risques) est dans
+La conception complète (architecture, modèle de données, écrans, risques) est dans
 [docs/CONCEPTION.md](docs/CONCEPTION.md).
 
 **Guides d'utilisation** (aussi affichés dans l'application : lien *Aide* de la barre du haut pour l'organisation,
 onglet *?* de la vue terrain pour les membres) :
 - [Guide de l'organisation](docs/guide-organisateur.md) — préparer la manifestation, répartir les équipes, coordonner
   le jour J ;
-- [Guide des membres d'équipe](docs/guide-membre.md) — rejoindre son équipe, sa mission sur téléphone, messages,
+- [Guide des membres d'équipe](docs/guide-membre.md) — activer son compte, sa mission sur téléphone, messages,
   incidents, partage de position.
 
 ## Ce que fait la phase 1
@@ -161,7 +161,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `PUBLIC_URL` | Adresse publique du site (`https://…`), pour la configuration OwnTracks | déduite de la requête |
 | `SMTP_URL` | Serveur d'envoi d'e-mails (`smtps://utilisateur:motdepasse@hôte:465`) pour les liens de connexion, facultatif | — |
 | `MAIL_FROM` | Expéditeur des e-mails | `Coordination de cortège <no-reply@localhost>` |
-| `JOIN_RATE_LIMIT` | Ouvertures de lien d'invitation par minute et par adresse IP | `30` |
+| `JOIN_RATE_LIMIT` | Ouvertures de liens de connexion par minute et par adresse IP | `30` |
 | `OVERPASS_URL` | Serveurs Overpass, séparés par des virgules, essayés dans l'ordre | `overpass-api.de`, puis `overpass.private.coffee` |
 | `OSM_USER_AGENT` | Identification envoyée à Overpass | `cortege-coordination (auto-hébergé)` |
 | `MAX_GPX_BYTES` | Taille maximale d'un GPX | 10 Mo |
@@ -202,17 +202,16 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
   réinitialisation du mot de passe.
 - **Accès des comptes** à une manifestation (onglet Synthèse) : recherche dans l'annuaire, rôle organisateur,
   responsable ou membre.
-- **Membres et invitations** par équipe (onglet Équipes) :
-  - QR code d'équipe imprimable, admission immédiate ou après validation, nombre maximal de personnes, expiration,
-    suspension, régénération (l'ancien QR cesse de fonctionner) ; il ne donne que le rôle de membre ;
-  - liens individuels à usage unique (24 h à 30 jours), affichés une seule fois, révocables ; seul un organisateur
-    peut inviter un responsable ;
-  - demandes à valider, liste des membres, retrait (accès coupé immédiatement), lien de récupération d'accès pour un
-    nouveau téléphone (les autres appareils sont déconnectés) ;
-  - option « les responsables peuvent inviter et valider des membres ».
-- **Participants sans compte** : la page `/rejoindre/<jeton>` demande seulement un pseudonyme ; la session (cookie
-  `HttpOnly`) dure jusqu'au lendemain de la manifestation, 30 jours au plus. Le participant ne voit que la page de son
-  équipe (consignes, missions) — la vraie vue mobile de mission arrive en phase 3.
+- **Comptes des membres d'équipe** (depuis la migration 009) : créés par un administrateur (prénom, nom, e-mail
+  facultatif, **date d'expiration** facultative après laquelle le compte est supprimé automatiquement), sans identifiant
+  ni mot de passe. Le **lien d'activation** obtenu à la création connecte le membre sur son téléphone pour plusieurs
+  jours. Il complète ensuite son **profil** (prénom, nom, e-mail).
+- **Membres d'une équipe** (onglet Équipes → Membres) : l'organisation ajoute des comptes membres (et des comptes
+  d'organisation ayant accès à la manifestation), désigne les responsables, renvoie un lien de connexion, retire un
+  membre. Les responsables peuvent le faire depuis leur vue terrain si l'organisation le permet.
+- Un **membre ne voit que ses équipes** (vue terrain), jamais la planification ni les autres équipes.
+- Les QR codes d'équipe et liens d'invitation des premières versions ont été retirés ; les anciens participants ont été
+  convertis en comptes membres, qui expirent au lendemain de leur manifestation.
 
 ## Connexion, installation et interfaces
 
@@ -232,8 +231,8 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 
 - **Vue terrain** (téléphone, installable sur l'écran d'accueil) pour chaque membre d'équipe : mission en cours,
   consignes, carte du point et du parcours, grands boutons *En route*, *Arrivé*, *Terminé*, *Relève nécessaire*,
-  *Aide* et *Signaler un incident*, point suivant, liste des missions, indicateur « ● direct ». Les participants y
-  arrivent directement ; un compte membre d'une équipe l'ouvre depuis l'onglet « Mon équipe ».
+  *Aide* et *Signaler un incident*, point suivant, liste des missions, indicateur « ● direct ». Les membres y
+  arrivent directement après connexion ; un compte d'organisation membre d'une équipe l'ouvre depuis l'onglet « Mon équipe ».
 - **Statuts depuis le terrain** : un membre ne peut qu'avancer sa mission (revenir en arrière ou réaffecter reste
   une décision de l'organisation) ; qui a changé le statut, et quand, est affiché.
 - **Incidents** (aide, sécurité, santé, circulation, matériel…) liés à la mission et, si la personne le choisit, à sa
@@ -307,9 +306,10 @@ Derrière un proxy HTTPS, autorisez la mise à niveau WebSocket sur `/api/direct
 - Limitation des tentatives de connexion (par adresse et par identifiant).
 - Verrou optimiste (`version`) sur les événements, points, équipes et missions : pas d'écrasement silencieux.
 - Journal d'audit des modifications importantes, sans secret.
-- Invitations : seul le hash SHA-256 d'un lien individuel est stocké ; les URL `/rejoindre/*` sont masquées dans les
+- Liens de connexion : seul le hash SHA-256 est stocké ; les URL `/connexion/*` sont masquées dans les
   journaux et servies avec `Referrer-Policy: no-referrer` ; ouvertures de lien limitées par adresse
-  (`JOIN_RATE_LIMIT`, 30 par minute par défaut). Un participant n'a jamais accès à l'organisation de la manifestation.
+  (`JOIN_RATE_LIMIT`, 30 par minute par défaut). Un compte membre n'a jamais accès à l'organisation de la manifestation ;
+  un compte expiré ne peut plus se connecter et est supprimé automatiquement (vérification toutes les heures).
 
 ## Structure du dépôt
 

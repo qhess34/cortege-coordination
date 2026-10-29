@@ -34,7 +34,7 @@ describe('connecter un autre appareil (QR code)', () => {
     const login = await phone.request('POST', '/api/auth/lien/' + token, {});
     expect(login.statusCode).toBe(200);
     phone.cookie = String(login.headers['set-cookie']).split(';')[0]!;
-    expect((await phone.get('/api/auth/me')).json()).toMatchObject({ id: orgaId, accountType: 'compte' });
+    expect((await phone.get('/api/auth/me')).json()).toMatchObject({ id: orgaId, globalRole: 'organisateur' });
     // Deuxième usage refusé.
     const again = await new Agent(ctx.app).request('POST', '/api/auth/lien/' + token, {});
     expect(again.statusCode).toBe(410);

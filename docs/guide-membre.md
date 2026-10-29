@@ -6,13 +6,22 @@ permet de **prévenir l'organisation** en un geste.
 > En cas d'urgence vitale, appelez directement le **15** (SAMU), le **17** (police), le **18** (pompiers) ou le
 > **112**. L'application ne prévient pas les secours.
 
-## 1. Rejoindre votre équipe
+## 1. Activer votre compte
 
-1. Scannez le **QR code** de votre équipe avec l'appareil photo du téléphone, ou ouvrez le **lien** reçu.
-2. Indiquez votre **prénom ou un pseudonyme**, puis touchez **Rejoindre l'équipe**.
-3. Si l'équipe demande une validation, patientez : la page se met à jour toute seule dès qu'un responsable a accepté.
+1. L'organisation a créé votre compte et vous a transmis un **lien d'activation** (SMS, messagerie…). Ouvrez-le sur
+   votre **téléphone**.
+2. Touchez **Se connecter**. Votre équipe s'affiche directement ; si vous êtes dans plusieurs équipes, choisissez-la
+   dans *Mes équipes*.
+3. Ouvrez **Profil** pour vérifier votre **prénom**, votre **nom** et, si vous le souhaitez, votre **e-mail**.
 
-Il n'y a **ni compte ni mot de passe** : ce téléphone reste connecté pendant la manifestation.
+Il n'y a **pas de mot de passe** : ce téléphone reste connecté plusieurs jours. Pour vous reconnecter plus tard :
+
+- **par e-mail** : page d'accueil → onglet *Lien de connexion* → *Recevoir un lien par e-mail*. Il faut avoir renseigné
+  votre adresse dans votre profil.
+- **depuis un autre de vos appareils déjà connecté** : *Profil* → *📱 Connecter un appareil*, puis scannez le QR code ;
+- **en demandant un lien** à votre responsable ou à l'organisation.
+
+Votre équipe vous est attribuée par l'organisation : il n'y a rien à rejoindre vous-même.
 
 **Conseil** : ajoutez l'application à l'écran d'accueil. Sur Android, menu ⋮ → *Ajouter à l'écran d'accueil* ; sur
 iPhone, bouton Partager → *Sur l'écran d'accueil*.
@@ -84,22 +93,24 @@ Il s'arrête tout seul après la manifestation, et vous pourrez alors désinstal
 
 ## 7. Questions fréquentes
 
-- **J'ai changé de téléphone ou effacé mes données** : demandez un **lien de récupération** à votre responsable ou à
-  l'organisation. L'ancien appareil sera déconnecté.
-- **« Ce lien a déjà été utilisé »** : un lien individuel ne sert qu'une fois. Si c'était vous, ouvrez simplement
-  l'application : vous êtes toujours connecté.
+- **J'ai changé de téléphone ou effacé mes données** : recevez un lien par e-mail (si votre adresse est dans votre
+  profil), ou demandez un **lien de connexion** à votre responsable ou à l'organisation.
+- **« Ce lien a déjà servi »** : un lien ne sert qu'une fois. Si c'était vous, ouvrez simplement l'application : vous
+  êtes toujours connecté. Sinon, demandez-en un nouveau.
 - **Le bouton ne répond pas, « action impossible »** : vérifiez la connexion (indicateur ○), puis réessayez. En cas de
   doute, appelez votre responsable.
 - **« Vous n'êtes plus membre d'aucune équipe »** : l'organisation vous a retiré de l'équipe. Contactez-la.
-- **Je veux me connecter avec un compte d'organisation sur ce téléphone** : bas de la page, *Se connecter avec un compte
-  d'organisation*. L'accès participant sur ce téléphone sera fermé.
+- **Je n'ai pas encore d'équipe** : la page *Mes équipes* l'indique. Elle se remplit dès que l'organisation vous ajoute.
+- **Responsable d'équipe** : si l'organisation le permet, vous ajoutez et retirez des membres depuis la vue terrain
+  (*Gérer les membres de l'équipe*), et vous pouvez leur envoyer un lien de connexion.
 
 ## 8. Vos données
 
 L'application conserve :
 
-- votre **pseudonyme** et votre équipe ;
+- votre **prénom**, votre **nom**, votre **e-mail** si vous l'avez indiqué, et vos équipes ;
 - vos actions sur les missions (statuts, incidents, messages) ;
 - si vous la partagez, **votre dernière position seulement**.
 
-Votre accès s'arrête automatiquement après la manifestation. Pour toute question, adressez-vous à l'organisation.
+Si l'organisation a fixé une **date d'expiration** à votre compte (indiquée dans votre profil), il est **supprimé
+automatiquement** à cette date. Pour toute question, adressez-vous à l'organisation.

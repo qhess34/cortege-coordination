@@ -15,8 +15,8 @@ const TeamFields = {
   instructions: z.string().max(20000),
   leaderUserId: z.number().int().positive().nullable(),
   status: z.enum(['non_confirmee', 'prete', 'en_mission', 'indisponible']),
-  /** Le responsable peut gérer les invitations et les membres de son équipe. */
-  leaderCanInvite: z.boolean(),
+  /** Les responsables peuvent ajouter et retirer des membres de leur équipe. */
+  leaderCanManage: z.boolean(),
   /** Points fixes, volante, ouverture (tête du cortège) ou fermeture (queue). */
   kind: z.enum(['points', 'volante', 'ouverture', 'fermeture']),
 };
@@ -51,7 +51,7 @@ export function publicTeam(r: Record<string, unknown>) {
   return {
     id: r.id, eventId: r.event_id, name: r.name, color: r.color, description: r.description, instructions: r.instructions,
     leaderUserId: r.leader_user_id, leaderName: r.leader_name ?? null, status: r.status, disabled: !!r.disabled_at,
-    leaderCanInvite: !!r.leader_can_invite, kind: r.kind, members: r.member_count ?? 0, pendingAdmissions: r.pending_count ?? 0,
+    leaderCanManage: !!r.leader_can_manage, kind: r.kind, members: r.member_count ?? 0,
     version: r.version, missions: r.missions ?? [],
   };
 }
@@ -59,7 +59,6 @@ export function publicTeam(r: Record<string, unknown>) {
 const TEAM_SELECT = `
   SELECT t.*, u.display_name AS leader_name,
          (SELECT count(*)::int FROM team_memberships tm WHERE tm.team_id = t.id) AS member_count,
-         (SELECT count(*)::int FROM admission_requests a WHERE a.team_id = t.id AND a.status = 'en_attente') AS pending_count,
          coalesce((SELECT json_agg(json_build_object('id', m.id, 'position', m.position, 'status', m.status, 'version', m.version,
                                                      'instructions', m.instructions, 'pointId', p.id, 'pointName', p.name,
                                                      'distance', p.distance_m, 'pointDeleted', p.deleted_at IS NOT NULL,
@@ -124,10 +123,10 @@ export async function teamRoutes(app: FastifyInstance) {
         `UPDATE teams SET name = coalesce($2, name), color = coalesce($3, color), description = coalesce($4, description),
                 instructions = coalesce($5, instructions),
                 leader_user_id = CASE WHEN $6::boolean THEN $7::bigint ELSE leader_user_id END,
-                status = coalesce($8, status), leader_can_invite = coalesce($9, leader_can_invite), kind = coalesce($10, kind),
+                status = coalesce($8, status), leader_can_manage = coalesce($9, leader_can_manage), kind = coalesce($10, kind),
                 version = version + 1
           WHERE id = $1`,
-        [id, b.name ?? null, b.color ?? null, b.description ?? null, b.instructions ?? null, b.leaderUserId !== undefined, b.leaderUserId ?? null, b.status ?? null, b.leaderCanInvite ?? null, b.kind ?? null],
+        [id, b.name ?? null, b.color ?? null, b.description ?? null, b.instructions ?? null, b.leaderUserId !== undefined, b.leaderUserId ?? null, b.status ?? null, b.leaderCanManage ?? null, b.kind ?? null],
       );
       await audit(c, { actorId: u.id, eventId, entity: 'team', entityId: id, action: 'modification', details: { ...b, version: undefined } });
       return loadTeam(c, id);

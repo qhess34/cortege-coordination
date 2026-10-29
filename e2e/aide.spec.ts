@@ -1,5 +1,6 @@
 // Guides : aide de l'organisation (barre du haut) et des membres (vue terrain).
 import { expect, test } from '@playwright/test';
+import { invite, signIn } from './helpers-membres';
 
 const H = { 'x-requested-with': 'cortege' };
 
@@ -13,17 +14,15 @@ test('guide de l’organisation et guide des membres accessibles dans l’applic
   await expect(orga.getByRole('heading', { name: 'Le jour J : onglet Coordination' })).toBeInViewport();
   await page.screenshot({ path: '/tmp/claude-0/-home-user/1bfc10af-db02-53e3-80f8-133b2eb05388/scratchpad/aide-orga.png' });
   await page.getByRole('tab', { name: 'Membres d’équipe' }).click();
-  await expect(page.getByTestId('guide-membre')).toContainText('Rejoindre votre équipe');
+  await expect(page.getByTestId('guide-membre')).toContainText('Activer votre compte');
 
   // Membre : onglet « ? » de la vue terrain.
   const ev = await (await page.request.post('/api/events', { data: { name: 'Aide' }, headers: H })).json();
   const team = await (await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Aide', color: '#2a9d8f' }, headers: H })).json();
-  const inv = await (await page.request.post('/api/teams/' + team.id + '/invitations', { data: { kind: 'equipe', admission: 'immediate' }, headers: H })).json();
+  const inv = await invite(page, team.id, 'Lina');
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR', serviceWorkers: 'block' });
   const phone = await ctx.newPage();
-  await phone.goto(inv.path);
-  await phone.getByLabel('Votre nom ou pseudonyme').fill('Lina');
-  await phone.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
+  await signIn(phone, inv.path);
   await phone.getByRole('tab', { name: 'Aide' }).click();
   const aide = phone.getByTestId('aide-membre');
   await expect(aide).toContainText('Selon votre type d');

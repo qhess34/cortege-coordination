@@ -5,6 +5,7 @@ import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
 import { createPool } from './db.js';
 import { migrate } from './migrate.js';
+import { scheduleAccountPurge } from './services/expiry.js';
 import { overpassFetcher } from './services/overpass.js';
 import { osrmRouter } from './services/routing.js';
 import { smtpMailer } from './services/mailer.js';
@@ -18,6 +19,7 @@ const app = await buildApp({ db, config, osm: overpassFetcher(config.overpassUrl
   logger: true,
  });
 if (applied.length) app.log.info({ applied }, 'migrations appliquées');
+scheduleAccountPurge(app);
 
 // En production, le serveur distribue aussi l'interface compilée (web/dist).
 if (config.webDist && existsSync(config.webDist)) {

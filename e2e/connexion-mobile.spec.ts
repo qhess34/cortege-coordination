@@ -1,5 +1,6 @@
 // Première page (mot de passe ou lien), connexion d'un téléphone par lien, coordination en direct sur mobile.
 import { expect, test } from '@playwright/test';
+import { invite, signIn } from './helpers-membres';
 import { at, gpxFrom } from '../server/test/helpers/osm';
 
 const H = { 'x-requested-with': 'cortege' };
@@ -33,7 +34,7 @@ test('connecter son téléphone par QR code, puis coordonner en direct depuis le
   const team = await (await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Rive', color: '#2a9d8f' }, headers: H })).json();
   const point = await (await page.request.post('/api/events/' + ev.id + '/points', { data: { name: 'Quai', position: at(200, 0) }, headers: H })).json();
   await page.request.post('/api/teams/' + team.id + '/missions', { data: { pointId: point.id }, headers: H });
-  const inv = await (await page.request.post('/api/teams/' + team.id + '/invitations', { data: { kind: 'equipe', admission: 'immediate' }, headers: H })).json();
+  const inv = await invite(page, team.id, 'Yann');
 
   // Ordinateur : « Connecter un appareil » affiche un QR code.
   await page.goto('/#/');
@@ -65,9 +66,7 @@ test('connecter son téléphone par QR code, puis coordonner en direct depuis le
   // Un membre signale un besoin d'aide : badge et incident sur le téléphone de l'organisation, sans recharger.
   const memberCtx = await browser.newContext(PHONE);
   const member = await memberCtx.newPage();
-  await member.goto(inv.path);
-  await member.getByLabel('Votre nom ou pseudonyme').fill('Yann');
-  await member.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
+  await signIn(member, inv.path);
   await member.getByTestId('vue-terrain').getByRole('button', { name: /Aide/ }).click();
   const incidentsTab = live.getByRole('tab', { name: /Incidents/ });
   await expect(incidentsTab.locator('.count')).toHaveText('1');

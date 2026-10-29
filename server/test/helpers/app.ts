@@ -7,7 +7,7 @@ import { createPool, type Db } from '../../src/db.js';
 import type { OverpassResponse } from '../../src/geo/osm-analysis.js';
 import { migrate } from '../../src/migrate.js';
 import { resetLoginFailures } from '../../src/routes/auth.js';
-import { resetMailThrottle } from '../../src/routes/login-links.js';
+import { createLoginLink, resetMailThrottle } from '../../src/routes/login-links.js';
 import type { Position } from '../../src/geo/route.js';
 
 export const TEST_DB = process.env.TEST_DATABASE_URL ?? 'postgres://cortege:cortege@localhost:5432/cortege_test';
@@ -70,14 +70,32 @@ export async function createUser(db: Db, login: string, globalRole: 'admin' | 'o
   return r.rows[0].id;
 }
 
+/** Compte « membre » (sans identifiant ni mot de passe), comme le crée un administrateur. */
+export async function createMember(db: Db, name: string, expiresAt: Date | null = null): Promise<number> {
+  const r = await db.query("INSERT INTO users(display_name, first_name, global_role, expires_at) VALUES ($1, $1, 'membre', $2) RETURNING id", [name, expiresAt]);
+  return r.rows[0].id;
+}
+
+/** Crée un membre, l'ajoute à l'équipe (par l'organisation) et le connecte par lien. */
+export async function memberAgent(ctx: TestContext, orga: Agent, teamId: number, name: string): Promise<Agent & { userId: number }> {
+  const id = await createMember(ctx.db, name);
+  const added = await orga.post('/api/teams/' + teamId + '/members', { userId: id });
+  if (added.statusCode !== 200) throw new Error('ajout à l’équipe : ' + added.body);
+  const link = await createLoginLink(ctx.db, id, 'admin', null);
+  const a = new Agent(ctx.app);
+  const r = await a.linkLogin(link.path);
+  if (r.statusCode !== 200) throw new Error('connexion par lien : ' + r.body);
+  return Object.assign(a, { userId: id });
+}
+
 /** Client HTTP de test qui conserve le cookie de session. */
 export class Agent {
   cookie: string | null = null;
   constructor(private app: FastifyInstance) {}
 
-  /** Rejoindre une équipe par invitation : la réponse pose le cookie de session du participant. */
-  async join(token: string, pseudonym?: string): Promise<LightMyRequestResponse> {
-    const res = await this.request('POST', '/api/rejoindre/' + token, pseudonym === undefined ? {} : { pseudonym });
+  /** Connexion par lien (« /connexion/<jeton> ») : la réponse pose le cookie de session. */
+  async linkLogin(path: string): Promise<LightMyRequestResponse> {
+    const res = await this.request('POST', '/api/auth/lien/' + path.split('/connexion/')[1]);
     const set = res.headers['set-cookie'];
     const raw = Array.isArray(set) ? set[0] : set;
     if (raw) this.cookie = raw.split(';')[0]!;

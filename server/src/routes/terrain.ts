@@ -69,6 +69,16 @@ async function canDeclare(c: Client, user: SessionUser, eventId: number): Promis
   };
 }
 
+/** Le compte fait-il partie d'une équipe de la manifestation (membre ou responsable) ? */
+async function inEventTeam(c: Client, userId: number, eventId: number): Promise<boolean> {
+  const r = await c.query(
+    `SELECT 1 FROM teams t LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = $2
+      WHERE t.event_id = $1 AND (t.leader_user_id = $2 OR m.user_id IS NOT NULL) LIMIT 1`,
+    [eventId, userId],
+  );
+  return !!r.rowCount;
+}
+
 /** Membre d'une équipe volante active de la manifestation : peut intervenir sur tous ses incidents. */
 async function inFlyingTeam(c: Client, user: SessionUser, eventId: number): Promise<boolean> {
   const r = await c.query(
@@ -124,7 +134,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     const [ev, team, missions, messages, incidents, track, progress, tail, eventPoints] = await Promise.all([
       app.db.query('SELECT id, name, starts_at, ends_at, instructions, status, location_sharing FROM events WHERE id = $1', [eventId]),
       app.db.query(
-        `SELECT t.id, t.name, t.color, t.instructions, t.disabled_at, l.display_name AS leader_name
+        `SELECT t.id, t.name, t.color, t.instructions, t.disabled_at, t.leader_can_manage, l.display_name AS leader_name
            FROM teams t LEFT JOIN users l ON l.id = t.leader_user_id WHERE t.id = $1`,
         [teamId],
       ),
@@ -136,7 +146,7 @@ export async function terrainRoutes(app: FastifyInstance) {
         [teamId],
       ),
       app.db.query(
-        `SELECT g.*, a.display_name AS author_name, (a.id IS NULL OR a.account_type = 'compte' AND NOT EXISTS (
+        `SELECT g.*, a.display_name AS author_name, (a.id IS NULL OR NOT EXISTS (
                   SELECT 1 FROM team_memberships tm WHERE tm.team_id = $1 AND tm.user_id = a.id)) AS from_organisation,
                 EXISTS (SELECT 1 FROM message_receipts r WHERE r.message_id = g.id AND r.user_id = $3) OR g.author_id = $3 AS read
            FROM messages g LEFT JOIN users a ON a.id = g.author_id
@@ -183,6 +193,8 @@ export async function terrainRoutes(app: FastifyInstance) {
       tail,
       canDeclare: await canDeclare(app.db, u, eventId),
       canHandleIncidents: flying || access.asOrganizer || access.role === 'responsable',
+      // Gestion des membres depuis la vue terrain : organisation, ou responsable si l'organisation le permet.
+      canManageMembers: access.asOrganizer || (access.role === 'responsable' && !!t.leader_can_manage),
       locationSharing: !!e.location_sharing,
       sharing: !!(await app.db.query('SELECT 1 FROM member_locations WHERE user_id = $1', [u.id])).rowCount,
       // OwnTracks configuré sur un téléphone de ce membre (identifiant actif).
@@ -338,7 +350,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     await requireEventRole(app.db, u, eventId, 'lecture');
     const r = await app.db.query(
       `SELECT g.*, t.name AS team_name, a.display_name AS author_name,
-              (a.id IS NULL OR a.account_type = 'compte' AND NOT EXISTS (SELECT 1 FROM team_memberships tm WHERE tm.team_id = g.team_id AND tm.user_id = a.id)) AS from_organisation,
+              (a.id IS NULL OR NOT EXISTS (SELECT 1 FROM team_memberships tm WHERE tm.team_id = g.team_id AND tm.user_id = a.id)) AS from_organisation,
               (SELECT count(*) FROM message_receipts r WHERE r.message_id = g.id) AS reads,
               (SELECT count(DISTINCT tm.user_id) FROM team_memberships tm JOIN teams t2 ON t2.id = tm.team_id
                 WHERE t2.event_id = g.event_id AND (g.team_id IS NULL OR tm.team_id = g.team_id) AND tm.user_id IS DISTINCT FROM g.author_id) AS recipients
@@ -356,7 +368,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     const g = (await app.db.query('SELECT event_id, team_id FROM messages WHERE id = $1', [id])).rows[0];
     if (!g) throw notFound('Message');
     if (g.team_id) await requireTeamMember(app.db, u, g.team_id).catch(() => { throw notFound('Message'); });
-    else if (u.accountType === 'participant' ? u.eventId !== g.event_id : (await eventRole(app.db, u, g.event_id)) === null) throw notFound('Message');
+    else if ((await eventRole(app.db, u, g.event_id)) === null && !(await inEventTeam(app.db, u.id, g.event_id))) throw notFound('Message');
     await app.db.query('INSERT INTO message_receipts(message_id, user_id) VALUES ($1, $2) ON CONFLICT DO NOTHING', [id, u.id]);
     app.live.publish(g.event_id);
     return { ok: true };
@@ -376,7 +388,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     return tx(app.db, async (c) => {
       const rights = await canDeclare(c, u, eventId);
       if (!rights[b.part]) {
-        if ((await eventRole(c, u, eventId)) === null && u.eventId !== eventId) throw notFound('Événement');
+        if ((await eventRole(c, u, eventId)) === null && !(await inEventTeam(c, u.id, eventId))) throw notFound('Événement');
         throw forbidden();
       }
       const track = await currentTrack(c, eventId);
@@ -523,7 +535,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     const u = req.user;
     const eventId = Number((req.query as Record<string, string>).event);
     const allowed = !!u && Number.isSafeInteger(eventId) && (
-      u.accountType === 'participant' ? u.eventId === eventId : (await eventRole(app.db, u, eventId)) !== null
+      ((await eventRole(app.db, u, eventId)) !== null || (await inEventTeam(app.db, u.id, eventId)))
     );
     if (!allowed) {
       socket.close(4404, 'introuvable');

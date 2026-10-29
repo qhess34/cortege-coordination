@@ -1,6 +1,6 @@
 // Suivi en arrière-plan avec OwnTracks : configuration, réception des positions, zones, révocation.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Agent, createUser, setup, type TestContext } from './helpers/app.js';
+import { Agent, createUser, memberAgent, setup, type TestContext } from './helpers/app.js';
 import { at, gpxFrom } from './helpers/osm.js';
 
 let ctx: TestContext;
@@ -35,9 +35,7 @@ beforeAll(async () => {
     const p = (await orga.post('/api/events/' + eventId + '/points', { name, position: at(x, 0) })).json().id;
     await orga.post('/api/teams/' + teamA + '/missions', { pointId: p });
   }
-  const inv = (await orga.post('/api/teams/' + teamA + '/invitations', { kind: 'equipe', admission: 'immediate' })).json();
-  alice = new Agent(ctx.app);
-  await alice.join(inv.token, 'Alice Martin');
+  alice = await memberAgent(ctx, orga, teamA, 'Alice Martin');
 });
 afterAll(() => ctx.close());
 

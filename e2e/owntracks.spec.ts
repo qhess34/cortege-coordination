@@ -1,5 +1,6 @@
 // OwnTracks : lien de configuration sur le téléphone, réception des positions (application simulée), arrêt.
 import { expect, test } from '@playwright/test';
+import { invite, signIn } from './helpers-membres';
 import { at, gpxFrom } from '../server/test/helpers/osm';
 
 const H = { 'x-requested-with': 'cortege' };
@@ -14,7 +15,7 @@ test('configurer OwnTracks, positions reçues écran éteint, suivi visible et r
   const team = await (await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Ouest', color: '#8ac926' }, headers: H })).json();
   const point = await (await page.request.post('/api/events/' + ev.id + '/points', { data: { name: 'Pont', position: at(200, 0) }, headers: H })).json();
   await page.request.post('/api/teams/' + team.id + '/missions', { data: { pointId: point.id }, headers: H });
-  const inv = await (await page.request.post('/api/teams/' + team.id + '/invitations', { data: { kind: 'equipe', admission: 'immediate' }, headers: H })).json();
+  const inv = await invite(page, team.id, 'Nour');
 
   await page.goto('/#/evenements/' + ev.id);
   await page.getByRole('tab', { name: 'Coordination' }).click();
@@ -23,9 +24,7 @@ test('configurer OwnTracks, positions reçues écran éteint, suivi visible et r
 
   const phoneCtx = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'fr-FR', serviceWorkers: 'block' });
   const phone = await phoneCtx.newPage();
-  await phone.goto(inv.path);
-  await phone.getByLabel('Votre nom ou pseudonyme').fill('Nour');
-  await phone.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
+  await signIn(phone, inv.path);
   const card = phone.getByTestId('vue-terrain').getByTestId('owntracks');
   await card.getByRole('button', { name: 'Configurer' }).click();
   await expect(card.getByRole('link', { name: 'Google Play' })).toHaveAttribute('href', /org\.owntracks\.android/);

@@ -1,5 +1,6 @@
 // Suivi des équipes en direct (partage de position facultatif) et arrivée automatique au point.
 import { expect, test } from '@playwright/test';
+import { invite, signIn } from './helpers-membres';
 import { at, gpxFrom } from '../server/test/helpers/osm';
 
 const H = { 'x-requested-with': 'cortege' };
@@ -14,7 +15,7 @@ test('position partagée visible au bureau ; arrivée au point détectée ; arr�
   const team = await (await page.request.post('/api/events/' + ev.id + '/teams', { data: { name: 'Équipe Est', color: '#3a86ff' }, headers: H })).json();
   const point = await (await page.request.post('/api/events/' + ev.id + '/points', { data: { name: 'Angle mairie', position: at(200, 0) }, headers: H })).json();
   await page.request.post('/api/teams/' + team.id + '/missions', { data: { pointId: point.id }, headers: H });
-  const inv = await (await page.request.post('/api/teams/' + team.id + '/invitations', { data: { kind: 'equipe', admission: 'immediate' }, headers: H })).json();
+  const inv = await invite(page, team.id, 'Sam');
 
   // Partage autorisé par l'organisation (Synthèse).
   await page.goto('/#/evenements/' + ev.id);
@@ -30,9 +31,7 @@ test('position partagée visible au bureau ; arrivée au point détectée ; arr�
     geolocation: { longitude: lon, latitude: lat, accuracy: 8 }, permissions: ['geolocation'],
   });
   const phone = await phoneCtx.newPage();
-  await phone.goto(inv.path);
-  await phone.getByLabel('Votre nom ou pseudonyme').fill('Sam');
-  await phone.getByRole('button', { name: 'Rejoindre l’équipe' }).click();
+  await signIn(phone, inv.path);
   const field = phone.getByTestId('vue-terrain');
   const card = field.getByTestId('partage-position');
   await expect(card).toContainText('facultatif');

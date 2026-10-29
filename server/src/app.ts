@@ -15,7 +15,7 @@ import type { Mailer } from './services/mailer.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
 import { eventRoutes } from './routes/events.js';
-import { invitationRoutes } from './routes/invitations.js';
+import { memberRoutes } from './routes/members.js';
 import { loginLinkRoutes } from './routes/login-links.js';
 import { owntracksRoutes } from './routes/owntracks.js';
 import { pointRoutes } from './routes/points.js';
@@ -137,7 +137,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(pointRoutes);
   await app.register(teamRoutes);
   await app.register(roadbookRoutes);
-  await app.register(invitationRoutes);
+  await app.register(memberRoutes);
   await app.register(terrainRoutes);
   await app.register(owntracksRoutes);
   await app.register(loginLinkRoutes);

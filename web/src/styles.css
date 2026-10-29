@@ -394,3 +394,8 @@ button.icon { padding: .1rem .4rem; min-width: 1.8rem; }
 .legend .dot.inc { background: rgba(214,40,40,.25); border: 2px solid #d62828; }
 .live-coord .grid-stats { grid-template-columns: repeat(2, 1fr); }
 @media (max-width: 800px) { .topbar { flex-wrap: wrap; gap: .5rem .8rem; } .topbar-name { display: none; } }
+
+/* Comptes membres */
+.table-wrap { overflow-x: auto; }
+.member-nav { gap: 1rem; margin-bottom: .3rem; }
+.member-home, .profile { max-width: 40rem; margin: 0 auto; }

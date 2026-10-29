@@ -1,6 +1,6 @@
 // Lot 3 : vue de mission, statuts depuis le terrain, incidents, messages, progression, tableau de bord, direct.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { Agent, createUser, setup, type TestContext } from './helpers/app.js';
+import { Agent, createUser, memberAgent, setup, type TestContext } from './helpers/app.js';
 import { at, gpxFrom } from './helpers/osm.js';
 
 let ctx: TestContext;
@@ -26,9 +26,7 @@ beforeAll(async () => {
   const p = (await orga.post('/api/events/' + eventId + '/points', { name: 'Angle', position: at(200, 0) })).json().id;
   await orga.post('/api/teams/' + teamA + '/missions', { pointId: p });
   for (const [team, name] of [[teamA, 'Alice'], [teamB, 'Bob']] as const) {
-    const inv = (await orga.post('/api/teams/' + team + '/invitations', { kind: 'equipe', admission: 'immediate' })).json();
-    const a = new Agent(ctx.app);
-    expect((await a.join(inv.token, name)).statusCode).toBe(200);
+    const a = await memberAgent(ctx, orga, team, name);
     if (name === 'Alice') alice = a; else bob = a;
   }
   missionA = (await mission(alice)).id;
@@ -153,15 +151,19 @@ describe('direct (WebSocket)', () => {
   const open = async (who: Agent, ev: number) => {
     const queue: string[] = [];
     const waiters: ((m: string) => void)[] = [];
+    let closed!: Promise<number>;
     const ws = await ctx.app.injectWS('/api/direct?event=' + ev, { headers: { cookie: who.cookie ?? '' } }, {
-      onInit: (w) => w.on('message', (d) => { const w0 = waiters.shift(); if (w0) w0(String(d)); else queue.push(String(d)); }),
+      onInit: (w) => {
+        closed = new Promise<number>((resolve) => w.once('close', (c) => resolve(c)));
+        w.on('message', (d) => { const w0 = waiters.shift(); if (w0) w0(String(d)); else queue.push(String(d)); });
+      },
     });
     const next = () => new Promise<string>((resolve, reject) => {
       if (queue.length) return resolve(queue.shift()!);
       const t = setTimeout(() => reject(new Error('aucun message')), 3000);
       waiters.push((m) => { clearTimeout(t); resolve(m); });
     });
-    return Object.assign(ws, { next });
+    return Object.assign(ws, { next, closed });
   };
 
   it('un membre reçoit un signal après une modification, sans aucune donnée', async () => {
@@ -176,10 +178,7 @@ describe('direct (WebSocket)', () => {
   });
   it('refusé hors de sa manifestation ou sans session', async () => {
     const other = (await orga.post('/api/events', { name: 'Autre' })).json().id;
-    for (const ws of [await open(alice, other), await open(new Agent(ctx.app), eventId)]) {
-      const code = await new Promise<number>((resolve) => ws.once('close', (c) => resolve(c)));
-      expect(code).toBe(4404);
-    }
+    for (const ws of [await open(alice, other), await open(new Agent(ctx.app), eventId)]) expect(await ws.closed).toBe(4404);
   });
 });
 
@@ -187,9 +186,7 @@ describe('équipes volante, d’ouverture et de fermeture', () => {
   const joinTeam = async (kind: string, name: string) => {
     const team = (await orga.post('/api/events/' + eventId + '/teams', { name: 'Équipe ' + kind, color: '#6a4c93', kind })).json();
     expect(team.kind).toBe(kind);
-    const inv = (await orga.post('/api/teams/' + team.id + '/invitations', { kind: 'equipe', admission: 'immediate' })).json();
-    const a = new Agent(ctx.app);
-    await a.join(inv.token, name);
+    const a = await memberAgent(ctx, orga, team.id, name);
     return { team, agent: a };
   };
 

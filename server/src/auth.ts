@@ -33,18 +33,15 @@ export interface SessionUser {
   id: number;
   login: string | null;
   displayName: string;
-  globalRole: 'admin' | 'organisateur' | 'aucun';
-  /** « participant » : personne admise par invitation, sans identifiant ni mot de passe. */
-  accountType: 'compte' | 'participant';
-  /** Manifestation d'un participant (null pour un compte administré). */
-  eventId: number | null;
+  /** « membre » : membre d'équipe, sans identifiant ni mot de passe (connexion par lien), qui ne voit que ses équipes. */
+  globalRole: 'admin' | 'organisateur' | 'membre' | 'aucun';
 }
 
 export async function createSession(c: Client, userId: number, ttlHours: number, userAgent?: string): Promise<string> {
   return createSessionUntil(c, userId, new Date(Date.now() + ttlHours * 3600_000), userAgent);
 }
 
-/** Session valable jusqu'à une date donnée (participants : jusqu'au lendemain de la manifestation). */
+/** Session valable jusqu'à une date donnée (membres : plusieurs jours, sans dépasser l'expiration du compte). */
 export async function createSessionUntil(c: Client, userId: number, expiresAt: Date, userAgent?: string): Promise<string> {
   const token = randomBytes(32).toString('base64url');
   await c.query('INSERT INTO sessions(token_hash, user_id, expires_at, user_agent) VALUES ($1, $2, $3, $4)', [
@@ -61,14 +58,14 @@ export async function loadSession(c: Client, token: string, ttlHours: number): P
        FROM users u
       WHERE s.token_hash = $1 AND u.id = s.user_id
         AND s.revoked_at IS NULL AND s.expires_at > now() AND u.disabled_at IS NULL
-      RETURNING s.id AS session_id, u.id, u.login, u.display_name, u.global_role, u.account_type, u.event_id`,
+        AND (u.expires_at IS NULL OR u.expires_at > now())
+      RETURNING s.id AS session_id, u.id, u.login, u.display_name, u.global_role`,
     [hashToken(token), ttlHours],
   );
   const row = r.rows[0];
   if (!row) return null;
   return {
     sessionId: row.session_id, id: row.id, login: row.login, displayName: row.display_name, globalRole: row.global_role,
-    accountType: row.account_type, eventId: row.event_id,
   };
 }
 

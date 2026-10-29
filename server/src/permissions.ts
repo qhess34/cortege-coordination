@@ -10,8 +10,8 @@ export async function eventRole(c: Client, user: SessionUser, eventId: number): 
   const ev = await c.query('SELECT 1 FROM events WHERE id = $1', [eventId]);
   if (!ev.rowCount) return null;
   if (user.globalRole === 'admin') return 'organisateur';
-  // Un participant n'a accès qu'à son équipe, par les routes /api/moi/… : rien de la manifestation entière.
-  if (user.accountType === 'participant') return null;
+  // Un membre d'équipe n'accède qu'à ses équipes (vue terrain) : rien de la manifestation entière.
+  if (user.globalRole === 'membre') return null;
   const r = await c.query('SELECT role FROM event_memberships WHERE event_id = $1 AND user_id = $2', [eventId, user.id]);
   return (r.rows[0]?.role as EventRole | undefined) ?? null;
 }
@@ -56,20 +56,20 @@ export function requireCanCreateEvent(user: SessionUser): void {
 }
 
 /**
- * Gestion d'une équipe (invitations, admissions, membres) : organisateur de la manifestation, ou responsable de
+ * Gestion des membres d'une équipe : organisateur de la manifestation, ou responsable de
  * l'équipe si l'organisateur le lui permet. Renvoie l'événement et le rôle de gestion.
  */
 export async function requireTeamManager(c: Client, user: SessionUser, teamId: number): Promise<{ eventId: number; asOrganizer: boolean }> {
-  const t = (await c.query('SELECT event_id, leader_user_id, leader_can_invite FROM teams WHERE id = $1', [teamId])).rows[0];
+  const t = (await c.query('SELECT event_id, leader_user_id, leader_can_manage FROM teams WHERE id = $1', [teamId])).rows[0];
   if (!t) throw notFound('Équipe');
   if ((await eventRole(c, user, t.event_id)) === 'organisateur') return { eventId: t.event_id, asOrganizer: true };
-  if (t.leader_can_invite) {
+  if (t.leader_can_manage) {
     const leader = t.leader_user_id === user.id ||
       !!(await c.query("SELECT 1 FROM team_memberships WHERE team_id = $1 AND user_id = $2 AND role = 'responsable'", [teamId, user.id])).rowCount;
     if (leader) return { eventId: t.event_id, asOrganizer: false };
   }
   // Rien ne doit indiquer l'existence de l'équipe à qui n'y a pas accès.
-  const visible = user.accountType === 'participant'
+  const visible = user.globalRole === 'membre'
     ? !!(await c.query('SELECT 1 FROM team_memberships WHERE team_id = $1 AND user_id = $2', [teamId, user.id])).rowCount
     : (await eventRole(c, user, t.event_id)) !== null;
   if (!visible) throw notFound('Équipe');
