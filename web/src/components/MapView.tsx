@@ -56,6 +56,8 @@ interface Props {
   focus?: { position: Position; n: number } | null;
   /** Identifiant du fond de carte (voir basemaps.ts). */
   basemap?: string;
+  /** Positions partagées par les membres (organisation seulement). */
+  members?: MemberPosition[];
   /** Affiche la couverture Panoramax et les repères d'inspection. */
   panoramax?: {
     enabled: boolean; tilesUrl: string; clicked: Position | null; photo: Position | null;
@@ -102,11 +104,14 @@ function arrowImage(): ImageData {
   return g.getImageData(0, 0, 24, 24);
 }
 
+export interface MemberPosition { userId: number; displayName: string; teamId: number; teamName: string; color: string; position: Position; accuracy: number | null; updatedAt: string }
+
 export function MapView(props: Props) {
   const container = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const [ready, setReady] = useState(false);
   const kmMarkers = useRef<maplibregl.Marker[]>([]);
+  const memberMarkers = useRef(new Map<number, maplibregl.Marker>());
   // Les gestionnaires d'événements MapLibre lisent toujours les dernières props.
   const latest = useRef(props);
   latest.current = props;
@@ -529,6 +534,33 @@ export function MapView(props: Props) {
     const pos = sel.kind === 'point' ? props.points.find((p) => p.id === sel.id)?.position : props.suggestions.find((s) => s.id === sel.id)?.position;
     if (pos && !m.getBounds().contains(pos)) m.easeTo({ center: pos, zoom: Math.max(m.getZoom(), 16) });
   }, [props.selection, ready]);
+
+
+  // Membres qui partagent leur position : pastille à la couleur de l'équipe, nom, ancienneté au survol.
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready) return;
+    const seen = new Set<number>();
+    for (const p of props.members ?? []) {
+      seen.add(p.userId);
+      let mk = memberMarkers.current.get(p.userId);
+      if (!mk) {
+        const el = document.createElement('div');
+        el.className = 'member-marker';
+        el.innerHTML = '<span class="member-dot"></span><span class="member-name"></span>';
+        mk = new maplibregl.Marker({ element: el }).setLngLat(p.position).addTo(m);
+        memberMarkers.current.set(p.userId, mk);
+      }
+      const el = mk.getElement();
+      (el.querySelector('.member-dot') as HTMLElement).style.background = p.color;
+      el.querySelector('.member-name')!.textContent = p.displayName;
+      el.title = p.displayName + ' (' + p.teamName + ') — ' + new Date(p.updatedAt).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }) +
+        (p.accuracy ? ' · précision ±' + Math.round(p.accuracy) + ' m' : '');
+      el.dataset.testid = 'membre-' + p.userId;
+      mk.setLngLat(p.position);
+    }
+    for (const [id, mk] of memberMarkers.current) if (!seen.has(id)) { mk.remove(); memberMarkers.current.delete(id); }
+  }, [props.members, ready]);
 
   return (
     <>

@@ -10,6 +10,8 @@ export interface EventInfo {
   id: number; name: string; description: string; startsAt: string | null; endsAt: string | null; areaName: string;
   status: 'preparation' | 'pret' | 'en_cours' | 'termine' | 'archive'; instructions: string; currentTrackId: number | null;
   version: number; role?: 'organisateur' | 'responsable' | 'membre';
+  /** Partage de position en direct autorisé pour la manifestation. */
+  locationSharing: boolean;
 }
 
 export interface Track {

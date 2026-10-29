@@ -12,7 +12,7 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     name: ev.name, description: ev.description, areaName: ev.areaName, status: ev.status, instructions: ev.instructions,
-    startsAt: toLocal(ev.startsAt), endsAt: toLocal(ev.endsAt),
+    startsAt: toLocal(ev.startsAt), endsAt: toLocal(ev.endsAt), locationSharing: ev.locationSharing,
   });
   const save = async (e: FormEvent) => {
     e.preventDefault();
@@ -43,6 +43,12 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
               {Object.entries(EVENT_STATUS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
             </select>
           </label>
+          <label className="check"><input type="checkbox" checked={form.locationSharing} onChange={(e) => setForm({ ...form, locationSharing: e.target.checked })} />
+            Autoriser le partage de position en direct</label>
+          <p className="muted small">
+            Chaque membre décide lui-même de partager sa position depuis son téléphone. Seule la dernière position est conservée,
+            visible de l’organisation uniquement ; elle est effacée à l’arrêt du partage. Désactiver efface toutes les positions.
+          </p>
           <label>Consignes générales<textarea rows={5} value={form.instructions} onChange={(e) => setForm({ ...form, instructions: e.target.value })} /></label>
           <div className="row"><button className="primary">Enregistrer</button><button type="button" onClick={() => setEditing(false)}>Annuler</button></div>
         </form>
@@ -53,6 +59,7 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
             <dt>Début</dt><dd>{dateTime(ev.startsAt)}</dd>
             <dt>Fin</dt><dd>{dateTime(ev.endsAt)}</dd>
             <dt>Zone</dt><dd>{ev.areaName || '—'}</dd>
+            <dt>Partage de position</dt><dd>{ev.locationSharing ? 'autorisé (au choix de chaque membre)' : 'désactivé'}</dd>
           </dl>
           {ev.description && <p className="pre">{ev.description}</p>}
           {ev.instructions && <><h3>Consignes générales</h3><p className="pre">{ev.instructions}</p></>}

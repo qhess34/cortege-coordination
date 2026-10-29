@@ -9,11 +9,17 @@ export interface LiveState {
   syncedAt: Date | null;
 }
 
-export function useLive(eventId: number | null, reload: () => Promise<unknown>, pollMs = 30_000): LiveState & { markSynced: () => void } {
+export function useLive(
+  eventId: number | null, reload: () => Promise<unknown>, pollMs = 30_000,
+  /** Appelé au signal « positions » (seules les positions partagées ont changé). */
+  onPositions?: () => void,
+): LiveState & { markSynced: () => void } {
   const [connected, setConnected] = useState(false);
   const [syncedAt, setSyncedAt] = useState<Date | null>(null);
   const reloadRef = useRef(reload);
   reloadRef.current = reload;
+  const positionsRef = useRef(onPositions);
+  positionsRef.current = onPositions;
 
   useEffect(() => {
     if (eventId === null) return;
@@ -45,6 +51,7 @@ export function useLive(eventId: number | null, reload: () => Promise<unknown>, 
             setConnected(true);
             refresh(); // rattrape ce qui a pu changer pendant la coupure
           } else if (m.type === 'maj') refresh();
+          else if (m.type === 'positions') positionsRef.current?.();
         } catch {
           // message illisible : ignoré
         }

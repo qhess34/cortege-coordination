@@ -5,6 +5,7 @@ import { MISSION_STATUS, SUGGESTION_TYPES, TEAM_KIND, km } from '../labels';
 import type { Position, TeamKind } from '../types';
 import { ago, useLive } from '../useLive';
 import { FieldMap } from './FieldMap';
+import { useSharing } from './useSharing';
 
 export interface FieldMission {
   id: number; version: number; order: number; status: string; instructions: string; statusChangedAt: string | null;
@@ -36,6 +37,9 @@ export interface Terrain {
   /** Points tenus par toutes les équipes (équipes sans point fixe). */
   eventPoints: { name: string; position: Position; distance: number | null; status: string; teamName: string; color: string }[];
   routing: boolean;
+  /** Partage de position autorisé par l'organisation ; `sharing` : ce compte partage actuellement. */
+  locationSharing: boolean;
+  sharing: boolean;
 }
 
 export const INCIDENT_CATEGORY: Record<string, string> = {
@@ -105,6 +109,13 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
     }
   }, [teamId, onUnauthorized]);
   const live = useLive(data?.event.id ?? null, load);
+  const sharing = useSharing({
+    teamId,
+    allowed: !!data?.locationSharing,
+    onPosition: (p) => { setMe(p); setGeoError(null); },
+    onArrived: (name) => { setToast({ kind: 'ok', text: 'Arrivée détectée à « ' + name + ' » : vous êtes « en position ».' }); void load().catch(() => undefined); },
+    onError: (text) => setToast({ kind: 'error', text }),
+  });
   useEffect(() => { load().then(live.markSynced, () => undefined); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [load]);
   // Rafraîchit les « il y a … min ».
   useEffect(() => { const t = setInterval(() => tick((n) => n + 1), 30_000); return () => clearInterval(t); }, []);
@@ -199,6 +210,23 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
         <section className="stack">
           {data.messages.some((m) => m.urgent && m.read === false) && (
             <button className="urgent-banner" onClick={() => setTab('messages')}>⚠ Message urgent de l’organisation — lire</button>
+          )}
+          {data.locationSharing && (
+            <div className={'card small' + (sharing.on ? ' sharing' : '')} data-testid="partage-position">
+              {sharing.on ? (
+                <div className="row">
+                  <span className="grow">📡 <b>Position partagée avec l’organisation</b>{sharing.lastSent ? ' · envoyée ' + ago(sharing.lastSent) : ''}.
+                    {data.team.kind === 'points' ? ' L’arrivée au point est enregistrée automatiquement.' : ''}</span>
+                  <button onClick={() => void sharing.stop()}>Arrêter</button>
+                </div>
+              ) : (
+                <div className="row">
+                  <span className="grow">L’organisation peut suivre les équipes en direct si vous partagez votre position (facultatif).</span>
+                  <button className="primary" onClick={sharing.start}>Partager ma position</button>
+                </div>
+              )}
+              <p className="muted">Seulement tant que l’application est ouverte à l’écran ; dernière position seulement, effacée à l’arrêt.</p>
+            </div>
           )}
           <Progression data={data} reload={load} setToast={setToast} locate={locate} />
           {data.team.kind !== 'points' && <RoleCard data={data} openIncidents={() => setTab('incidents')} />}

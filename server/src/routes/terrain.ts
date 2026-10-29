@@ -27,6 +27,13 @@ export const MEMBER_TRANSITIONS: Partial<Record<MissionStatus, MissionStatus[]>>
   incident: ['en_deplacement', 'en_position', 'terminee'],
 };
 
+/** Distance (m) au point de mission en deçà de laquelle l'arrivée est enregistrée automatiquement. */
+export const ARRIVAL_RADIUS = 30;
+/** Précision GPS minimale (m) pour l'arrivée automatique. */
+const ARRIVAL_MAX_ACCURACY = 50;
+/** Une position plus ancienne n'est plus affichée. */
+const POSITION_MAX_AGE = '10 minutes';
+
 const INCIDENT_CATEGORIES = ['aide', 'securite', 'sante', 'circulation', 'materiel', 'autre'] as const;
 const Lon = z.number().min(-180).max(180);
 const Lat = z.number().min(-90).max(90);
@@ -121,7 +128,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     const { eventId } = access;
     const flying = access.kind === 'volante';
     const [ev, team, missions, messages, incidents, track, progress, tail, eventPoints] = await Promise.all([
-      app.db.query('SELECT id, name, starts_at, ends_at, instructions, status FROM events WHERE id = $1', [eventId]),
+      app.db.query('SELECT id, name, starts_at, ends_at, instructions, status, location_sharing FROM events WHERE id = $1', [eventId]),
       app.db.query(
         `SELECT t.id, t.name, t.color, t.instructions, t.disabled_at, l.display_name AS leader_name
            FROM teams t LEFT JOIN users l ON l.id = t.leader_user_id WHERE t.id = $1`,
@@ -182,6 +189,8 @@ export async function terrainRoutes(app: FastifyInstance) {
       tail,
       canDeclare: await canDeclare(app.db, u, eventId),
       canHandleIncidents: flying || access.asOrganizer || access.role === 'responsable',
+      locationSharing: !!e.location_sharing,
+      sharing: !!(await app.db.query('SELECT 1 FROM member_locations WHERE user_id = $1', [u.id])).rowCount,
       routing: !!app.router,
     };
   });
@@ -419,10 +428,14 @@ export async function terrainRoutes(app: FastifyInstance) {
       ),
     ]);
     const pres = new Map(presence.rows.map((p) => [p.team_id, p]));
+    const shared = new Map((await app.db.query(
+      `SELECT team_id, count(*)::int AS n FROM member_locations WHERE event_id = $1 AND updated_at > now() - $2::interval GROUP BY team_id`,
+      [eventId, POSITION_MAX_AGE],
+    )).rows.map((r) => [r.team_id, r.n]));
     return {
       teams: teams.rows.map((t) => ({
         id: t.id, name: t.name, color: t.color, disabled: !!t.disabled_at, kind: t.kind,
-        members: Number(pres.get(t.id)?.members ?? 0), active: Number(pres.get(t.id)?.active ?? 0),
+        members: Number(pres.get(t.id)?.members ?? 0), active: Number(pres.get(t.id)?.active ?? 0), sharing: shared.get(t.id) ?? 0,
         missions: missions.rows.filter((m) => m.team_id === t.id).map((m) => ({
           id: m.id, version: m.version, order: m.position, status: m.status, statusChangedAt: m.status_changed_at, changedBy: m.changed_by,
           pointName: m.name, distance: m.distance_m, position: [m.lon, m.lat], passedByTail: passed(tail, m.distance_m),
@@ -453,6 +466,81 @@ export async function terrainRoutes(app: FastifyInstance) {
       if (e instanceof RoutingError) throw new HttpError(502, e.message);
       throw e;
     }
+  });
+
+  // --- Partage de position en direct (facultatif) ------------------------------------------------------------------
+  // Seule la dernière position est gardée (aucun historique, aucune entrée dans le journal d'audit). Elle n'est
+  // visible que de l'organisation et disparaît à l'arrêt du partage ou après POSITION_MAX_AGE sans mise à jour.
+  app.post('/api/terrain/equipes/:id/position', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    const u = requireUser(req);
+    const teamId = idParam(req);
+    const b = z.object({ position: z.tuple([Lon, Lat]), accuracy: z.number().min(0).max(10_000).nullable().default(null) }).parse(req.body);
+    const out = await tx(app.db, async (c) => {
+      const access = await requireTeamMember(c, u, teamId);
+      const ev = (await c.query('SELECT location_sharing FROM events WHERE id = $1', [access.eventId])).rows[0];
+      if (!ev.location_sharing) throw new HttpError(409, 'Le partage de position n’est pas activé pour cette manifestation.');
+      // Un organisateur qui consulte l'équipe sans en faire partie ne partage rien.
+      const member = !!(await c.query('SELECT 1 FROM team_memberships WHERE team_id = $1 AND user_id = $2 UNION SELECT 1 FROM teams WHERE id = $1 AND leader_user_id = $2', [teamId, u.id])).rowCount;
+      if (!member) throw forbidden();
+      await c.query(
+        `INSERT INTO member_locations(user_id, event_id, team_id, geom, accuracy_m, updated_at)
+         VALUES ($1, $2, $3, ST_SetSRID(ST_MakePoint($4, $5), 4326), $6, now())
+         ON CONFLICT (user_id) DO UPDATE SET event_id = EXCLUDED.event_id, team_id = EXCLUDED.team_id, geom = EXCLUDED.geom,
+                                             accuracy_m = EXCLUDED.accuracy_m, updated_at = now()`,
+        [u.id, access.eventId, teamId, b.position[0], b.position[1], b.accuracy],
+      );
+      // Arrivée automatique : la première mission non terminée de l'équipe passe « en position » quand le membre est
+      // à moins de ARRIVAL_RADIUS du point (et que la précision du téléphone le permet).
+      let arrived: { missionId: number; pointName: string } | null = null;
+      if (access.kind === 'points' && (b.accuracy === null || b.accuracy <= ARRIVAL_MAX_ACCURACY)) {
+        const m = (await c.query(
+          `SELECT m.id, m.status, p.name, ST_DistanceSphere(p.geom, ST_SetSRID(ST_MakePoint($2, $3), 4326)) AS d
+             FROM missions m JOIN mission_points p ON p.id = m.mission_point_id
+            WHERE m.team_id = $1 AND m.cancelled_at IS NULL AND m.status <> 'terminee'
+            ORDER BY m.position LIMIT 1 FOR UPDATE OF m`,
+          [teamId, b.position[0], b.position[1]],
+        )).rows[0];
+        if (m && (m.status === 'affectee' || m.status === 'en_deplacement') && m.d <= ARRIVAL_RADIUS) {
+          await c.query(
+            "UPDATE missions SET status = 'en_position', version = version + 1, updated_at = now(), status_changed_at = now(), status_changed_by = $2 WHERE id = $1",
+            [m.id, u.id],
+          );
+          await audit(c, { actorId: u.id, eventId: access.eventId, entity: 'mission', entityId: m.id, action: 'statut', details: { from: m.status, to: 'en_position', auto: true } });
+          arrived = { missionId: m.id, pointName: m.name };
+        }
+      }
+      return { eventId: access.eventId, arrived };
+    });
+    app.live.publish(out.eventId, 'positions');
+    return { ok: true, arrived: out.arrived };
+  });
+
+  // Arrêt du partage : la position est effacée.
+  app.delete('/api/terrain/position', async (req) => {
+    const u = requireUser(req);
+    const r = await app.db.query('DELETE FROM member_locations WHERE user_id = $1 RETURNING event_id', [u.id]);
+    if (r.rows[0]) app.live.publish(r.rows[0].event_id, 'positions');
+    return { ok: true };
+  });
+
+  // Positions partagées récentes, pour l'organisation seulement.
+  app.get('/api/events/:id/positions', async (req) => {
+    const u = requireUser(req);
+    const eventId = idParam(req);
+    if ((await requireEventRole(app.db, u, eventId, 'lecture')) !== 'organisateur') throw forbidden();
+    // Purge des positions trop anciennes (aucune conservation au-delà).
+    await app.db.query("DELETE FROM member_locations WHERE updated_at < now() - interval '2 hours'");
+    const r = await app.db.query(
+      `SELECT l.user_id, u.display_name, l.team_id, t.name AS team_name, t.color, t.kind, ST_X(l.geom) AS lon, ST_Y(l.geom) AS lat,
+              l.accuracy_m, l.updated_at
+         FROM member_locations l JOIN users u ON u.id = l.user_id JOIN teams t ON t.id = l.team_id
+        WHERE l.event_id = $1 AND l.updated_at > now() - $2::interval ORDER BY t.name, u.display_name`,
+      [eventId, POSITION_MAX_AGE],
+    );
+    return r.rows.map((x) => ({
+      userId: x.user_id, displayName: x.display_name, teamId: x.team_id, teamName: x.team_name, color: x.color, kind: x.kind,
+      position: [x.lon, x.lat], accuracy: x.accuracy_m, updatedAt: x.updated_at,
+    }));
   });
 
   // --- Signal temps réel ------------------------------------------------------------------------------------------

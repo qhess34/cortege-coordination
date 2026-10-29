@@ -5,11 +5,12 @@ import { INCIDENT_CATEGORY, INCIDENT_STATUS, type FieldIncident, type Progress }
 import { MISSION_STATUS, TEAM_KIND, TEAM_KIND_SHORT, km } from '../../labels';
 import type { Position } from '../../types';
 import { ago } from '../../useLive';
+import type { MemberPosition } from '../../components/MapView';
 import type { PanelProps } from '../EventPage';
 
 export interface Tableau {
   teams: {
-    id: number; name: string; color: string; disabled: boolean; members: number; active: number; kind: string;
+    id: number; name: string; color: string; disabled: boolean; members: number; active: number; kind: string; sharing: number;
     missions: {
       id: number; version: number; order: number; status: string; statusChangedAt: string | null; changedBy: string | null; pointName: string;
       distance: number | null; position: Position; passedByTail: boolean;
@@ -27,7 +28,9 @@ interface OrgMessage { id: number; teamId: number | null; teamName: string | nul
 /** Ordre d'affichage des statuts (du plus urgent au plus calme). */
 const STATUS_ORDER = ['incident', 'releve_necessaire', 'en_deplacement', 'affectee', 'a_preparer', 'en_position', 'terminee'];
 
-export function CoordinationPanel({ data, canEdit, liveTick }: PanelProps & { liveTick: number }) {
+export function CoordinationPanel({ data, canEdit, liveTick, members }: PanelProps & { liveTick: number; members: MemberPosition[] | null }) {
+  // Partage de position : compté sur les positions reçues en direct (plus à jour que le tableau).
+  const sharingOf = (teamId: number, fallback: number) => (members ? members.filter((m) => m.teamId === teamId).length : fallback);
   const eventId = data.event.id;
   const [t, setT] = useState<Tableau | null>(null);
   const [messages, setMessages] = useState<OrgMessage[]>([]);
@@ -117,6 +120,7 @@ export function CoordinationPanel({ data, canEdit, liveTick }: PanelProps & { li
               <span className="dot" style={{ background: team.color }} />
               <b className="grow">{team.name}{team.kind !== 'points' && <span className="badge">{TEAM_KIND_SHORT[team.kind]}</span>}</b>
               <span className="muted small" title="Membres ayant utilisé l’application ces 5 dernières minutes">{team.active}/{team.members} actif(s)</span>
+              {sharingOf(team.id, team.sharing) > 0 && <span className="muted small" title="Membres partageant leur position (visible sur la carte)">📡 {sharingOf(team.id, team.sharing)}</span>}
             </p>
             {team.missions.length === 0 ? <p className="muted small">{team.kind === 'points' ? 'Aucune mission.' : TEAM_KIND[team.kind] + ' (sans point fixe).'}</p> : (
               <ul className="plain small">

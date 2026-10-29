@@ -19,7 +19,7 @@ interface Subscriber { send: (data: string) => void }
 
 export class LiveHub {
   private subs = new Map<number, Set<Subscriber>>();
-  private pending = new Map<number, NodeJS.Timeout>();
+  private pending = new Map<string, NodeJS.Timeout>();
 
   constructor(private delayMs = 150) {}
 
@@ -37,12 +37,16 @@ export class LiveHub {
     return this.subs.get(eventId)?.size ?? 0;
   }
 
-  /** Regroupe les modifications rapprochées en un seul signal. */
-  publish(eventId: number): void {
-    if (!this.subs.has(eventId) || this.pending.has(eventId)) return;
-    this.pending.set(eventId, setTimeout(() => {
-      this.pending.delete(eventId);
-      const msg = JSON.stringify({ type: 'maj', at: new Date().toISOString() });
+  /**
+   * Regroupe les modifications rapprochées en un seul signal. `positions` : seules les positions partagées ont
+   * changé (signal distinct, plus espacé, pour que les écrans ne rechargent que la carte).
+   */
+  publish(eventId: number, type: 'maj' | 'positions' = 'maj'): void {
+    const key = eventId + ':' + type;
+    if (!this.subs.has(eventId) || this.pending.has(key)) return;
+    this.pending.set(key, setTimeout(() => {
+      this.pending.delete(key);
+      const msg = JSON.stringify({ type, at: new Date().toISOString() });
       for (const s of this.subs.get(eventId) ?? []) {
         try {
           s.send(msg);
@@ -50,7 +54,7 @@ export class LiveHub {
           // Connexion fermée entre-temps : elle sera retirée à sa fermeture.
         }
       }
-    }, this.delayMs));
+    }, type === 'positions' ? this.delayMs * 6 : this.delayMs));
   }
 
   close(): void {

@@ -87,6 +87,7 @@ async function cutParticipant(c: Client, userId: number) {
   await revokeUserSessions(c, userId);
   await c.query("UPDATE users SET disabled_at = coalesce(disabled_at, now()) WHERE id = $1 AND account_type = 'participant'", [userId]);
   await c.query('DELETE FROM event_memberships WHERE user_id = $1', [userId]);
+  await c.query('DELETE FROM member_locations WHERE user_id = $1', [userId]);
 }
 
 const CreateInvitation = z.object({
@@ -389,6 +390,7 @@ export async function invitationRoutes(app: FastifyInstance) {
       if (!m) throw notFound('Membre');
       if (userId === u.id) throw conflict('Vous ne pouvez pas vous retirer vous-même.');
       await c.query('DELETE FROM team_memberships WHERE team_id = $1 AND user_id = $2', [teamId, userId]);
+      await c.query('DELETE FROM member_locations WHERE user_id = $1 AND team_id = $2', [userId, teamId]);
       if (m.account_type === 'participant') await cutParticipant(c, userId);
       await audit(c, { actorId: u.id, eventId, entity: 'team_membership', entityId: userId, action: 'retrait', details: { teamId } });
       return { ok: true };

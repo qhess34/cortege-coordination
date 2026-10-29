@@ -296,3 +296,9 @@ button.big { font-size: 1.1rem; padding: .7rem 1.2rem; width: 100%; }
 .stat b.alert { color: var(--danger); }
 .event-title .sync { margin-left: .5rem; }
 a.button.big { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 3.2rem; font-weight: 600; text-decoration: none; }
+
+/* Positions partagées par les membres (carte de l'organisation) */
+.member-marker { display: flex; align-items: center; gap: 3px; pointer-events: auto; }
+.member-dot { width: 14px; height: 14px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35), 0 1px 3px rgba(0,0,0,.4); }
+.member-name { font-size: 11px; font-weight: 600; background: rgba(255,255,255,.85); border-radius: 3px; padding: 0 3px; white-space: nowrap; color: #1b1f24; }
+.sharing { border-left: 6px solid #3a86ff; }

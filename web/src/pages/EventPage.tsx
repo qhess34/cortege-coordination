@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Route } from '../../../server/src/geo/route';
 import { ApiError, api } from '../api';
-import { MapView, type PointEdit, type Selection } from '../components/MapView';
+import { MapView, type MemberPosition, type PointEdit, type Selection } from '../components/MapView';
 import { MapMenu } from '../components/MapMenu';
 import { useLive } from '../useLive';
 import { CoordinationPanel } from './event/CoordinationPanel';
@@ -159,7 +159,19 @@ export function EventPage({ eventId }: { eventId: number }) {
     setData((d) => (d ? { ...d, points, teams, summary } : d));
     setLiveTick((n) => n + 1);
   }, [base]);
-  const live = useLive(eventId, refreshLive);
+  // Positions partagées (organisation seulement, si le partage est autorisé) : rechargées au signal « positions ».
+  const [members, setMembers] = useState<MemberPosition[]>([]);
+  const showMembers = !!data && data.event.role === 'organisateur' && data.event.locationSharing;
+  const loadMembers = useCallback(() => {
+    if (!showMembers) { setMembers([]); return; }
+    api.get<MemberPosition[]>(base + '/positions').then(setMembers, () => undefined);
+  }, [base, showMembers]);
+  useEffect(() => {
+    loadMembers();
+    const t = setInterval(loadMembers, 30_000);
+    return () => clearInterval(t);
+  }, [loadMembers]);
+  const live = useLive(eventId, refreshLive, 30_000, loadMembers);
 
   const run = useCallback(async (fn: () => Promise<unknown>, success?: string) => {
     try {
@@ -332,6 +344,7 @@ export function EventPage({ eventId }: { eventId: number }) {
     <div className="event-layout">
       <section className="map-pane">
         <MapView
+          members={members}
           track={data.track}
           suggestions={visibleSuggestions}
           points={visiblePoints(data.points, hiddenTeams).concat(
@@ -410,7 +423,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           {tab === 'points' && <PointsPanel {...props} />}
           {tab === 'equipes' && <TeamsPanel {...props} />}
           {tab === 'historique' && <HistoryPanel {...props} />}
-          {tab === 'coordination' && <CoordinationPanel {...props} liveTick={liveTick} />}
+          {tab === 'coordination' && <CoordinationPanel {...props} liveTick={liveTick} members={showMembers ? members : null} />}
           {tab === 'mon_equipe' && myTeams && (
             <div className="stack" data-testid="mon-equipe">
               {myTeams.teams.length === 0 && <p className="muted">Vous ne faites plus partie d’aucune équipe.</p>}

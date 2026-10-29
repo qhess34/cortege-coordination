@@ -235,8 +235,21 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - **Direct** : WebSocket `/api/direct?event=<id>` qui envoie un simple signal « mise à jour » après chaque modification
   validée ; l'écran recharge ce que ses droits lui permettent de voir (le signal ne contient aucune donnée). En cas de
   coupure : reconnexion automatique et rechargement toutes les 30 s.
-- **Position** : demandée seulement à la demande (*Ma position*), elle reste sur le téléphone ; elle n'est envoyée que
-  pour calculer un itinéraire ou si on la joint à un incident, et n'est jamais suivie en continu.
+- **Position** : par défaut, demandée seulement à la demande (*Ma position*) et gardée sur le téléphone ; envoyée
+  seulement pour calculer un itinéraire ou si on la joint à un incident.
+- **Suivi en direct des équipes (facultatif)** : si l'organisation l'autorise pour la manifestation (Synthèse →
+  Modifier → *Autoriser le partage de position en direct*), chaque membre peut choisir *Partager ma position* sur son
+  téléphone. L'organisation voit alors les membres sur sa carte (couleur de l'équipe, nom, heure, précision) et le
+  nombre de membres suivis par équipe dans la coordination.
+  - **Arrivée automatique** : à moins de 30 m de son point (précision GPS ≤ 50 m), la mission en cours passe d'elle-même
+    « en position » (enregistré comme fait par le membre, visible dans la coordination).
+  - **Vie privée** : double accord (organisation + membre), arrêt à tout moment ; seule la **dernière** position est
+    conservée — aucun historique, rien dans le journal d'audit —, visible de l'organisation seulement, masquée après
+    10 minutes sans mise à jour et supprimée après 2 heures, à l'arrêt du partage, au retrait de l'équipe ou quand
+    l'organisation désactive le partage. Pensez à en informer les membres (base légale, information RGPD).
+  - **Limite** : une application web ne suit la position que **tant qu'elle est ouverte à l'écran** (l'écran est gardé
+    allumé pendant le partage quand le navigateur le permet) ; écran verrouillé ou application en arrière-plan, les
+    envois s'arrêtent — surtout sur iPhone. Un suivi en arrière-plan demanderait une application native.
 
 Derrière un proxy HTTPS, autorisez la mise à niveau WebSocket sur `/api/direct` (nginx : `proxy_http_version 1.1;`
 `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` — Caddy le fait d'office).
