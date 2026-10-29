@@ -1,5 +1,6 @@
 import { Fragment, useState, type FormEvent } from 'react';
-import { api } from '../../api';
+import { ApiError, api } from '../../api';
+import { notifyEventsChanged } from '../../components/EventSwitcher';
 import { EVENT_STATUS, MISSION_STATUS, POINT_STATUS, SUGGESTION_STATUS, dateTime, km } from '../../labels';
 import type { PanelProps } from '../EventPage';
 
@@ -19,7 +20,10 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
       () => api.patch('/api/events/' + ev.id, { ...form, startsAt: fromLocal(form.startsAt), endsAt: fromLocal(form.endsAt), version: ev.version }),
       'Événement enregistré.',
     );
-    if (ok) setEditing(false);
+    if (ok) {
+      setEditing(false);
+      notifyEventsChanged();
+    }
   };
   const count = (m: Record<string, number>, k: string) => m[k] ?? 0;
 
@@ -86,6 +90,50 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
         </dl>
         {s.lastAnalysis && <p className="muted">Dernière analyse OSM : {dateTime(s.lastAnalysis.at)} (données OSM du {dateTime(s.lastAnalysis.osmTimestamp)}).</p>}
       </div>
+      {canEdit && <DeleteEvent id={ev.id} name={ev.name} running={ev.status === 'en_cours'} />}
+    </div>
+  );
+}
+
+/** Suppression définitive : il faut retaper le nom de la manifestation. */
+function DeleteEvent({ id, name, running }: { id: number; name: string; running: boolean }) {
+  const [open, setOpen] = useState(false);
+  const [typed, setTyped] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const remove = async (e: FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    setError(null);
+    try {
+      await api.delete('/api/events/' + id, { confirmName: typed });
+      notifyEventsChanged();
+      window.location.hash = '#/';
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Suppression impossible.');
+      setBusy(false);
+    }
+  };
+  return (
+    <div className="card danger-zone">
+      <h3>Supprimer la manifestation</h3>
+      {!open ? (
+        <>
+          <p className="muted">Supprime définitivement le parcours, les suggestions, les points, les équipes, les missions et l’historique.</p>
+          <button className="danger" onClick={() => setOpen(true)} disabled={running} title={running ? 'Impossible pendant la manifestation' : undefined}>Supprimer…</button>
+          {running && <p className="muted small">Manifestation en cours : changez d’abord son statut.</p>}
+        </>
+      ) : (
+        <form className="stack" onSubmit={remove}>
+          <p>Cette action est <b>irréversible</b>. Pour confirmer, saisissez le nom de la manifestation : <b>{name}</b></p>
+          <input aria-label="Nom de la manifestation à supprimer" value={typed} onChange={(e) => setTyped(e.target.value)} autoComplete="off" />
+          {error && <p className="error">{error}</p>}
+          <div className="row">
+            <button className="danger" disabled={busy || typed.trim() !== name.trim()}>Supprimer définitivement</button>
+            <button type="button" onClick={() => { setOpen(false); setTyped(''); }}>Annuler</button>
+          </div>
+        </form>
+      )}
     </div>
   );
 }

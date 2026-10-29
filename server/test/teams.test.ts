@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Agent, createUser, setup, type TestContext } from './helpers/app.js';
-import { at } from './helpers/osm.js';
+import { at, gpxFrom, referenceNetwork } from './helpers/osm.js';
 
 let ctx: TestContext;
 let orga: Agent;
@@ -130,5 +130,44 @@ describe('équipes', () => {
     const other = (await orga.post('/api/events', { name: 'Autre' })).json().id;
     const foreign = (await orga.post('/api/events/' + other + '/points', { name: 'Ailleurs', position: at(0, 0) })).json().id;
     expect((await orga.post('/api/teams/' + b.id + '/missions', { pointId: foreign })).statusCode).toBe(404);
+  });
+});
+
+describe('suppression d’une manifestation', () => {
+  it('supprime toutes les données après confirmation du nom, et seulement pour un organisateur', async () => {
+    const id = (await orga.post('/api/events', { name: 'À supprimer' })).json().id;
+    const p = (await orga.post('/api/events/' + id + '/points', { name: 'P', position: at(0, 0) })).json().id;
+    const t = (await orga.post('/api/events/' + id + '/teams', { name: 'T', color: '#123456' })).json().id;
+    await orga.post('/api/teams/' + t + '/missions', { pointId: p });
+
+    const lecteur = await createUser(ctx.db, 'lecteur', 'aucun');
+    await orga.put('/api/events/' + id + '/members', { userId: lecteur, role: 'membre' });
+    const l = new Agent(ctx.app);
+    await l.login('lecteur');
+    expect((await l.request('DELETE', '/api/events/' + id, { confirmName: 'À supprimer' })).statusCode).toBe(403);
+
+    expect((await orga.request('DELETE', '/api/events/' + id, { confirmName: 'Autre nom' })).statusCode).toBe(400);
+    await orga.patch('/api/events/' + id, { status: 'en_cours', version: 1 });
+    expect((await orga.request('DELETE', '/api/events/' + id, { confirmName: 'À supprimer' })).statusCode).toBe(409);
+    await orga.patch('/api/events/' + id, { status: 'termine', version: 2 });
+
+    expect((await orga.request('DELETE', '/api/events/' + id, { confirmName: 'À supprimer' })).statusCode).toBe(200);
+    expect((await orga.get('/api/events/' + id)).statusCode).toBe(404);
+    for (const table of ['mission_points', 'teams', 'missions', 'audit_logs']) {
+      expect((await ctx.db.query('SELECT count(*)::int AS n FROM ' + table + ' WHERE event_id = $1', [id])).rows[0].n).toBe(0);
+    }
+    const trace = (await ctx.db.query("SELECT details FROM audit_logs WHERE entity = 'event' AND entity_id = $1 AND action = 'suppression'", [id])).rows;
+    expect(trace[0].details).toMatchObject({ name: 'À supprimer', points: 1, teams: 1, missions: 1 });
+  });
+
+  it('supprime une manifestation avec parcours et analyse OSM', async () => {
+    const id = (await orga.post('/api/events', { name: 'Avec parcours' })).json().id;
+    await orga.upload('/api/events/' + id + '/tracks', gpxFrom([[[0, 3], [250, -2], [500, 2]]]));
+    ctx.osm.data = referenceNetwork();
+    expect((await orga.post('/api/events/' + id + '/analyses', {})).statusCode).toBe(201);
+    const s = (await orga.get('/api/events/' + id + '/suggestions')).json();
+    await orga.post('/api/suggestions/' + s[0].id + '/validate', {});
+    expect((await orga.request('DELETE', '/api/events/' + id, { confirmName: 'Avec parcours' })).statusCode).toBe(200);
+    expect((await ctx.db.query('SELECT count(*)::int AS n FROM gpx_tracks WHERE event_id = $1', [id])).rows[0].n).toBe(0);
   });
 });

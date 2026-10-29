@@ -173,3 +173,12 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 .map-menu { display: flex; flex-direction: column; gap: .35rem; min-width: 240px; }
 .map-menu > button { text-align: left; }
 ul.compact { margin: 0; padding-left: 1.1rem; }
+
+/* Barre du haut : choix de la manifestation */
+.event-switcher { display: flex; gap: .5rem; align-items: center; }
+.event-switcher select { width: auto; max-width: 280px; padding: .25rem .4rem; }
+.topbar button.on-dark { background: transparent; color: #fff; border-color: rgba(255,255,255,.6); padding: .25rem .6rem; }
+.dialog { border: 1px solid var(--border); border-radius: 10px; padding: 1.2rem; width: min(420px, calc(100% - 2rem)); background: var(--surface); color: var(--text); }
+.dialog::backdrop { background: rgba(0,0,0,.4); }
+.danger-zone { border-color: var(--danger); }
+@media (max-width: 800px) { .event-switcher select { max-width: 160px; } }

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { idParam, requireUser } from '../app.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
-import { conflict, notFound } from '../errors.js';
+import { badRequest, conflict, notFound } from '../errors.js';
 import { requireCanCreateEvent, requireEventRole } from '../permissions.js';
 import { POINT_STATUS_SQL } from '../services/points.js';
 
@@ -95,6 +95,41 @@ export async function eventRoutes(app: FastifyInstance) {
       const changes = Object.fromEntries(Object.entries(b).filter(([k]) => k !== 'version' && k !== 'instructions' && k !== 'description'));
       await audit(c, { actorId: u.id, eventId: id, entity: 'event', entityId: id, action: 'modification', details: changes });
       return publicEvent(r.rows[0]);
+    });
+  });
+
+  // Suppression définitive d'une manifestation et de toutes ses données (parcours, suggestions, points, équipes,
+  // missions, historique). Réservée à ses organisateurs ; il faut retaper son nom ; refusée pendant l'événement.
+  app.delete('/api/events/:id', async (req) => {
+    const u = requireUser(req);
+    const id = idParam(req);
+    const b = z.object({ confirmName: z.string() }).parse(req.body ?? {});
+    return tx(app.db, async (c) => {
+      await requireEventRole(c, u, id, 'organisation');
+      const ev = (await c.query('SELECT * FROM events WHERE id = $1 FOR UPDATE', [id])).rows[0];
+      if (b.confirmName.trim() !== ev.name.trim()) throw badRequest('Le nom saisi ne correspond pas à celui de la manifestation.');
+      if (ev.status === 'en_cours') throw conflict('Manifestation en cours : changez d’abord son statut pour la supprimer.');
+      const counts = (
+        await c.query(
+          `SELECT (SELECT count(*) FROM mission_points WHERE event_id = $1)::int AS points,
+                  (SELECT count(*) FROM teams WHERE event_id = $1)::int AS teams,
+                  (SELECT count(*) FROM missions WHERE event_id = $1)::int AS missions,
+                  (SELECT count(*) FROM gpx_tracks WHERE event_id = $1)::int AS tracks`,
+          [id],
+        )
+      ).rows[0];
+      // Ordre imposé par les clés étrangères « RESTRICT » entre les données de l'événement.
+      await c.query('DELETE FROM missions WHERE event_id = $1', [id]);
+      await c.query('DELETE FROM mission_points WHERE event_id = $1', [id]);
+      await c.query('DELETE FROM map_suggestions WHERE event_id = $1', [id]);
+      await c.query('DELETE FROM osm_analyses WHERE event_id = $1', [id]);
+      await c.query('UPDATE events SET current_track_id = NULL WHERE id = $1', [id]);
+      await c.query('DELETE FROM gpx_tracks WHERE event_id = $1', [id]);
+      await c.query('DELETE FROM teams WHERE event_id = $1', [id]);
+      await c.query('DELETE FROM events WHERE id = $1', [id]);
+      // L'historique de l'événement disparaît avec lui ; seule une trace de la suppression est conservée.
+      await audit(c, { actorId: u.id, eventId: null, entity: 'event', entityId: id, action: 'suppression', details: { name: ev.name, ...counts } });
+      return { ok: true };
     });
   });
 

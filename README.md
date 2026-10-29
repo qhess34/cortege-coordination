@@ -32,6 +32,9 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
 - **Comptes administrés** : pas d'inscription publique. Le premier administrateur est créé en ligne de commande ;
   les administrateurs créent les autres comptes (`POST /api/admin/users`, écran prévu en phase 2).
 - **Événements** isolés : chaque compte ne voit que ceux auxquels il a accès ; un administrateur voit tout.
+  La barre du haut permet de basculer d'une manifestation à l'autre et d'en créer une nouvelle ; un organisateur
+  peut supprimer définitivement une manifestation depuis sa synthèse (nom à retaper, impossible pendant
+  l'événement ; seule une trace de la suppression est conservée dans le journal).
 - **Parcours GPX** : validation, longueur, distances cumulées, boucles, segments disjoints, sauts suspects, points
   de passage ; remplacement versionné avec aperçu des points qui s'éloigneraient du nouveau tracé, confirmation,
   et aucune suppression.
@@ -51,9 +54,12 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
 - **Équipes et missions** : création, couleur, responsable, consignes, désactivation ; affectation ordonnée,
   réordonnancement, réaffectation, statuts de mission avec transitions contrôlées (la fin d'une mission ne libère
   pas le point).
-- **Fonds de carte** au choix (mémorisé dans le navigateur) : plan OpenStreetMap, plan IGN, photo aérienne IGN
-  (France), satellite Esri (monde).
-- **Photos de rue Panoramax** : un clic sur la carte (hors mode ajout) ouvre la photo
+- **Fonds de carte** au choix (mémorisé dans le navigateur) : plan OSM vectoriel (par défaut, net à tout zoom),
+  plan OSM en images, plan IGN, photo aérienne IGN (France), satellite Esri (monde).
+- **Clic sur la carte** : menu avec la position (et la distance sur le parcours), « Voir les photos ici »,
+  « Ajouter un point ici », « Copier les coordonnées ». Un clic sur une suggestion ouvre sa bulle (valider,
+  écarter, photos, détails).
+- **Photos de rue Panoramax** : « Voir les photos ici » ouvre la photo
   [Panoramax](https://panoramax.fr) la plus proche (à moins de 50 m) dans le viewer officiel, pour vérifier un
   carrefour ou un accès sans se déplacer ; un clic sur un point ou une suggestion montre la photo la plus proche de
   cet élément. La couverture photo est tracée en orange à partir du zoom 13. Désactivable dans la barre de la carte

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from './api';
+import { EventSwitcher } from './components/EventSwitcher';
 import { EventPage } from './pages/EventPage';
 import { EventsPage } from './pages/EventsPage';
 import { LoginPage } from './pages/LoginPage';
@@ -42,6 +43,7 @@ export function App() {
     <div className="app">
       <header className="topbar">
         <a href="#/" className="brand">Coordination de cortège</a>
+        <EventSwitcher me={me} currentId={m ? Number(m[1]) : null} />
         <span className="spacer" />
         <span className="muted">{me.displayName}{me.globalRole === 'admin' ? ' (administrateur)' : ''}</span>
         <button className="link" onClick={logout}>Se déconnecter</button>
