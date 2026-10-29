@@ -14,10 +14,10 @@ développement et les risques. Les décisions marquées **[à valider]** mérite
             ┌──────────────── navigateur ─────────────────┐
             │ web/ : React + TypeScript + Vite             │
             │  • interface organisateur (bureau)           │
-            │  • PWA terrain (mobile)        [phase 3]     │
+            │  • PWA terrain (mobile)                      │
             │  MapLibre GL JS, GeoJSON                     │
             └───────────────┬─────────────────────────────┘
-                REST JSON   │  WebSocket [phase 3]   cookie de session HttpOnly
+                REST JSON   │  WebSocket   cookie de session HttpOnly
             ┌───────────────┴─────────────────────────────┐
             │ server/ : Node.js 22 + TypeScript + Fastify  │
             │  routes → services → dépôts SQL              │
@@ -29,7 +29,7 @@ développement et les risques. Les décisions marquées **[à valider]** mérite
             │ PostgreSQL 16 + │   │ Overpass API (données OSM)    │
             │ PostGIS 3       │   │ tuiles raster/vecteur         │
             └─────────────────┘   │ routage piéton (OSRM/Valhalla)│
-                                  │ [phase 3]                     │
+                                  │                               │
                                   └───────────────────────────────┘
 ```
 
@@ -46,7 +46,7 @@ développement et les risques. Les décisions marquées **[à valider]** mérite
 | Calcul géographique | Module pur `server/src/geo` (haversine, projection sur polyligne) | Testable sans base, réutilisable côté client | turf (dépendance lourde pour 5 fonctions) |
 | GPX | `@tmcw/togeojson` + `@xmldom/xmldom` | Bibliothèque maintenue, sortie GeoJSON directe | parseur maison |
 | Carte | MapLibre GL JS | Libre, rendu vectoriel ou raster, aucun compte requis | Leaflet (pas de vectoriel natif), Mapbox (licence) |
-| Temps réel | WebSocket (`@fastify/websocket`) [phase 3] | Bidirectionnel, simple derrière un proxy | SSE (unidirectionnel), Socket.IO (protocole propriétaire) |
+| Temps réel | WebSocket (`@fastify/websocket`) | Bidirectionnel, simple derrière un proxy | SSE (unidirectionnel), Socket.IO (protocole propriétaire) |
 | Sessions | Jeton aléatoire en cookie `HttpOnly; Secure; SameSite=Lax`, seul le **hash** SHA-256 est stocké | Jeton inaccessible au JavaScript, révocable côté serveur | JWT (révocation difficile) |
 | Mots de passe (administrateurs, organisateurs) | `scrypt` de Node (`crypto`) | Aucune dépendance native à compiler | argon2 (module natif) |
 | Tests | Vitest (unitaires + intégration sur vraie base PostGIS), Playwright (bout en bout) | Rapides, TypeScript natif | Jest |
@@ -58,7 +58,7 @@ développement et les risques. Les décisions marquées **[à valider]** mérite
 |---|---|---|---|
 | Overpass API (`overpass-api.de`) | Une requête par analyse, limitée à un couloir autour du parcours | Quelques requêtes par minute et par IP, temps de réponse variable, pas de SLA | Instance Overpass auto-hébergée sur un extrait Geofabrik régional ; URL configurable `OVERPASS_URL` |
 | Tuiles `tile.openstreetmap.org` | Fond de carte | [Politique d'usage](https://operations.osmfoundation.org/policies/tiles/) : usage modéré, en-tête identifiant, pas de pré-chargement massif | Fournisseur commercial, ou tuiles vectorielles auto-hébergées (Protomaps/PMTiles, OpenMapTiles) ; URL configurable `VITE_TILE_URL` |
-| Routage piéton [phase 3] | Itinéraire vers le prochain point | Serveurs de démonstration OSRM/Valhalla non destinés à la production | OSRM ou Valhalla auto-hébergés (profil piéton) |
+| Routage piéton | Itinéraire vers le prochain point | Serveurs de démonstration OSRM/Valhalla non destinés à la production | OSRM ou Valhalla auto-hébergés (profil piéton) |
 
 Les données OSM sont sous licence **ODbL** : l'attribution « © contributeurs OpenStreetMap » est affichée en permanence
 sur la carte, et sur toute fiche de mission exportée. Chaque analyse conserve la date des données
@@ -72,25 +72,24 @@ distinctes**. Valider une suggestion crée un point opérationnel qui la référ
 
 | Table | Rôle | Points clés |
 |---|---|---|
-| `users` | Comptes administrés (admin, organisateurs, responsables nommés) | `global_role` ∈ `admin`, `organisateur`, `aucun` ; `disabled_at` ; pas d'inscription publique |
-| `participants` [phase 2] | Personnes admises par invitation, sans mot de passe | Pseudonyme, rattachées à un événement |
+| `users` | Comptes créés par un administrateur | `global_role` ∈ `admin`, `organisateur`, `membre`, `aucun` ; un `membre` n'a ni identifiant ni mot de passe (connexion par lien) ; prénom, nom, e-mail ; `expires_at` (suppression automatique) ; `disabled_at` ; pas d'inscription publique |
 | `events` | Événements | Statut ∈ `preparation`, `pret`, `en_cours`, `termine`, `archive` ; `current_track_id` ; consignes |
 | `event_memberships` | Accès d'un compte à un événement | Rôle ∈ `organisateur`, `responsable`, `membre` ; unique (event, user) |
-| `teams` | Équipes | Couleur, responsable, statut, `disabled_at` (désactivation, jamais suppression implicite) |
-| `team_memberships` [phase 2] | Appartenance à une équipe | Un membre est un compte ou un participant |
+| `teams` | Équipes | Couleur, type ∈ `points`, `volante`, `ouverture`, `fermeture` ; responsable ; `leader_can_manage` ; `disabled_at` (désactivation, jamais suppression implicite) |
+| `team_memberships` | Appartenance à une équipe | Compte « membre » ou compte d'organisation ayant accès à la manifestation ; rôle ∈ `membre`, `responsable` |
 | `gpx_tracks` | Versions du parcours | Géométrie `LineString`/`MultiLineString` 4326, longueur, avertissements, `version` croissante |
 | `route_points` | Points de passage GPX (`wpt`) | Distance cumulée projetée |
-| `osm_analyses` | Historique des analyses | Paramètres, date des données OSM, rapport de comparaison |
+| `osm_analyses` | Historique des analyses | Paramètres, date des données OSM, rapport de comparaison, rues nommées relevées (nom des points) |
 | `map_suggestions` | Suggestions OSM | `stable_key` unique par événement ; statut ∈ `a_examiner`, `validee`, `ecartee` ; motif, attributs, incertitudes ; `last_seen_analysis_id` |
 | `mission_points` | Points opérationnels | Origine ∈ `suggestion`, `manuel`, `import` ; `distance_m` ; `deleted_at` (suppression logique tant que l'historique en dépend) |
 | `missions` | Affectation point ↔ équipe, ordonnée | `position` ; statut ∈ `a_preparer`, `affectee`, `en_deplacement`, `en_position`, `terminee`, `releve_necessaire`, `incident` ; `version` (verrou optimiste) |
-| `invitations` [phase 2] | QR code d'équipe ou magic link | Seul le **hash** du jeton est stocké ; type, mode d'admission, expiration, utilisations max, révocation |
-| `admission_requests` [phase 2] | Demandes en attente de validation | |
-| `sessions` | Sessions (comptes et participants) | Hash du jeton, expiration, `revoked_at`, dernière activité |
-| `messages`, `message_receipts` [phase 3] | Communication ciblée, accusés de réception | |
-| `incidents` [phase 3] | Incidents | Catégorie, priorité, statut, responsable du suivi, position facultative |
-| `event_progress` [phase 3] | Progression **déclarée** du cortège | Distance cumulée, auteur, horodatage ; jamais confondue avec une position GPS |
-| `location_updates` [phase 4] | Dernière position partagée volontairement | Une ligne par participant, purge à la fin de l'événement |
+| `sessions` | Sessions | Hash du jeton, expiration (glissante ; plusieurs jours pour un membre), `revoked_at`, dernière activité |
+| `login_links` | Liens de connexion à usage unique | Seul le **hash** du jeton est stocké ; origine ∈ `appareil`, `admin`, `email`, `equipe` ; expiration ; `used_at` |
+| `messages`, `message_receipts` | Communication ciblée, accusés de réception | Fil d'équipe ou annonce à tous ; urgent |
+| `incidents` | Incidents | Catégorie, priorité, statut, responsable du suivi, position facultative, verrou optimiste |
+| `event_progress` | Progression **déclarée** du cortège | Tête ou queue, distance cumulée, auteur, horodatage ; jamais confondue avec une position GPS |
+| `member_locations` | Dernière position partagée volontairement | Une ligne par membre, sans historique ; source (navigateur, OwnTracks), batterie ; purge après 2 h |
+| `trackers` | Identifiants de suivi OwnTracks | Hash du secret, expiration, révocation, version des zones envoyées |
 | `audit_logs` | Journal des modifications importantes | Acteur, action, entité, avant/après (sans secret) |
 
 **Statut opérationnel d'un point.** Il n'est pas stocké mais **calculé** à partir des missions (`valide` →
@@ -161,55 +160,56 @@ analyse signalées (jamais supprimées). Le rapport présente ces groupes sépar
 6. *Fiche d'un point* — nom, description, type, coordonnées, distance cumulée, historique, missions liées.
 7. *Équipe* — informations, membres, missions ordonnées (monter / descendre / réaffecter).
 8. *Remplacement du GPX* — aperçu des points qui s'éloigneraient du nouveau tracé, confirmation.
-9. *Administration* [phase 2] — comptes, rôles, sessions.
+9. *Administration* — comptes (organisation et membres), rôles, expiration, sessions, liens de connexion.
+10. *Coordination en direct* (téléphone) — direct, incidents, équipes, messages, carte.
 
-**Participant (PWA mobile)** [phase 3]
-1. *Invitation* — événement, équipe, pseudonyme, bouton *Rejoindre*, messages d'erreur explicites.
+**Membre d'équipe (PWA mobile)**
+1. *Connexion par lien* — lien d'activation ou de connexion, confirmation *Se connecter* ; *Mes équipes* ; *Profil*.
 2. *Ma mission* — carte du point, consignes, statut, grands boutons *En route*, *Arrivé*, *Terminé*, *Incident*,
    *Aide* ; prochain point ; responsable ; derniers messages ; indicateur de synchronisation.
 3. *Itinéraire* — tracé piéton avec avertissement sur ses limites.
 4. *Messages* et *Incidents*.
 
-## 5. Authentification et invitations
+## 5. Comptes et authentification
 
 **Comptes administrés.** Aucun point d'entrée d'inscription. Le premier administrateur est créé en ligne de commande
-(`npm run admin:create`). Seuls les administrateurs créent, modifient, désactivent des comptes et attribuent les rôles
-globaux. Toute route vérifie côté serveur : session valide → compte actif → droit sur l'événement → droit sur l'action.
+(`npm run admin:create`). Seuls les administrateurs créent, modifient, désactivent, suppriment des comptes et
+attribuent les rôles globaux. Un compte `membre` (membre d'équipe) n'a ni identifiant ni mot de passe : il se connecte
+par lien et n'accède qu'à ses équipes (vue terrain), jamais à l'organisation d'une manifestation. Une date d'expiration
+facultative entraîne la suppression automatique du compte (vérification horaire, journalisée). Toute route vérifie côté serveur : session valide → compte actif → droit sur l'événement → droit sur l'action.
 
 **Sessions.** Jeton de 32 octets aléatoires (`crypto.randomBytes`) envoyé en cookie `HttpOnly`, `Secure` en
-production, `SameSite=Lax`, `Path=/`. Seul `sha256(jeton)` est stocké. Expiration glissante (12 h pour les comptes,
-durée de l'événement + marge pour les participants), révocation individuelle ou globale. Les requêtes modifiantes
+production, `SameSite=Lax`, `Path=/`. Seul `sha256(jeton)` est stocké. Expiration glissante (12 h pour les comptes
+d'organisation ; 30 jours au plus pour un membre, sans dépasser l'expiration de son compte), révocation individuelle
+ou globale. Les requêtes modifiantes
 exigent un en-tête `X-Requested-With` (protection CSRF complémentaire à `SameSite`). Limitation des tentatives de
 connexion par IP et par identifiant.
 
-**QR code d'équipe** [phase 2]. Le QR encode `https://<hôte>/rejoindre/<jeton>` où le jeton est un identifiant
-d'invitation aléatoire (pas un mot de passe, pas une session). Paramètres : mode d'admission (`immediate` ou
-`validation`), expiration, nombre d'utilisations, suspension. Le droit obtenu est toujours `membre`. Régénérer = révoquer
-l'ancien jeton et en créer un nouveau.
-
-**Magic link individuel** [phase 2]. Même forme d'URL, invitation `individuelle` à usage unique, durée configurable,
-révocable, éventuellement pré-remplie d'un rôle (`membre` ou `responsable`) choisi par une personne habilitée. Le
-jeton est retiré de l'URL par le client dès l'ouverture (`history.replaceState`) et les journaux du serveur masquent
-le chemin `/rejoindre/*` et `/api/invitations/*/accept`.
+**Liens de connexion.** Jeton aléatoire de 32 octets dans une URL `https://<hôte>/connexion/<jeton>`, à usage unique,
+dont seul le hash est stocké. Origines : QR code « Connecter un appareil » affiché par un appareil connecté (10 min),
+lien créé par un administrateur — dont le lien d'activation d'un nouveau membre — ou par l'organisation d'une équipe
+pour l'un de ses membres (72 h), lien envoyé par e-mail si un serveur SMTP est configuré (15 min, réponse identique
+que l'adresse existe ou non). La page n'ouvre la session qu'au clic sur *Se connecter* (un logiciel qui pré-ouvre les
+liens d'un e-mail ne la consomme pas), puis recharge l'accueil : le jeton quitte l'adresse et l'historique. Les
+journaux masquent `/connexion/*` ; ces pages sont servies sans Referer et jamais mises en cache par le service worker.
+Désactiver un compte ou changer son mot de passe invalide ses liens en cours.
 
 ```
-Participant           Serveur                                  Base
-   │ GET /rejoindre/<jeton>                                     │
-   │──────────────────────▶ hash(jeton) → invitation ? ────────▶│
-   │◀── événement, équipe, état (valide / expirée / révoquée /  │
-   │    consommée / équipe fermée)                              │
-   │ POST accept {pseudonyme}                                   │
-   │──────────────────────▶ transaction : verrou invitation,    │
-   │                        contrôle état, compteur++,          │
-   │                        participant + appartenance (ou      │
-   │                        demande en attente), session ──────▶│
+Téléphone              Serveur                                  Base
+   │ GET /api/auth/lien/<jeton>                                 │
+   │──────────────────────▶ hash(jeton) → lien ? ──────────────▶│
+   │◀── nom du compte, état (valide / utilisé / expiré /        │
+   │    compte désactivé ou expiré)                             │
+   │ POST /api/auth/lien/<jeton> (clic « Se connecter »)        │
+   │──────────────────────▶ transaction : verrou du lien,       │
+   │                        contrôle état, used_at, session ───▶│
    │◀── Set-Cookie: session=<jeton> (HttpOnly)                  │
-   │ ouvertures suivantes : cookie seul, le lien n'est plus     │
-   │ nécessaire                                                  │
+   │ ouvertures suivantes : cookie seul                         │
 ```
 
-**Récupération d'accès** sans compte classique : un responsable habilité génère un nouveau magic link individuel
-pour le participant existant (rattaché au même participant, l'ancienne session est révoquée).
+**Membres des équipes.** L'organisation (ou un responsable, si elle le permet) ajoute des comptes à une équipe :
+comptes `membre`, ou comptes d'organisation ayant accès à la manifestation. Retirer un membre coupe aussitôt son accès
+aux missions de l'équipe et efface sa position partagée.
 
 ## 6. Plan de développement
 
@@ -223,14 +223,12 @@ pour le participant existant (rattaché au même participant, l'ancienne session
 5. Analyse OSM : client Overpass, algorithme pur testé sur jeux de données, enregistrement non destructif. ✔
 6. Suggestions : liste, filtres, validation, exclusion. ✔
 7. Points : ajout (clic, coordonnées), déplacement, modification, suppression avec conséquences, historique. ✔
-8. Équipes et missions : création, désactivation, affectation, ordre, réaffectation. ✔ (les membres d'équipe
-   arrivent avec les invitations, en phase 2)
+8. Équipes et missions : création, désactivation, affectation, ordre, réaffectation. ✔
 9. Interface organisateur : carte MapLibre et panneaux. ✔
 10. Documentation et test de bout en bout du parcours MVP organisateur. ✔
 
-**Phase 2** ✔ — administration des comptes, rôles par événement, participants, invitations QR et magic link, admission
-immédiate ou validée, sessions participants, révocation. Les participants sont des lignes `users` de type
-`participant` (sans identifiant ni mot de passe, rattachées à un événement) plutôt qu'une table séparée.
+**Phase 2** ✔ — administration des comptes (organisation et membres d'équipe), rôles par événement, connexion par lien,
+expiration et suppression automatique des comptes, profil, membres des équipes, révocation.
 
 **Phase 3** ✔ — PWA, vue de mission, transitions de mission par les membres, routage piéton, WebSocket, tableau de bord
 partagé, messages, incidents, progression déclarée du cortège. Le temps réel est un simple signal d'invalidation (aucune donnée dans le
@@ -251,5 +249,5 @@ export des fiches de mission, outils de diagnostic.
 | Réseau mobile saturé pendant la manifestation | Coordination dégradée | Phase 4 : cache PWA, file locale, horodatage visible, données anciennes signalées |
 | Fuite d'un QR code public | Personnes non souhaitées dans une équipe | Rôle membre seulement, admission avec validation, plafond d'utilisations, suspension, retrait immédiat |
 | Vol de session | Accès usurpé | Cookie HttpOnly/Secure, hash en base, révocation, durée limitée, rotation à l'admission |
-| Données personnelles (pseudonymes, positions) | Exposition sensible | Minimisation, pas d'e-mail obligatoire, positions non historisées, purge après l'événement |
+| Données personnelles (noms, e-mails, positions) | Exposition sensible | Minimisation, pas d'e-mail obligatoire, positions non historisées, purge après l'événement |
 | Concurrence d'édition entre organisateurs | Écrasement de modifications | Champ `version` et verrou optimiste (`409 Conflict`) |

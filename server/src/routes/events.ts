@@ -46,7 +46,7 @@ export async function eventRoutes(app: FastifyInstance) {
   // Seuls les événements auxquels le compte a accès sont listés.
   app.get('/api/events', async (req) => {
     const u = requireUser(req);
-    // Un participant voit son équipe par /api/moi, pas la liste des manifestations.
+    // Un compte « membre » ne voit que ses équipes (/api/moi/equipes), pas la liste des manifestations.
     if (u.globalRole === 'membre') return [];
     const r = u.globalRole === 'admin'
       ? await app.db.query("SELECT e.*, 'organisateur' AS role FROM events e ORDER BY coalesce(starts_at, created_at) DESC")
@@ -197,7 +197,7 @@ export async function eventRoutes(app: FastifyInstance) {
     const b = AddMember.parse(req.body);
     return tx(app.db, async (c) => {
       await requireEventRole(c, u, id, 'organisation');
-      // Les participants invités n'obtiennent jamais d'accès à la manifestation entière.
+      // Les comptes « membre » n'obtiennent jamais d'accès à la manifestation entière.
       const target = await c.query("SELECT id FROM users WHERE id = $1 AND disabled_at IS NULL AND global_role <> 'membre'", [b.userId]);
       if (!target.rowCount) throw notFound('Compte');
       await c.query(

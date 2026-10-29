@@ -246,17 +246,12 @@ a.button:hover { border-color: var(--primary); }
 .rb-subpoint { border-left: 3px solid var(--border); padding-left: .6rem; margin-bottom: .6rem; }
 .rb-subpoint h4 { margin: .2rem 0; }
 
-/* Lot 2 : invitations, page participant, administration */
+/* Membres d'une équipe, grands boutons */
 .team-access { border-top: 1px solid var(--border); padding-top: .5rem; margin: .25rem 0 .5rem; }
 .team-access h4 { margin: .5rem 0 .25rem; font-size: .95rem; }
-.qr-card { display: flex; gap: 1rem; align-items: flex-start; flex-wrap: wrap; }
-.qr-card img { border: 1px solid var(--border); border-radius: 6px; background: #fff; }
-.qr-card input { width: 100%; font-size: .8rem; }
 button.big { font-size: 1.1rem; padding: .7rem 1.2rem; width: 100%; }
-.page.participant { max-width: 40rem; margin: 0 auto; padding: 1rem; }
-.page.participant .missions li { padding: .4rem 0; }
 
-/* Lot 3 : vue terrain (téléphone) et coordination */
+/* Vue terrain (téléphone) et coordination */
 /* La vue terrain est la zone qui défile (l'application occupe tout l'écran sans défiler elle-même). */
 .field { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; padding: 0 max(.75rem, calc((100% - 40rem) / 2)) 3rem; }
 .field h1 { font-size: 1.3rem; margin: 0; }
@@ -266,7 +261,6 @@ button.big { font-size: 1.1rem; padding: .7rem 1.2rem; width: 100%; }
 .field-tabs button { flex: 1; font-size: 1rem; padding: .6rem .3rem; }
 .field-tabs button[aria-selected='true'] { background: var(--primary); color: var(--primary-text); border-color: var(--primary); }
 .field-tabs .count { display: inline-block; min-width: 1.3em; margin-left: .3rem; padding: 0 .35rem; border-radius: 999px; background: var(--danger); color: #fff; font-size: .8rem; }
-.field-footer { text-align: center; padding: 1.5rem 0 0; }
 .sync { font-size: .8rem; white-space: nowrap; }
 .sync.on { color: #2a7d3f; }
 .sync.off { color: var(--muted); }

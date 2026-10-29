@@ -52,7 +52,7 @@ describe('connecter un autre appareil (QR code)', () => {
     expect((await new Agent(ctx.app).request('POST', '/api/auth/lien/' + token, {})).statusCode).toBe(410);
   });
 
-  it('un participant sans compte ne peut pas en créer', async () => {
+  it('impossible sans être connecté', async () => {
     expect((await new Agent(ctx.app).post('/api/auth/liens')).statusCode).toBe(401);
   });
 });

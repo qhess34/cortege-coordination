@@ -1,12 +1,12 @@
-// Lot 3 : vue de mission, statuts depuis le terrain, incidents, messages, progression, tableau de bord, direct.
+// Jour J : vue de mission, statuts depuis le terrain, incidents, messages, progression, tableau de bord, direct.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Agent, createUser, memberAgent, setup, type TestContext } from './helpers/app.js';
 import { at, gpxFrom } from './helpers/osm.js';
 
 let ctx: TestContext;
 let orga: Agent;
-let alice: Agent; // participante de l'équipe A
-let bob: Agent; // participant de l'équipe B
+let alice: Agent; // membre de l'équipe A
+let bob: Agent; // membre de l'équipe B
 let eventId: number;
 let teamA: number;
 let teamB: number;

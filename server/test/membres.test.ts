@@ -58,11 +58,6 @@ describe('création des comptes par un administrateur', () => {
     expect(r.json()).toMatchObject({ displayName: 'Léa Dupont', activation: null });
     expect((await orga.post('/api/admin/users', { globalRole: 'membre', firstName: 'X' })).statusCode).toBe(403);
   });
-
-  it('les anciennes invitations d’équipe n’existent plus', async () => {
-    expect((await new Agent(ctx.app).get('/api/rejoindre/abc')).statusCode).toBe(404);
-    expect((await orga.post('/api/teams/' + teamA + '/invitations', { kind: 'equipe' })).statusCode).toBe(404);
-  });
 });
 
 describe('équipes et profil du membre', () => {

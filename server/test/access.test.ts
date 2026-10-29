@@ -126,10 +126,10 @@ describe('isolation des événements', () => {
 });
 
 describe('en-têtes de sécurité', () => {
-  it("envoie l'origine du site aux serveurs de tuiles, mais rien depuis une page d'invitation", async () => {
+  it("envoie l'origine du site aux serveurs de tuiles, mais rien depuis une page de lien de connexion", async () => {
     const page = await ctx.app.inject({ method: 'GET', url: '/' });
     expect(page.headers['referrer-policy']).toBe('strict-origin-when-cross-origin');
-    const invitation = await ctx.app.inject({ method: 'GET', url: '/rejoindre/jeton-secret' });
-    expect(invitation.headers['referrer-policy']).toBe('no-referrer');
+    const lien = await ctx.app.inject({ method: 'GET', url: '/connexion/jeton-secret' });
+    expect(lien.headers['referrer-policy']).toBe('no-referrer');
   });
 });

@@ -88,7 +88,7 @@ export async function loginLinkRoutes(app: FastifyInstance) {
     return done;
   });
 
-  const linkLimit = { config: { rateLimit: { max: app.config.joinRateLimit, timeWindow: '1 minute' } } };
+  const linkLimit = { config: { rateLimit: { max: app.config.linkRateLimit, timeWindow: '1 minute' } } };
   const state = (l: Record<string, unknown> | undefined) =>
     !l ? 'inconnu' : l.used_at ? 'utilise' : new Date(l.expires_at as string) < new Date() ? 'expire'
       : l.disabled_at || (l.account_expires_at && new Date(l.account_expires_at as string) < new Date()) ? 'desactive' : 'valide';

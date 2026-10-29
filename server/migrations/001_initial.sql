@@ -1,19 +1,30 @@
--- Schéma initial (phase 1) : comptes administrés, sessions, événements, parcours, analyses OSM,
--- suggestions, points de mission, équipes, missions, journal d'audit.
+-- Schéma de la base : comptes, sessions et liens de connexion ; manifestations, parcours, analyses OSM, suggestions,
+-- points, équipes, missions ; coordination du jour J (messages, incidents, progression, positions, OwnTracks) ;
+-- journal d'audit.
 
 CREATE EXTENSION IF NOT EXISTS postgis;
 
--- Comptes créés uniquement par un administrateur. Aucune inscription publique.
+-- Comptes créés uniquement par un administrateur (aucune inscription publique). Un compte « membre » (membre d'équipe)
+-- n'a ni identifiant ni mot de passe : il se connecte par lien et ne voit que ses équipes. Un compte avec une date
+-- d'expiration est supprimé automatiquement à cette date.
 CREATE TABLE users (
   id            bigserial PRIMARY KEY,
-  login         text NOT NULL UNIQUE CHECK (login ~ '^[a-z0-9._-]{3,64}$'),
+  login         text UNIQUE CHECK (login ~ '^[a-z0-9._-]{3,64}$'),
   display_name  text NOT NULL CHECK (length(display_name) BETWEEN 1 AND 120),
+  first_name    text NOT NULL DEFAULT '' CHECK (length(first_name) <= 80),
+  last_name     text NOT NULL DEFAULT '' CHECK (length(last_name) <= 80),
+  email         text,
   password_hash text,
-  global_role   text NOT NULL DEFAULT 'aucun' CHECK (global_role IN ('admin', 'organisateur', 'aucun')),
+  global_role   text NOT NULL DEFAULT 'membre' CHECK (global_role IN ('admin', 'organisateur', 'membre', 'aucun')),
+  expires_at    timestamptz,
   created_at    timestamptz NOT NULL DEFAULT now(),
   created_by    bigint REFERENCES users(id) ON DELETE SET NULL,
-  disabled_at   timestamptz
+  disabled_at   timestamptz,
+  -- Seuls les membres se passent d'identifiant (connexion par lien uniquement).
+  CONSTRAINT users_login_required_check CHECK (login IS NOT NULL OR global_role = 'membre')
 );
+CREATE UNIQUE INDEX users_email_idx ON users (lower(email)) WHERE email IS NOT NULL;
+CREATE INDEX users_expires_idx ON users(expires_at) WHERE expires_at IS NOT NULL;
 
 -- Sessions : seul le hash SHA-256 du jeton est stocké.
 CREATE TABLE sessions (
@@ -39,6 +50,10 @@ CREATE TABLE events (
                    CHECK (status IN ('preparation', 'pret', 'en_cours', 'termine', 'archive')),
   instructions     text NOT NULL DEFAULT '',
   current_track_id bigint,
+  -- Partage de position en direct autorisé (chaque membre décide ensuite s'il partage).
+  location_sharing boolean NOT NULL DEFAULT false,
+  -- Rayon (m) des zones envoyées à OwnTracks autour des points de mission (détection d'arrivée).
+  zone_radius_m    integer NOT NULL DEFAULT 50 CHECK (zone_radius_m BETWEEN 20 AND 300),
   version          integer NOT NULL DEFAULT 1,
   created_at       timestamptz NOT NULL DEFAULT now(),
   created_by       bigint REFERENCES users(id) ON DELETE SET NULL,
@@ -92,6 +107,8 @@ CREATE TABLE osm_analyses (
   source         text NOT NULL,
   stats          jsonb NOT NULL,
   report         jsonb NOT NULL,
+  -- Rues nommées relevées (voies et nœuds) : nom d'un nouveau point d'après la rue ou le croisement.
+  streets        jsonb,
   created_at     timestamptz NOT NULL DEFAULT now(),
   created_by     bigint REFERENCES users(id) ON DELETE SET NULL
 );
@@ -130,12 +147,26 @@ CREATE TABLE teams (
   description  text NOT NULL DEFAULT '',
   instructions text NOT NULL DEFAULT '',
   leader_user_id bigint REFERENCES users(id) ON DELETE SET NULL,
+  -- Les responsables peuvent ajouter et retirer des membres de leur équipe.
+  leader_can_manage boolean NOT NULL DEFAULT false,
+  -- Points fixes, volante (incidents), ouverture (tête du cortège), fermeture (queue).
+  kind         text NOT NULL DEFAULT 'points' CHECK (kind IN ('points', 'volante', 'ouverture', 'fermeture')),
   status       text NOT NULL DEFAULT 'non_confirmee' CHECK (status IN ('non_confirmee', 'prete', 'en_mission', 'indisponible')),
   disabled_at  timestamptz,
   version      integer NOT NULL DEFAULT 1,
   created_at   timestamptz NOT NULL DEFAULT now(),
   UNIQUE (event_id, name)
 );
+
+-- Membres d'une équipe (comptes « membre » ou comptes d'organisation ayant accès à la manifestation).
+CREATE TABLE team_memberships (
+  team_id    bigint NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  user_id    bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  role       text NOT NULL DEFAULT 'membre' CHECK (role IN ('membre', 'responsable')),
+  joined_at  timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (team_id, user_id)
+);
+CREATE INDEX team_memberships_user_idx ON team_memberships(user_id);
 
 -- Points opérationnels retenus par l'organisateur (distincts des suggestions).
 CREATE TABLE mission_points (
@@ -174,7 +205,10 @@ CREATE TABLE missions (
   version          integer NOT NULL DEFAULT 1,
   created_at       timestamptz NOT NULL DEFAULT now(),
   updated_at       timestamptz NOT NULL DEFAULT now(),
-  cancelled_at     timestamptz
+  cancelled_at     timestamptz,
+  -- Dernier changement de statut (affiché au tableau de bord).
+  status_changed_at timestamptz,
+  status_changed_by bigint REFERENCES users(id) ON DELETE SET NULL
 );
 -- Une seule mission active par équipe et par rang ; un point n'est actif qu'une fois par équipe.
 CREATE UNIQUE INDEX missions_team_position_idx ON missions(team_id, position) WHERE cancelled_at IS NULL;
@@ -193,3 +227,107 @@ CREATE TABLE audit_logs (
 );
 CREATE INDEX audit_logs_entity_idx ON audit_logs(entity, entity_id);
 CREATE INDEX audit_logs_event_idx ON audit_logs(event_id, at DESC);
+
+-- --- Connexion par lien --------------------------------------------------------------------------------------------
+
+-- Liens de connexion à usage unique : QR code d'un appareil connecté, lien d'un administrateur (dont l'activation d'un
+-- membre), lien envoyé par l'organisation d'une équipe, lien par e-mail. Seul le hash du jeton est stocké.
+CREATE TABLE login_links (
+  id          bigserial PRIMARY KEY,
+  token_hash  bytea NOT NULL UNIQUE,
+  user_id     bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind        text NOT NULL CHECK (kind IN ('appareil', 'admin', 'email', 'equipe')),
+  created_by  bigint REFERENCES users(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  expires_at  timestamptz NOT NULL,
+  used_at     timestamptz
+);
+CREATE INDEX login_links_user_idx ON login_links(user_id);
+
+-- --- Coordination du jour J ------------------------------------------------------------------------------------------
+
+-- Messages : fil d'une équipe avec l'organisation (team_id renseigné) ou annonce à tous (team_id NULL).
+CREATE TABLE messages (
+  id          bigserial PRIMARY KEY,
+  event_id    bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  team_id     bigint REFERENCES teams(id) ON DELETE CASCADE,
+  author_id   bigint REFERENCES users(id) ON DELETE SET NULL,
+  body        text NOT NULL CHECK (length(body) BETWEEN 1 AND 2000),
+  urgent      boolean NOT NULL DEFAULT false,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX messages_event_idx ON messages(event_id, created_at DESC);
+CREATE INDEX messages_team_idx ON messages(team_id, created_at DESC);
+
+-- Accusés de lecture.
+CREATE TABLE message_receipts (
+  message_id  bigint NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+  user_id     bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  read_at     timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (message_id, user_id)
+);
+
+-- Incidents signalés depuis le terrain (ou par l'organisation).
+CREATE TABLE incidents (
+  id           bigserial PRIMARY KEY,
+  event_id     bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  team_id      bigint REFERENCES teams(id) ON DELETE SET NULL,
+  mission_id   bigint REFERENCES missions(id) ON DELETE SET NULL,
+  reporter_id  bigint REFERENCES users(id) ON DELETE SET NULL,
+  category     text NOT NULL CHECK (category IN ('aide', 'securite', 'sante', 'circulation', 'materiel', 'autre')),
+  priority     text NOT NULL DEFAULT 'normale' CHECK (priority IN ('normale', 'haute')),
+  status       text NOT NULL DEFAULT 'ouvert' CHECK (status IN ('ouvert', 'pris_en_charge', 'resolu')),
+  description  text NOT NULL DEFAULT '',
+  geom         geometry(Point, 4326),
+  handled_by   bigint REFERENCES users(id) ON DELETE SET NULL,
+  created_at   timestamptz NOT NULL DEFAULT now(),
+  updated_at   timestamptz NOT NULL DEFAULT now(),
+  resolved_at  timestamptz,
+  version      integer NOT NULL DEFAULT 1
+);
+CREATE INDEX incidents_event_idx ON incidents(event_id, status);
+
+-- Progression déclarée de la tête ou de la queue du cortège (distance sur le parcours). Jamais une position GPS.
+CREATE TABLE event_progress (
+  id          bigserial PRIMARY KEY,
+  event_id    bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  part        text NOT NULL DEFAULT 'tete' CHECK (part IN ('tete', 'queue')),
+  distance_m  double precision NOT NULL CHECK (distance_m >= 0),
+  note        text NOT NULL DEFAULT '',
+  author_id   bigint REFERENCES users(id) ON DELETE SET NULL,
+  created_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX event_progress_event_idx ON event_progress(event_id, part, created_at DESC);
+
+-- Partage de position en direct (facultatif) : seule la DERNIÈRE position d'un membre est conservée, sans historique,
+-- effacée à l'arrêt du partage, au retrait de l'équipe, et au plus tard 2 heures après sa dernière mise à jour.
+CREATE TABLE member_locations (
+  user_id     bigint PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  event_id    bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  team_id     bigint NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  geom        geometry(Point, 4326) NOT NULL,
+  accuracy_m  double precision,
+  source      text NOT NULL DEFAULT 'web' CHECK (source IN ('web', 'owntracks')),
+  battery     integer,
+  updated_at  timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX member_locations_event_idx ON member_locations(event_id, updated_at DESC);
+
+-- Suivi en arrière-plan avec l'application OwnTracks : un identifiant de suivi par membre ; seul le hash du secret
+-- est stocké. Expire le lendemain de la manifestation, révocable.
+CREATE TABLE trackers (
+  id                 text PRIMARY KEY,
+  secret_hash        bytea NOT NULL,
+  user_id            bigint NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  team_id            bigint NOT NULL REFERENCES teams(id) ON DELETE CASCADE,
+  event_id           bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  created_at         timestamptz NOT NULL DEFAULT now(),
+  expires_at         timestamptz NOT NULL,
+  revoked_at         timestamptz,
+  -- Dernier contact de l'application, niveau de batterie et version des zones (points de mission) envoyées.
+  last_seen_at       timestamptz,
+  battery            integer,
+  waypoints_version  text
+);
+CREATE INDEX trackers_user_idx ON trackers(user_id);
+CREATE INDEX trackers_event_idx ON trackers(event_id);

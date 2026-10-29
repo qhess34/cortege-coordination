@@ -93,7 +93,7 @@ const osmDirections = (from: Position | null, to: Position) =>
   'https://www.openstreetmap.org/directions?engine=fossgis_osrm_foot&route=' +
   (from ? from[1] + '%2C' + from[0] : '') + '%3B' + to[1] + '%2C' + to[0] + '#map=17/' + to[1] + '/' + to[0];
 
-export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: number; header?: ReactNode; footer?: ReactNode; onUnauthorized?: () => void }) {
+export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; header?: ReactNode; onUnauthorized?: () => void }) {
   const scroller = useRef<HTMLElement>(null);
   const [data, setData] = useState<Terrain | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -344,7 +344,6 @@ export function FieldView({ teamId, header, footer, onUnauthorized }: { teamId: 
 
       {tab === 'aide' && <section className="card" data-testid="aide-membre"><Markdown source={guideMembre} toc /></section>}
 
-      {footer && <footer className="field-footer">{footer}</footer>}
       {toast && <div className={'toast ' + toast.kind} role="status">{toast.text}</div>}
     </main>
   );

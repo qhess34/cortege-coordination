@@ -1,4 +1,4 @@
-// Lot 3 : un participant sur téléphone et l'organisation au bureau, en direct (sans rechargement de page).
+// Jour J : un membre sur téléphone et l'organisation au bureau, en direct (sans rechargement de page).
 import { expect, test } from '@playwright/test';
 import { invite, signIn } from './helpers-membres';
 import { at, gpxFrom } from '../server/test/helpers/osm';
@@ -24,7 +24,7 @@ test('jour J : statut, aide, message urgent et progression circulent en direct',
   await expect(coord.getByTestId('coord-equipe-' + team.id)).toContainText('Affectée');
   await expect(page.locator('.event-title .sync')).toHaveText('● direct');
 
-  // Téléphone du participant.
+  // Téléphone du membre.
   const [lon, lat] = at(150, 10);
   const phoneCtx = await browser.newContext({
     viewport: { width: 390, height: 844 }, locale: 'fr-FR', serviceWorkers: 'block',

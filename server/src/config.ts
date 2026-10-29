@@ -12,8 +12,8 @@ export interface Config {
   userAgent: string;
   maxGpxBytes: number;
   webDist: string | null;
-  /** Ouvertures de lien d'invitation autorisées par minute et par adresse IP. */
-  joinRateLimit: number;
+  /** Ouvertures de liens de connexion autorisées par minute et par adresse IP. */
+  linkRateLimit: number;
   /** Tentatives de connexion autorisées par minute et par adresse IP. */
   loginRateLimit: number;
   /** Serveur d'itinéraires compatible OSRM, profil piéton (facultatif). */
@@ -46,7 +46,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     userAgent: env.OSM_USER_AGENT ?? 'cortege-coordination (auto-hébergé)',
     maxGpxBytes: Number(env.MAX_GPX_BYTES ?? 10 * 1024 * 1024),
     webDist: env.WEB_DIST ?? null,
-    joinRateLimit: Number(env.JOIN_RATE_LIMIT ?? 30),
+    linkRateLimit: Number(env.LINK_RATE_LIMIT ?? 30),
     loginRateLimit: Number(env.LOGIN_RATE_LIMIT ?? 20),
     routingUrl: env.ROUTING_URL || null,
     publicUrl: env.PUBLIC_URL ? env.PUBLIC_URL.replace(/\/+$/, '') : null,

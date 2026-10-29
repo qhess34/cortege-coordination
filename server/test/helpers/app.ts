@@ -24,7 +24,7 @@ export interface TestContext {
   close: () => Promise<void>;
 }
 
-export async function setup(opts: { logStream?: NodeJS.WritableStream; joinRateLimit?: number; noRouter?: boolean } = {}): Promise<TestContext> {
+export async function setup(opts: { logStream?: NodeJS.WritableStream; linkRateLimit?: number; noRouter?: boolean } = {}): Promise<TestContext> {
   const db = createPool(TEST_DB);
   await db.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
@@ -33,8 +33,8 @@ export async function setup(opts: { logStream?: NodeJS.WritableStream; joinRateL
   const config: Config = {
     port: 0, host: '127.0.0.1', databaseUrl: TEST_DB, cookieSecure: false, sessionTtlHours: 12,
     overpassUrls: ['http://overpass.test'], userAgent: 'test', maxGpxBytes: 1024 * 1024, webDist: null,
-    // Les tests ouvrent de nombreux liens depuis la même adresse ; la limite est testée à part.
-    joinRateLimit: opts.joinRateLimit ?? 10_000,
+    // Les tests ouvrent de nombreux liens depuis la même adresse.
+    linkRateLimit: opts.linkRateLimit ?? 10_000,
     loginRateLimit: 20,
     routingUrl: null,
     publicUrl: 'https://cortege.test',

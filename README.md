@@ -161,7 +161,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `PUBLIC_URL` | Adresse publique du site (`https://…`), pour la configuration OwnTracks | déduite de la requête |
 | `SMTP_URL` | Serveur d'envoi d'e-mails (`smtps://utilisateur:motdepasse@hôte:465`) pour les liens de connexion, facultatif | — |
 | `MAIL_FROM` | Expéditeur des e-mails | `Coordination de cortège <no-reply@localhost>` |
-| `JOIN_RATE_LIMIT` | Ouvertures de liens de connexion par minute et par adresse IP | `30` |
+| `LINK_RATE_LIMIT` | Ouvertures de liens de connexion par minute et par adresse IP | `30` |
 | `OVERPASS_URL` | Serveurs Overpass, séparés par des virgules, essayés dans l'ordre | `overpass-api.de`, puis `overpass.private.coffee` |
 | `OSM_USER_AGENT` | Identification envoyée à Overpass | `cortege-coordination (auto-hébergé)` |
 | `MAX_GPX_BYTES` | Taille maximale d'un GPX | 10 Mo |
@@ -198,11 +198,11 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 
 ## Ce que fait la phase 2
 
-- **Écran « Comptes »** (administrateurs) : création, rôle global, désactivation, révocation des sessions,
-  réinitialisation du mot de passe.
+- **Écran « Comptes »** (administrateurs) : création des comptes d'organisation et de membres d'équipe, rôle global,
+  expiration, désactivation, suppression, révocation des sessions, réinitialisation du mot de passe, lien de connexion.
 - **Accès des comptes** à une manifestation (onglet Synthèse) : recherche dans l'annuaire, rôle organisateur,
   responsable ou membre.
-- **Comptes des membres d'équipe** (depuis la migration 009) : créés par un administrateur (prénom, nom, e-mail
+- **Comptes des membres d'équipe** : créés par un administrateur (prénom, nom, e-mail
   facultatif, **date d'expiration** facultative après laquelle le compte est supprimé automatiquement), sans identifiant
   ni mot de passe. Le **lien d'activation** obtenu à la création connecte le membre sur son téléphone pour plusieurs
   jours. Il complète ensuite son **profil** (prénom, nom, e-mail).
@@ -210,8 +210,6 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
   d'organisation ayant accès à la manifestation), désigne les responsables, renvoie un lien de connexion, retire un
   membre. Les responsables peuvent le faire depuis leur vue terrain si l'organisation le permet.
 - Un **membre ne voit que ses équipes** (vue terrain), jamais la planification ni les autres équipes.
-- Les QR codes d'équipe et liens d'invitation des premières versions ont été retirés ; les anciens participants ont été
-  convertis en comptes membres, qui expirent au lendemain de leur manifestation.
 
 ## Connexion, installation et interfaces
 
@@ -308,14 +306,14 @@ Derrière un proxy HTTPS, autorisez la mise à niveau WebSocket sur `/api/direct
 - Journal d'audit des modifications importantes, sans secret.
 - Liens de connexion : seul le hash SHA-256 est stocké ; les URL `/connexion/*` sont masquées dans les
   journaux et servies avec `Referrer-Policy: no-referrer` ; ouvertures de lien limitées par adresse
-  (`JOIN_RATE_LIMIT`, 30 par minute par défaut). Un compte membre n'a jamais accès à l'organisation de la manifestation ;
+  (`LINK_RATE_LIMIT`, 30 par minute par défaut). Un compte membre n'a jamais accès à l'organisation de la manifestation ;
   un compte expiré ne peut plus se connecter et est supprimé automatiquement (vérification toutes les heures).
 
 ## Structure du dépôt
 
 ```
 server/            API Fastify (TypeScript)
-  migrations/      schéma SQL versionné (PostGIS)
+  migrations/      schéma SQL (PostGIS) : 001_initial.sql, puis une migration par évolution future
   src/geo/         calculs purs : parcours, GPX, analyse OSM
   src/routes/      routes HTTP, une par domaine
   src/services/    fusion des analyses, missions, Overpass

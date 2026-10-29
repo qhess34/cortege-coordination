@@ -1,4 +1,4 @@
-// Lot 3 : coordination le jour J. Vue de mission des membres, statuts posés depuis le terrain, incidents,
+// Coordination le jour J. Vue de mission des membres, statuts posés depuis le terrain, incidents,
 // messages, progression déclarée du cortège, tableau de bord, itinéraire piéton et signal temps réel.
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -36,7 +36,7 @@ export type TeamKind = 'points' | 'volante' | 'ouverture' | 'fermeture';
 export interface TeamAccess { eventId: number; role: 'membre' | 'responsable'; asOrganizer: boolean; kind: TeamKind }
 
 /**
- * Accès « terrain » à une équipe : ses membres (participants ou comptes), son responsable, et les organisateurs
+ * Accès « terrain » à une équipe : ses membres, son responsable, et les organisateurs
  * de la manifestation. Une équipe invisible répond 404.
  */
 export async function requireTeamMember(c: Client, user: SessionUser, teamId: number): Promise<TeamAccess> {

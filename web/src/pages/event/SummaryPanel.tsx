@@ -115,7 +115,7 @@ export function SummaryPanel({ data, canEdit, run, select }: PanelProps) {
 const ROLE: Record<string, string> = { organisateur: 'Organisateur', responsable: 'Responsable', membre: 'Membre' };
 interface Account { id: number; login: string | null; displayName: string }
 
-/** Comptes ayant accès à la manifestation. Les participants invités par QR code ou lien n'y figurent pas. */
+/** Comptes d'organisation ayant accès à la manifestation (les comptes « membre » n'y figurent jamais). */
 function EventAccess({ eventId }: { eventId: number }) {
   const [members, setMembers] = useState<(Account & { role: string })[]>([]);
   const [q, setQ] = useState('');

@@ -40,7 +40,7 @@ export function App() {
   }, []);
   useEffect(() => { void loadMe(); }, [loadMe]);
 
-  // La session du navigateur peut changer dans un autre onglet (déconnexion, autre compte, lien d'invitation
+  // La session du navigateur peut changer dans un autre onglet (déconnexion, autre compte, lien de connexion
   // ouvert) : au retour sur l'onglet, on revérifie pour ne pas agir sous une identité périmée.
   const meId = me?.id;
   useEffect(() => {

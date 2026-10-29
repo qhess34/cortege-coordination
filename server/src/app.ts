@@ -54,8 +54,8 @@ export interface AppDeps {
   logStream?: NodeJS.WritableStream;
 }
 
-/** Chemins dont l'URL ne doit jamais apparaître dans les journaux (jetons d'invitation). */
-const SENSITIVE_PATH = /^\/(rejoindre|api\/rejoindre|connexion|api\/auth\/lien)\//;
+/** Chemins dont l'URL ne doit jamais apparaître dans les journaux (jetons des liens de connexion). */
+const SENSITIVE_PATH = /^\/(connexion|api\/auth\/lien)\//;
 
 export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   const app = Fastify({
@@ -97,7 +97,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.addHook('onRequest', async (req, reply) => {
     reply.header('x-content-type-options', 'nosniff');
     // Les serveurs de tuiles OSM refusent (403) les requêtes sans Referer : on n'envoie que l'origine du site
-    // aux tiers. Les pages dont l'URL porte un jeton (invitations) n'envoient aucun Referer.
+    // aux tiers. Les pages dont l'URL porte un jeton (liens de connexion) n'envoient aucun Referer.
     reply.header('referrer-policy', SENSITIVE_PATH.test(req.url) ? 'no-referrer' : 'strict-origin-when-cross-origin');
     reply.header('x-frame-options', 'DENY');
     if (!req.url.startsWith('/api/')) return;
