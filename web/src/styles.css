@@ -139,3 +139,9 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 @media (max-width: 800px) { .panoramax { width: calc(100% - 1.2rem); } }
 .panoramax-host { position: absolute; inset: 0; }
 .map-toolbar select.basemap { width: auto; padding: .25rem .4rem; }
+/* Viewer Panoramax : on garde la photo, la navigation et le zoom ; les métadonnées (tiroir du bas, légende,
+   frise temporelle) sont masquées. Le crédit et le lien vers Panoramax restent sous la photo. */
+.panoramax-host pnx-bottom-drawer,
+.panoramax-host pnx-widget-legend,
+.panoramax-host pnx-picture-legend,
+.panoramax-host pnx-time-travel { display: none !important; }

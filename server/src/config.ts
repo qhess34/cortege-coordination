@@ -6,7 +6,8 @@ export interface Config {
   /** Cookies `Secure` (obligatoire en production derrière HTTPS). */
   cookieSecure: boolean;
   sessionTtlHours: number;
-  overpassUrl: string;
+  /** Serveurs Overpass, essayés dans l'ordre (OVERPASS_URL, séparés par des virgules). */
+  overpassUrls: string[];
   /** Identification envoyée à Overpass (politique d'usage OSM). */
   userAgent: string;
   maxGpxBytes: number;
@@ -28,7 +29,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     databaseUrl,
     cookieSecure: bool(env.COOKIE_SECURE, production),
     sessionTtlHours: Number(env.SESSION_TTL_HOURS ?? 12),
-    overpassUrl: env.OVERPASS_URL ?? 'https://overpass-api.de/api/interpreter',
+    overpassUrls: (env.OVERPASS_URL || 'https://overpass-api.de/api/interpreter,https://overpass.private.coffee/api/interpreter')
+      .split(',').map((u) => u.trim()).filter(Boolean),
     userAgent: env.OSM_USER_AGENT ?? 'cortege-coordination (auto-hébergé)',
     maxGpxBytes: Number(env.MAX_GPX_BYTES ?? 10 * 1024 * 1024),
     webDist: env.WEB_DIST ?? null,

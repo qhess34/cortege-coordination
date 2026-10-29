@@ -14,7 +14,7 @@ export interface OsmRelation {
   tags?: Tags;
 }
 export type OsmElement = OsmNode | OsmWay | OsmRelation;
-export interface OverpassResponse { osm3s?: { timestamp_osm_base?: string }; elements: OsmElement[] }
+export interface OverpassResponse { osm3s?: { timestamp_osm_base?: string }; elements: OsmElement[]; remark?: string }
 
 // --- Résultat ------------------------------------------------------------------------------------------------
 
@@ -558,4 +558,33 @@ export function overpassQuery(corridor: number, simplified: Position[][]): strin
     '[out:json][timeout:90];\n(\n  ' + parts.join('\n  ') + '\n)->.w;\n.w out body;\n.w >;\nout skel qt;\n' +
     'rel(bw.w)["type"="restriction"];\nout body;\n'
   );
+}
+
+/**
+ * Découpe le couloir en plusieurs requêtes de taille limitée (`maxPoints` sommets par requête). Une seule
+ * requête sur un long parcours est lourde pour les serveurs publics, qui répondent alors 502 ou 504.
+ * Les tronçons se chevauchent d'un sommet pour ne rien perdre à la jonction.
+ */
+export function overpassQueries(corridor: number, simplified: Position[][], maxPoints = 60): string[] {
+  const chunks: Position[][] = [];
+  for (const seg of simplified) {
+    for (let i = 0; i < seg.length - 1; i += maxPoints - 1) chunks.push(seg.slice(i, i + maxPoints));
+  }
+  return chunks.filter((c) => c.length >= 2).map((c) => overpassQuery(corridor, [c]));
+}
+
+/** Fusionne plusieurs réponses Overpass (un élément présent dans plusieurs tronçons n'est gardé qu'une fois). */
+export function mergeOverpass(responses: OverpassResponse[]): OverpassResponse {
+  const seen = new Map<string, OsmElement>();
+  for (const r of responses) {
+    for (const el of r.elements) {
+      const key = el.type + '/' + el.id;
+      const prev = seen.get(key);
+      // `out skel` donne des nœuds sans attributs ; on garde la version la plus complète.
+      if (!prev || (!prev.tags && el.tags)) seen.set(key, el);
+    }
+  }
+  // Date des données : la plus ancienne des réponses, pour ne pas surestimer leur fraîcheur.
+  const stamps = responses.map((r) => r.osm3s?.timestamp_osm_base).filter((t): t is string => !!t).sort();
+  return { osm3s: stamps.length ? { timestamp_osm_base: stamps[0] } : undefined, elements: [...seen.values()] };
 }

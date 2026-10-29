@@ -4,7 +4,7 @@ import { idParam, requireUser } from '../app.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
 import { badRequest, conflict, HttpError } from '../errors.js';
-import { DEFAULT_OPTIONS, analyse, overpassQuery, type Suggestion } from '../geo/osm-analysis.js';
+import { DEFAULT_OPTIONS, analyse, mergeOverpass, overpassQueries, type OverpassResponse, type Suggestion } from '../geo/osm-analysis.js';
 import { simplify } from '../geo/route.js';
 import { requireEntityAccess, requireEventRole } from '../permissions.js';
 import { mergeSuggestions } from '../services/merge.js';
@@ -73,14 +73,18 @@ export async function suggestionRoutes(app: FastifyInstance) {
     if (!track) throw badRequest("Importez d'abord un parcours GPX.");
     const options = { ...DEFAULT_OPTIONS, ...b };
     const corridor = b.corridor ?? 40;
-    const query = overpassQuery(corridor, track.route.segments.map((s) => simplify(s, 5)));
+    // Tracé simplifié à 10 m (le couloir de 40 m reste couvert), interrogé par tronçons successifs :
+    // une seule grosse requête fait souvent échouer les serveurs publics (502, 504).
+    const queries = overpassQueries(corridor, track.route.segments.map((s) => simplify(s, 10)));
 
     let data;
     try {
-      data = await app.osm(query);
+      const responses: OverpassResponse[] = [];
+      for (const q of queries) responses.push(await app.osm(q));
+      data = mergeOverpass(responses);
     } catch (e) {
-      req.log.warn({ err: (e as Error).message }, 'échec Overpass');
-      throw new HttpError(502, 'Données OSM indisponibles : ' + (e as Error).message);
+      req.log.warn({ err: (e as Error).message, queries: queries.length }, 'échec Overpass');
+      throw new HttpError(502, 'Données OSM indisponibles. ' + (e as Error).message);
     }
     const result = analyse(track.route, data, options);
 
@@ -90,7 +94,7 @@ export async function suggestionRoutes(app: FastifyInstance) {
         await c.query(
           `INSERT INTO osm_analyses(event_id, track_id, options, osm_timestamp, source, stats, report, created_by)
            VALUES ($1, $2, $3, $4, $5, $6, '{}', $7) RETURNING id, created_at`,
-          [eventId, track.id, JSON.stringify({ ...options, corridor }), result.osmTimestamp, app.config.overpassUrl, JSON.stringify(result.stats), u.id],
+          [eventId, track.id, JSON.stringify({ ...options, corridor }), result.osmTimestamp, app.config.overpassUrls.join(', '), JSON.stringify(result.stats), u.id],
         )
       ).rows[0];
       const merge = await mergeSuggestions(c, eventId, a.id, result.suggestions);

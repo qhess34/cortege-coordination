@@ -120,7 +120,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `PORT`, `HOST` | Écoute du serveur | `3000`, `127.0.0.1` |
 | `COOKIE_SECURE` | Cookies réservés à HTTPS | `true` en production |
 | `SESSION_TTL_HOURS` | Durée des sessions (glissante) | `12` |
-| `OVERPASS_URL` | Instance Overpass | `https://overpass-api.de/api/interpreter` |
+| `OVERPASS_URL` | Serveurs Overpass, séparés par des virgules, essayés dans l'ordre | `overpass-api.de`, puis `overpass.private.coffee` |
 | `OSM_USER_AGENT` | Identification envoyée à Overpass | `cortege-coordination (auto-hébergé)` |
 | `MAX_GPX_BYTES` | Taille maximale d'un GPX | 10 Mo |
 | `WEB_DIST` | Dossier de l'interface compilée servie par l'API | — |
@@ -133,8 +133,9 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - Les données OSM sont sous licence [ODbL](https://www.openstreetmap.org/copyright) : l'attribution
   « © contributeurs OpenStreetMap » est affichée en permanence sur la carte.
 - **Overpass** (`overpass-api.de`) est un service public gratuit, sans garantie, limité à quelques requêtes par
-  minute et par adresse. L'application n'envoie qu'une requête par analyse, restreinte à un couloir de 40 m autour
-  du parcours, et conserve les résultats. Pour un usage régulier : instance Overpass auto-hébergée sur un extrait
+  minute et par adresse. L'application interroge un couloir de 40 m autour du parcours, découpé en tronçons envoyés
+  l'un après l'autre (une seule grosse requête fait souvent répondre 502 ou 504), réessaie sur les erreurs
+  passagères en passant au serveur suivant, refuse les réponses tronquées, et conserve les résultats. Pour un usage régulier : instance Overpass auto-hébergée sur un extrait
   régional (Geofabrik), puis `OVERPASS_URL`.
 - **Tuiles** `tile.openstreetmap.org` : soumises à la [politique d'usage](https://operations.osmfoundation.org/policies/tiles/)
   de la fondation OSM (usage modéré, pas de téléchargement massif). Pour un usage soutenu : fournisseur commercial

@@ -90,8 +90,7 @@ export function PanoramaxPanel({ position, onClose, onPicture }: Props) {
       </div>
       {state.kind === 'ok' && (
         <div className="panoramax-foot muted">
-          Photo à {Math.round(state.picture.distance)} m{state.picture.datetime ? ', prise le ' + dateTime(state.picture.datetime) : ''}.
-          {' '}Elle peut ne plus refléter l’état actuel des lieux.{' '}
+          Photo © contributeurs Panoramax{state.picture.datetime ? ' · ' + dateTime(state.picture.datetime) : ''} ·{' '}
           <a href={exploreUrl(state.picture.id)} target="_blank" rel="noreferrer">Ouvrir sur Panoramax</a>
         </div>
       )}

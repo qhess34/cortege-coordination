@@ -36,10 +36,11 @@ test('clic sur la carte : photo la plus proche, puis fermeture et désactivation
   const [w, s, e, n] = searches[0]!.split(',').map(Number);
   results = [{ id: '11111111-2222-3333-4444-555555555555', collection: 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee', geometry: { type: 'Point', coordinates: [(w! + e!) / 2, (s! + n!) / 2] }, properties: { datetime: '2025-06-01T10:00:00Z' } }];
   await map.click({ position: { x: box.width / 2, y: box.height / 2 } });
-  await expect(panel).toContainText(/Photo à \d+ m, prise le/);
+  await expect(panel).toContainText(/Photo © contributeurs Panoramax/);
   const viewer = panel.locator('pnx-photo-viewer');
   await expect(viewer).toHaveAttribute('picture', '11111111-2222-3333-4444-555555555555');
   await expect(viewer).toHaveAttribute('url-parameters', 'false');
+  for (const el of await panel.locator('pnx-bottom-drawer, pnx-widget-legend, pnx-time-travel').all()) await expect(el).toBeHidden();
   await expect(panel.getByRole('link', { name: 'Ouvrir sur Panoramax' })).toHaveAttribute('href', /pic=11111111/);
   // Le viewer ne modifie pas l'adresse de la page.
   expect(new URL(page.url()).hash).toMatch(/^#\/evenements\/\d+$/);

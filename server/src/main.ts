@@ -10,7 +10,7 @@ import { overpassFetcher } from './services/overpass.js';
 const config = loadConfig();
 const db = createPool(config.databaseUrl);
 const applied = await migrate(db);
-const app = await buildApp({ db, config, osm: overpassFetcher(config.overpassUrl, config.userAgent), logger: true });
+const app = await buildApp({ db, config, osm: overpassFetcher(config.overpassUrls, config.userAgent), logger: true });
 if (applied.length) app.log.info({ applied }, 'migrations appliquées');
 
 // En production, le serveur distribue aussi l'interface compilée (web/dist).

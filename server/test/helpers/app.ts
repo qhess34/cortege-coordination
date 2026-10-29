@@ -25,7 +25,7 @@ export async function setup(): Promise<TestContext> {
   resetLoginFailures();
   const config: Config = {
     port: 0, host: '127.0.0.1', databaseUrl: TEST_DB, cookieSecure: false, sessionTtlHours: 12,
-    overpassUrl: 'http://overpass.test', userAgent: 'test', maxGpxBytes: 1024 * 1024, webDist: null,
+    overpassUrls: ['http://overpass.test'], userAgent: 'test', maxGpxBytes: 1024 * 1024, webDist: null,
   };
   const osm: TestContext['osm'] = { data: { elements: [] }, queries: [], fail: null };
   const app = await buildApp({
