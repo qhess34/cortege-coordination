@@ -71,7 +71,7 @@ describe('analyse OSM', () => {
     const pts = await points();
     expect(pts).toHaveLength(1);
     expect(pts[0]).toMatchObject({ origin: 'suggestion', status: 'valide' });
-    expect(pts[0]!.name).toMatch(/Carrefour/);
+    expect(pts[0]!.name).toBe('Rue A × Rue B');
   });
 
   it('nouvelle analyse non destructive : conserve, ne réintroduit pas, ne duplique pas', async () => {

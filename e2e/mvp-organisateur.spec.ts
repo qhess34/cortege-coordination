@@ -63,7 +63,7 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   await bubble.getByRole('button', { name: 'Valider' }).click();
   await expect(page.getByText('point de mission créé')).toBeVisible();
   // Le point créé s'ouvre directement en modification.
-  await expect(page.getByTestId('point-editor').getByLabel('Nom')).toHaveValue('Accès véhicules — Rue B côté nord (Rue A)');
+  await expect(page.getByTestId('point-editor').getByLabel('Nom')).toHaveValue('Rue A × Rue B (accès nord)');
   await page.getByTestId('point-editor').getByRole('button', { name: 'Annuler' }).click();
 
   // 5. Écarter un point inutile, depuis sa bulle.
@@ -137,7 +137,7 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   await page.getByPlaceholder('Nom de la nouvelle équipe').fill('Équipe Nord');
   await page.getByRole('button', { name: 'Créer' }).click();
   await expect(page.getByRole('heading', { name: 'Équipe Nord' })).toBeVisible();
-  for (const name of [/Point 1/, /Rue B côté nord/]) {
+  for (const name of [/Point 1/, /Rue A × Rue B \(accès nord\)/]) {
     const select = page.getByLabel('Point à affecter');
     const value = await select.locator('option', { hasText: name }).getAttribute('value');
     await select.selectOption(value!);
@@ -148,7 +148,7 @@ test('organisateur : événement, GPX, analyse, points, équipes', async ({ page
   await expect(missions).toHaveCount(2);
   await expect(missions.first()).toContainText('Point 1');
   await missions.nth(1).getByRole('button', { name: 'Monter' }).click();
-  await expect(missions.first()).toContainText('Rue B côté nord');
+  await expect(missions.first()).toContainText('Rue A × Rue B (accès nord)');
 
   // Synthèse : il reste un point validé sans équipe.
   await page.getByRole('tab', { name: 'Synthèse' }).click();

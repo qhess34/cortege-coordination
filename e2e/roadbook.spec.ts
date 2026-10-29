@@ -36,7 +36,7 @@ test('roadbook d’équipe et roadbook complet', async ({ page }) => {
   await expect(rb.locator('.rb-table tbody tr')).toHaveCount(3);
   // Les deux accès du carrefour forment un seul lieu, avec une seule carte.
   await expect(rb.locator('.rb-point > h3')).toHaveText(['Lieu : Rue A / Rue B — points 1, 3', '2. Angle est']);
-  await expect(rb.locator('.rb-point').first().locator('h4')).toHaveText(['1. Accès véhicules — Rue B côté nord (Rue A)', '3. Accès véhicules — Rue B côté sud (Rue A)']);
+  await expect(rb.locator('.rb-point').first().locator('h4')).toHaveText(['1. Rue A × Rue B (accès nord)', '3. Rue A × Rue B (accès sud)']);
   await expect(rb).toContainText('Relève à 15 h');
   await expect(rb).toContainText('Rue B');
   await expect(rb).toContainText('Voie d’accès : Rue B — double sens');

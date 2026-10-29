@@ -4,6 +4,7 @@ import { idParam, requireUser } from '../app.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
 import { conflict } from '../errors.js';
+import { placeName, placeNameQuery } from '../geo/place-name.js';
 import type { Position } from '../geo/route.js';
 import { requireEntityAccess, requireEventRole } from '../permissions.js';
 import { compactTeam } from '../services/missions.js';
@@ -50,6 +51,22 @@ export function publicPoint(r: Record<string, unknown>) {
 }
 
 export async function pointRoutes(app: FastifyInstance) {
+  // Nom proposé pour un nouveau point : rue la plus proche ou croisement, d'après OSM. Simple aide à la saisie :
+  // si Overpass ne répond pas, on renvoie un nom vide plutôt qu'une erreur.
+  app.get('/api/events/:id/nom-de-lieu', async (req) => {
+    const u = requireUser(req);
+    const eventId = idParam(req);
+    await requireEventRole(app.db, u, eventId, 'organisation');
+    const q = z.object({ lon: z.coerce.number().min(-180).max(180), lat: z.coerce.number().min(-90).max(90) }).parse(req.query);
+    const p: Position = [q.lon, q.lat];
+    try {
+      return placeName(await app.osm(placeNameQuery(p)), p);
+    } catch (e) {
+      req.log.warn({ err: e }, 'nom de lieu indisponible');
+      return { name: null, streets: [], unavailable: true };
+    }
+  });
+
   app.get('/api/events/:id/points', async (req) => {
     const u = requireUser(req);
     const eventId = idParam(req);

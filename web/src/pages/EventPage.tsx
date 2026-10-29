@@ -81,6 +81,20 @@ export function EventPage({ eventId }: { eventId: number }) {
   const [edit, setEdit] = useState<PointEdit | null>(null);
   const [focus, setFocus] = useState<{ position: Position; n: number } | null>(null);
   const closeEdit = useCallback(() => setEdit(null), []);
+  // Nouveau point : propose le nom de la rue ou du croisement (OSM), sans écraser un nom saisi.
+  const draftKey = edit?.kind === 'new' && edit.autoName ? edit.position.join() : null;
+  useEffect(() => {
+    if (!draftKey) return;
+    const position = draftKey.split(',').map(Number) as Position;
+    let cancelled = false;
+    const t = setTimeout(() => {
+      api.get<{ name: string | null }>('/api/events/' + eventId + '/nom-de-lieu?lon=' + position[0] + '&lat=' + position[1]).then((r) => {
+        if (cancelled || !r.name) return;
+        setEdit((prev) => (prev?.kind === 'new' && prev.autoName && prev.position.join() === draftKey ? { ...prev, name: r.name! } : prev));
+      }, () => undefined);
+    }, 300);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [draftKey, eventId]);
   // Équipes dont les points sont masqués sur la carte (0 = points sans équipe).
   const [hiddenTeams, setHiddenTeams] = useState<Set<number>>(new Set());
   const [recenter, setRecenter] = useState(0);
@@ -159,7 +173,7 @@ export function EventPage({ eventId }: { eventId: number }) {
   };
 
   const newDraft = (p: Position): PointEdit => ({
-    kind: 'new', position: p, type: 'autre', description: '',
+    kind: 'new', position: p, type: 'autre', description: '', autoName: true,
     name: 'Point ' + (data.points.filter((x) => x.origin === 'manuel').length + 1),
   });
 
@@ -204,7 +218,7 @@ export function EventPage({ eventId }: { eventId: number }) {
       eventId={eventId}
       edit={edit}
       point={editingPoint}
-      onChange={setEdit}
+      onChange={(next) => setEdit(next.name !== edit.name ? { ...next, autoName: false } : next)}
       onClose={closeEdit}
       onSaved={async (id, message) => {
         setEdit(null);

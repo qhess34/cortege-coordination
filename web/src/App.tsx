@@ -35,6 +35,22 @@ export function App() {
   }, []);
   useEffect(() => { void loadMe(); }, [loadMe]);
 
+  // La session du navigateur peut changer dans un autre onglet (déconnexion, autre compte, lien d'invitation
+  // ouvert) : au retour sur l'onglet, on revérifie pour ne pas agir sous une identité périmée.
+  const meId = me?.id;
+  useEffect(() => {
+    if (meId === undefined) return;
+    const check = () => {
+      if (document.visibilityState !== 'visible') return;
+      api.get<Me>('/api/auth/me').then((m) => { if (m.id !== meId) window.location.reload(); }, (e) => {
+        if (e instanceof ApiError && e.status === 401) setMe(null);
+      });
+    };
+    document.addEventListener('visibilitychange', check);
+    window.addEventListener('focus', check);
+    return () => { document.removeEventListener('visibilitychange', check); window.removeEventListener('focus', check); };
+  }, [meId]);
+
   // Lien d'invitation (/rejoindre/<jeton>) : accessible sans connexion.
   const joinToken = window.location.pathname.match(/^\/rejoindre\/([A-Za-z0-9_-]+)$/)?.[1];
   if (joinToken) return <JoinPage token={joinToken} onJoined={loadMe} />;

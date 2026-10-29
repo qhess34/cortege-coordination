@@ -9,6 +9,7 @@ interface Info {
   kind: 'equipe' | 'individuelle'; admission: 'immediate' | 'validation'; role: 'membre' | 'responsable';
   recovery: { name: string } | null;
   state: string; message: string | null;
+  connectedAs: string | null;
 }
 
 export function JoinPage({ token, onJoined }: { token: string; onJoined: () => void }) {
@@ -50,7 +51,13 @@ export function JoinPage({ token, onJoined }: { token: string; onJoined: () => v
               <b>{info.event.name}</b>
               {info.event.startsAt ? <><br /><span className="muted">{dateTime(info.event.startsAt)}</span></> : null}
             </p>
-            {info.state !== 'valide' ? (
+            {info.connectedAs ? (
+              <p className="warning" role="alert">
+                Vous êtes connecté·e en tant que <b>{info.connectedAs}</b>. Rejoindre l’équipe depuis ce navigateur fermerait
+                cette session. Ouvrez le lien sur le téléphone du participant, ou dans une fenêtre de navigation privée.
+                <br /><a href="/#/">Revenir à l’organisation</a>
+              </p>
+            ) : info.state !== 'valide' ? (
               <p className="warning" role="alert">{info.message}</p>
             ) : (
               <form className="stack" onSubmit={join}>

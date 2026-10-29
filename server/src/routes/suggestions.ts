@@ -77,6 +77,13 @@ const SUGGESTION_SELECT = `
     FROM map_suggestions s
     LEFT JOIN mission_points p ON p.suggestion_id = s.id AND p.deleted_at IS NULL`;
 
+/** Nom d'un point issu d'une suggestion : la rue, ou le croisement « parcours × rue », et le côté de l'accès. */
+export function suggestionPointName(data: Suggestion, typeLabel: string): string {
+  const streets = [...new Set([data.routeNames[0], ...data.branches.map((x) => x.name)].filter((x): x is string => !!x))];
+  const base = streets.length >= 2 ? streets[0] + ' × ' + streets[1] : streets[0] ?? typeLabel;
+  return data.junction ? base + ' (accès ' + data.junction.side + ')' : base;
+}
+
 export async function suggestionRoutes(app: FastifyInstance) {
   // Analyse OSM. `?async=1` : lancée en tâche de fond, réponse immédiate avec l'identifiant à suivre.
   app.post('/api/events/:id/analyses', async (req, reply) => {
@@ -143,11 +150,7 @@ export async function suggestionRoutes(app: FastifyInstance) {
       const existing = await c.query('SELECT id FROM mission_points WHERE suggestion_id = $1', [id]);
       if (existing.rowCount) throw conflict('Un point issu de cette suggestion existe déjà (éventuellement supprimé).');
       const data = s.data as Suggestion;
-      const name = b.name ?? (data.junction
-        ? (TYPE_LABEL[s.type] ?? s.type) + ' — ' + (data.branches[0]?.name ?? 'voie sans nom') + ' côté ' + data.junction.side +
-          (data.routeNames[0] ? ' (' + data.routeNames[0] + ')' : '')
-        : (TYPE_LABEL[s.type] ?? s.type) + (data.routeNames[0] ? ' — ' + data.routeNames[0] : '') +
-          (data.branches[0]?.name ? ' / ' + data.branches[0].name : ''));
+      const name = b.name ?? suggestionPointName(data, TYPE_LABEL[s.type] ?? s.type);
       let distance = s.distance_m as number | null;
       if (b.position) distance = (await currentTrack(c, eventId))?.route.locate(b.position)?.distance ?? null;
       const p = (

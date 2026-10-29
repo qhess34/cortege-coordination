@@ -28,6 +28,10 @@ const STATE_TEXT: Record<Exclude<InvitationState, 'valide'>, string> = {
   equipe_fermee: 'Cette équipe n’accepte plus de membres.',
 };
 
+const CONNECTED_TEXT =
+  'Ce navigateur est connecté avec un compte d’organisation : rejoindre l’équipe ici le déconnecterait. ' +
+  'Ouvrez le lien sur le téléphone du participant, ou dans une fenêtre de navigation privée.';
+
 function invitationState(inv: Record<string, unknown>, teamDisabled: boolean): InvitationState {
   if (inv.revoked_at) return 'revoquee';
   if (teamDisabled) return 'equipe_fermee';
@@ -116,12 +120,16 @@ export async function invitationRoutes(app: FastifyInstance) {
       kind: inv.kind, admission: inv.admission, role: inv.role,
       recovery: inv.participant_id ? { name: inv.participant_name } : null,
       state, message: state === 'valide' ? null : STATE_TEXT[state],
+      // Rejoindre remplacerait la session du compte ouverte dans ce navigateur : la page prévient.
+      connectedAs: req.user?.accountType === 'compte' ? req.user.displayName : null,
     };
   });
 
   app.post('/api/rejoindre/:token', joinLimit, async (req, reply) => {
     const token = String((req.params as Record<string, string>).token);
     const b = z.object({ pseudonym: z.string().trim().min(1, 'Indiquez un nom ou un pseudonyme.').max(60).optional() }).parse(req.body ?? {});
+    // Ne jamais remplacer silencieusement la session d'un compte (organisateur qui teste son propre QR code).
+    if (req.user?.accountType === 'compte') throw new HttpError(409, CONNECTED_TEXT);
     const out = await tx(app.db, async (c) => {
       const inv = (await c.query('SELECT * FROM invitations WHERE token_hash = $1 FOR UPDATE', [hashToken(token)])).rows[0];
       if (!inv) throw notFound('Invitation');

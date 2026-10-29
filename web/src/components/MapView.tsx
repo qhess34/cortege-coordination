@@ -22,6 +22,8 @@ export interface PointEdit {
   name: string;
   type: string;
   description: string;
+  /** Nom proposé automatiquement (rue ou croisement), remplacé tant que l'utilisateur ne l'a pas modifié. */
+  autoName?: boolean;
 }
 
 interface Props {

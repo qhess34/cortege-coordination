@@ -40,7 +40,7 @@ describe('roadbook', () => {
     expect(rb.teams.map((t: { name: string }) => t.name)).toEqual(['Nord', 'Sud']);
     const n = rb.teams[0];
     expect(n.instructions).toBe('Rester groupés.');
-    expect(n.missions.map((m: { order: number; point: { name: string } }) => [m.order, m.point.name])).toEqual([[1, 'Accès véhicules — Rue B côté nord (Rue A)'], [2, 'Angle <est>']]);
+    expect(n.missions.map((m: { order: number; point: { name: string } }) => [m.order, m.point.name])).toEqual([[1, 'Rue A × Rue B (accès nord)'], [2, 'Angle <est>']]);
     // Un point issu d'OSM garde les informations utiles sur le terrain.
     expect(n.missions[0].point.osm.branches[0].name).toBe('Rue B');
     expect(n.missions[1].point.osm).toBeNull();
@@ -62,7 +62,7 @@ describe('roadbook', () => {
     expect(res.headers['content-disposition']).toMatch(/filename="roadbook-marche-roadbook-nord\.gpx"/);
     expect(res.body).toContain('&lt;est&gt;');
     const g = parseGpx(res.body);
-    expect(g.waypoints.map((w) => w.name)).toEqual(['01 Accès véhicules — Rue B côté nord (Rue A)', '02 Angle <est>']);
+    expect(g.waypoints.map((w) => w.name)).toEqual(['01 Rue A × Rue B (accès nord)', '02 Angle <est>']);
     expect(g.length).toBeCloseTo(500, -1);
   });
 

@@ -236,3 +236,14 @@ describe('suppression de la manifestation', () => {
     expect((await ctx.db.query('SELECT count(*)::int AS n FROM users WHERE event_id = $1', [id])).rows[0].n).toBe(0);
   });
 });
+
+describe('navigateur déjà connecté avec un compte', () => {
+  it("rejoindre ne remplace pas la session de l'organisateur", async () => {
+    const inv = await invite(teamA, { kind: 'equipe' });
+    const info = (await orga.get('/api/rejoindre/' + inv.token)).json();
+    expect(info.connectedAs).toBeTruthy();
+    const r = await orga.join(inv.token, 'Moi-même');
+    expect(r.statusCode).toBe(409);
+    expect((await orga.get('/api/events/' + eventId)).statusCode).toBe(200);
+  });
+});

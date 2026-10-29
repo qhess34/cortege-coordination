@@ -108,7 +108,7 @@ test('glisser une suggestion la valide à la position choisie ; un point se sais
   await expect(page.getByText('Suggestion validée à la position choisie')).toBeVisible();
   // Le point est posé à l'endroit choisi sans ouvrir sa bulle.
   await expect(page.getByTestId('map-bubble')).toHaveCount(0);
-  const marker = page.locator('.point-marker', { hasText: /Rue B côté nord/ });
+  const marker = page.locator('.point-marker', { hasText: /Rue A × Rue B \(accès nord\)/ });
   const mb = (await marker.locator('.point-dot').boundingBox())!;
   expect(Math.abs(mb.x + mb.width / 2 - (sx + 60))).toBeLessThan(6);
   expect(Math.abs(mb.y + mb.height / 2 - (sy - 90))).toBeLessThan(6);
