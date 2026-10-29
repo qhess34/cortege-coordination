@@ -12,7 +12,6 @@ test('guide de l’organisation et guide des membres accessibles dans l’applic
   await expect(orga.getByRole('heading', { level: 1 })).toHaveText('Guide de l’organisation'.replace('’', "'"));
   await orga.getByRole('navigation', { name: 'Sommaire' }).getByRole('link', { name: 'Le jour J : onglet Coordination' }).click();
   await expect(orga.getByRole('heading', { name: 'Le jour J : onglet Coordination' })).toBeInViewport();
-  await page.screenshot({ path: '/tmp/claude-0/-home-user/1bfc10af-db02-53e3-80f8-133b2eb05388/scratchpad/aide-orga.png' });
   await page.getByRole('tab', { name: 'Membres d’équipe' }).click();
   await expect(page.getByTestId('guide-membre')).toContainText('Activer votre compte');
 
@@ -27,6 +26,5 @@ test('guide de l’organisation et guide des membres accessibles dans l’applic
   const aide = phone.getByTestId('aide-membre');
   await expect(aide).toContainText('Selon votre type d');
   await expect(aide.locator('blockquote').first()).toContainText('112');
-  await phone.screenshot({ path: '/tmp/claude-0/-home-user/1bfc10af-db02-53e3-80f8-133b2eb05388/scratchpad/aide-membre.png' });
   await ctx.close();
 });
