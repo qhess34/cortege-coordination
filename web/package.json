@@ -9,6 +9,7 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@panoramax/web-viewer": "^5.3.1",
     "maplibre-gl": "^6.16.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
 import { MapView, type Selection } from '../components/MapView';
+import { PanoramaxPanel } from '../components/PanoramaxPanel';
+import { PANORAMAX_API } from '../panoramax';
 import type { EventInfo, MissionPoint, Position, Suggestion, Summary, Team, Track, Waypoint } from '../types';
 import { HistoryPanel } from './event/HistoryPanel';
 import { PointsPanel } from './event/PointsPanel';
@@ -31,6 +33,16 @@ export interface PanelProps {
 }
 
 type Tab = 'synthese' | 'parcours' | 'suggestions' | 'points' | 'equipes' | 'historique';
+/** Préférence locale (simple confort d'affichage) : vue Panoramax au clic sur la carte. */
+const PNX_PREF = 'cortege.panoramax';
+function readPanoramaxPref(): boolean {
+  try {
+    return localStorage.getItem(PNX_PREF) !== 'non';
+  } catch {
+    return true;
+  }
+}
+
 const TABS: [Tab, string][] = [
   ['synthese', 'Synthèse'], ['parcours', 'Parcours'], ['suggestions', 'Suggestions'], ['points', 'Points'], ['equipes', 'Équipes'], ['historique', 'Historique'],
 ];
@@ -43,6 +55,14 @@ export function EventPage({ eventId }: { eventId: number }) {
   const [addMode, setAddMode] = useState(false);
   const [toast, setToast] = useState<{ kind: 'ok' | 'error'; text: string } | null>(null);
   const [showDismissed, setShowDismissed] = useState(false);
+  const [panoramax, setPanoramax] = useState(readPanoramaxPref);
+  const [inspectAt, setInspectAt] = useState<Position | null>(null);
+  const [photoAt, setPhotoAt] = useState<Position | null>(null);
+  const togglePanoramax = (on: boolean) => {
+    setPanoramax(on);
+    if (!on) { setInspectAt(null); setPhotoAt(null); }
+    try { localStorage.setItem(PNX_PREF, on ? 'oui' : 'non'); } catch { /* stockage indisponible : préférence non mémorisée */ }
+  };
 
   const base = '/api/events/' + eventId;
   const reload = useCallback(async () => {
@@ -121,6 +141,8 @@ export function EventPage({ eventId }: { eventId: number }) {
           onSelect={select}
           onMapClick={addPointAt}
           onPointMove={movePoint}
+          onInspect={panoramax ? (p) => { setInspectAt(p); setPhotoAt(null); } : undefined}
+          panoramax={{ enabled: panoramax, tilesUrl: PANORAMAX_API + '/map/{z}/{x}/{y}.mvt', clicked: inspectAt, photo: photoAt }}
         />
         <div className="map-toolbar">
           {canEdit && (
@@ -129,7 +151,11 @@ export function EventPage({ eventId }: { eventId: number }) {
             </button>
           )}
           <label className="check"><input type="checkbox" checked={showDismissed} onChange={(e) => setShowDismissed(e.target.checked)} /> Afficher les suggestions écartées</label>
+          <label className="check" title="Affiche la photo de rue Panoramax la plus proche de l’endroit cliqué"><input type="checkbox" checked={panoramax} onChange={(e) => togglePanoramax(e.target.checked)} /> Photos Panoramax au clic</label>
         </div>
+        {panoramax && inspectAt && !addMode && (
+          <PanoramaxPanel position={inspectAt} onPicture={(p) => setPhotoAt(p?.position ?? null)} onClose={() => { setInspectAt(null); setPhotoAt(null); }} />
+        )}
         {addMode && <div className="map-hint">Cliquez sur la carte pour créer un point (plusieurs clics = plusieurs points).</div>}
         <div className="disclaimer">
           Suggestions issues d’OpenStreetMap, à vérifier sur le terrain. Elles ne garantissent rien en matière de sécurité

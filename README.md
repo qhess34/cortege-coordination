@@ -49,6 +49,11 @@ La conception complète (architecture, modèle de données, écrans, flux d'invi
 - **Équipes et missions** : création, couleur, responsable, consignes, désactivation ; affectation ordonnée,
   réordonnancement, réaffectation, statuts de mission avec transitions contrôlées (la fin d'une mission ne libère
   pas le point).
+- **Photos de rue Panoramax** : un clic sur la carte (hors mode ajout) ouvre la photo
+  [Panoramax](https://panoramax.fr) la plus proche (à moins de 50 m) dans le viewer officiel, pour vérifier un
+  carrefour ou un accès sans se déplacer ; un clic sur un point ou une suggestion montre la photo la plus proche de
+  cet élément. La couverture photo est tracée en orange à partir du zoom 13. Désactivable dans la barre de la carte
+  (« Photos Panoramax au clic »). Une photo peut être ancienne : elle ne reflète pas forcément l'état actuel.
 - **Synthèse** : points validés sans équipe, répartition des statuts, analyse à relancer après changement de
   parcours.
 
@@ -118,6 +123,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `MAX_GPX_BYTES` | Taille maximale d'un GPX | 10 Mo |
 | `WEB_DIST` | Dossier de l'interface compilée servie par l'API | — |
 | `VITE_TILE_URL` | Modèle d'URL des tuiles (à la compilation de l'interface) | tuiles OSM |
+| `VITE_PANORAMAX_URL` | API Panoramax (recherche, tuiles de couverture, viewer) | `https://api.panoramax.xyz/api` |
 
 ## OpenStreetMap : licences et limites d'usage
 
@@ -130,6 +136,9 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - **Tuiles** `tile.openstreetmap.org` : soumises à la [politique d'usage](https://operations.osmfoundation.org/policies/tiles/)
   de la fondation OSM (usage modéré, pas de téléchargement massif). Pour un usage soutenu : fournisseur commercial
   ou tuiles auto-hébergées (Protomaps/PMTiles, OpenMapTiles), puis `VITE_TILE_URL`.
+- **Panoramax** : photos de rue libres (licences indiquées par le viewer, le plus souvent CC-BY-SA). Le navigateur
+  interroge directement l'instance configurée (`VITE_PANORAMAX_URL`) : la position cliquée lui est donc transmise.
+  Une instance Panoramax auto-hébergée peut être utilisée.
 - **Routage piéton** (phase 3) : OSRM ou Valhalla auto-hébergés ; les serveurs de démonstration ne sont pas faits
   pour la production.
 

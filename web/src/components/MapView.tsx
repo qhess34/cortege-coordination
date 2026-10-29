@@ -20,9 +20,14 @@ interface Props {
   onSelect: (s: Selection) => void;
   onMapClick: (p: Position) => void;
   onPointMove: (id: number, p: Position) => void;
+  /** Clic hors mode ajout : position à inspecter (vue Panoramax). */
+  onInspect?: (p: Position) => void;
+  /** Affiche la couverture Panoramax et les repères d'inspection. */
+  panoramax?: { enabled: boolean; tilesUrl: string; clicked: Position | null; photo: Position | null };
 }
 
-const TILE_URL = import.meta.env.VITE_TILE_URL ?? 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+// `||` et non `??` : Docker transmet une chaîne vide quand la variable n'est pas définie.
+const TILE_URL = import.meta.env.VITE_TILE_URL || 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 
 export const TYPE_COLORS: Record<string, string> = {
   carrefour: '#d62828',
@@ -107,17 +112,44 @@ export function MapView(props: Props) {
           'circle-stroke-width': ['case', ['get', 'selected'], 4, 2.5],
         },
       });
+      // Couverture Panoramax (séquences de photos), sous le tracé.
+      const pnx = latest.current.panoramax;
+      if (pnx) {
+        m.addSource('panoramax', { type: 'vector', tiles: [pnx.tilesUrl], minzoom: 0, maxzoom: 15, attribution: 'Photos © contributeurs <a href="https://panoramax.fr" target="_blank" rel="noreferrer">Panoramax</a>' });
+        m.addLayer({
+          id: 'panoramax-sequences', type: 'line', source: 'panoramax', 'source-layer': 'sequences', minzoom: 13,
+          layout: { visibility: pnx.enabled ? 'visible' : 'none', 'line-cap': 'round' },
+          paint: { 'line-color': '#ff6f00', 'line-width': 2.5, 'line-opacity': 0.55 },
+        }, 'track-casing');
+      }
+      m.addSource('inspect', { type: 'geojson', data: empty });
+      m.addLayer({
+        id: 'inspect', type: 'circle', source: 'inspect',
+        paint: {
+          'circle-radius': ['match', ['get', 'kind'], 'photo', 6, 7],
+          'circle-color': ['match', ['get', 'kind'], 'photo', '#ff6f00', 'rgba(0,0,0,0)'],
+          'circle-stroke-color': ['match', ['get', 'kind'], 'photo', '#ffffff', '#ff6f00'],
+          'circle-stroke-width': 3,
+        },
+      });
       setReady(true);
     });
     m.on('click', (e: MapMouseEvent) => {
       const hits = m.queryRenderedFeatures(e.point, { layers: ['points', 'suggestions'] });
       const f = hits[0];
-      if (f && !latest.current.addMode) {
+      const clicked: Position = [e.lngLat.lng, e.lngLat.lat];
+      if (latest.current.addMode) {
+        latest.current.onMapClick(clicked);
+        return;
+      }
+      if (f) {
         latest.current.onSelect({ kind: f.layer.id === 'points' ? 'point' : 'suggestion', id: Number(f.properties.id) });
-      } else if (latest.current.addMode) {
-        latest.current.onMapClick([e.lngLat.lng, e.lngLat.lat]);
+        // Pour un point ou une suggestion, on inspecte l'élément lui-même plutôt que l'endroit exact du clic.
+        const g = f.geometry;
+        latest.current.onInspect?.(g.type === 'Point' ? [g.coordinates[0]!, g.coordinates[1]!] : clicked);
       } else {
         latest.current.onSelect(null);
+        latest.current.onInspect?.(clicked);
       }
     });
     for (const layer of ['points', 'suggestions']) {
@@ -131,6 +163,17 @@ export function MapView(props: Props) {
   useEffect(() => {
     if (map.current) map.current.getCanvas().style.cursor = props.addMode ? 'crosshair' : '';
   }, [props.addMode]);
+
+  const pnx = props.panoramax;
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !ready || !pnx) return;
+    if (m.getLayer('panoramax-sequences')) m.setLayoutProperty('panoramax-sequences', 'visibility', pnx.enabled ? 'visible' : 'none');
+    const features = [];
+    if (pnx.enabled && pnx.clicked) features.push({ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: pnx.clicked }, properties: { kind: 'clic' } });
+    if (pnx.enabled && pnx.photo) features.push({ type: 'Feature' as const, geometry: { type: 'Point' as const, coordinates: pnx.photo }, properties: { kind: 'photo' } });
+    (m.getSource('inspect') as GeoJSONSource).setData({ type: 'FeatureCollection', features });
+  }, [pnx?.enabled, pnx?.clicked, pnx?.photo, ready]);
 
   const route = useMemo(() => (props.track ? new Route(props.track.geometry.coordinates) : null), [props.track]);
 

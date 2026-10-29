@@ -21,6 +21,7 @@ services:
       context: .
       args:
         VITE_TILE_URL: ${VITE_TILE_URL:-}
+        VITE_PANORAMAX_URL: ${VITE_PANORAMAX_URL:-}
     depends_on:
       db:
         condition: service_healthy

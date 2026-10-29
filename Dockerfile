@@ -8,7 +8,8 @@ RUN npm ci
 COPY server server
 COPY web web
 ARG VITE_TILE_URL
-ENV VITE_TILE_URL=${VITE_TILE_URL}
+ARG VITE_PANORAMAX_URL
+ENV VITE_TILE_URL=${VITE_TILE_URL} VITE_PANORAMAX_URL=${VITE_PANORAMAX_URL}
 RUN npm run build -w server && npm run build -w web && npm prune --omit=dev
 
 FROM node:22-bookworm-slim
