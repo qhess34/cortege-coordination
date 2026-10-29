@@ -6,6 +6,7 @@ import { audit } from '../audit.js';
 import { tx } from '../db.js';
 import { HttpError, badRequest } from '../errors.js';
 import { DEFAULT_OPTIONS, analyse, excludedTypes, mergeOverpass, overpassQueries, type AnalysisOptions, type OverpassResponse } from '../geo/osm-analysis.js';
+import { streetNetwork } from '../geo/place-name.js';
 import { simplify } from '../geo/route.js';
 import { mergeSuggestions } from './merge.js';
 import { currentTrack } from './track.js';
@@ -59,10 +60,10 @@ export async function runAnalysis(app: FastifyInstance, userId: number, eventId:
     await c.query('SELECT 1 FROM events WHERE id = $1 FOR UPDATE', [eventId]);
     const a = (
       await c.query(
-        `INSERT INTO osm_analyses(event_id, track_id, options, osm_timestamp, source, stats, report, created_by)
-         VALUES ($1, $2, $3, $4, $5, $6, '{}', $7) RETURNING id, created_at`,
+        `INSERT INTO osm_analyses(event_id, track_id, options, osm_timestamp, source, stats, report, created_by, streets)
+         VALUES ($1, $2, $3, $4, $5, $6, '{}', $7, $8) RETURNING id, created_at`,
         [eventId, track.id, JSON.stringify({ ...options, corridor }), result.osmTimestamp, app.config.overpassUrls.join(', '),
-          JSON.stringify({ ...result.stats, chunks: queries.length, emptyChunks }), userId],
+          JSON.stringify({ ...result.stats, chunks: queries.length, emptyChunks }), userId, JSON.stringify(streetNetwork(data))],
       )
     ).rows[0];
     const merge = await mergeSuggestions(c, eventId, a.id, result.suggestions, excludedTypes(options));

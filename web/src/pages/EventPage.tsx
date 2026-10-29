@@ -96,13 +96,19 @@ export function EventPage({ eventId }: { eventId: number }) {
     if (!draftKey) return;
     const position = draftKey.split(',').map(Number) as Position;
     let cancelled = false;
+    const same = (prev: PointEdit | null) => prev?.kind === 'new' && prev.autoName && prev.position.join() === draftKey;
     const t = setTimeout(() => {
+      setEdit((prev) => (same(prev) ? { ...prev!, namePending: true } : prev));
       api.get<{ name: string | null }>('/api/events/' + eventId + '/nom-de-lieu?lon=' + position[0] + '&lat=' + position[1]).then((r) => {
-        if (cancelled || !r.name) return;
-        setEdit((prev) => (prev?.kind === 'new' && prev.autoName && prev.position.join() === draftKey ? { ...prev, name: r.name! } : prev));
-      }, () => undefined);
-    }, 300);
-    return () => { cancelled = true; clearTimeout(t); };
+        if (cancelled) return;
+        setEdit((prev) => (same(prev) ? { ...prev!, name: r.name ?? prev!.name, namePending: false } : prev && { ...prev, namePending: false }));
+      }, () => setEdit((prev) => prev && { ...prev, namePending: false }));
+    }, 150);
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+      setEdit((prev) => (prev?.namePending ? { ...prev, namePending: false } : prev));
+    };
   }, [draftKey, eventId]);
   // Équipes dont les points sont masqués sur la carte (0 = points sans équipe).
   const [hiddenTeams, setHiddenTeams] = useState<Set<number>>(new Set());

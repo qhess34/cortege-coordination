@@ -4,6 +4,7 @@ import { idParam, requireUser } from '../app.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
 import { conflict } from '../errors.js';
+import type { OverpassResponse } from '../geo/osm-analysis.js';
 import { placeName, placeNameQuery } from '../geo/place-name.js';
 import type { Position } from '../geo/route.js';
 import { requireEntityAccess, requireEventRole } from '../permissions.js';
@@ -59,8 +60,17 @@ export async function pointRoutes(app: FastifyInstance) {
     await requireEventRole(app.db, u, eventId, 'organisation');
     const q = z.object({ lon: z.coerce.number().min(-180).max(180), lat: z.coerce.number().min(-90).max(90) }).parse(req.query);
     const p: Position = [q.lon, q.lat];
+    // D'abord les rues relevées lors de la dernière analyse (instantané, le long du parcours)…
+    const saved = (await app.db.query(
+      'SELECT streets FROM osm_analyses WHERE event_id = $1 AND streets IS NOT NULL ORDER BY id DESC LIMIT 1', [eventId],
+    )).rows[0]?.streets as OverpassResponse | undefined;
+    if (saved) {
+      const found = placeName(saved, p);
+      if (found.name) return { ...found, source: 'analyse' };
+    }
+    // … sinon Overpass, autour du point.
     try {
-      return placeName(await app.osm(placeNameQuery(p)), p);
+      return { ...placeName(await app.osm(placeNameQuery(p)), p), source: 'overpass' };
     } catch (e) {
       req.log.warn({ err: e }, 'nom de lieu indisponible');
       return { name: null, streets: [], unavailable: true };

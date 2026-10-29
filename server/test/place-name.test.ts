@@ -2,7 +2,7 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { placeName } from '../src/geo/place-name.js';
 import { Agent, createUser, setup, type TestContext } from './helpers/app.js';
-import { OsmBuilder, at } from './helpers/osm.js';
+import { OsmBuilder, at, gpxFrom, referenceNetwork } from './helpers/osm.js';
 
 function network() {
   const b = new OsmBuilder();
@@ -58,6 +58,19 @@ describe('GET /api/events/:id/nom-de-lieu', () => {
     expect(r.statusCode).toBe(200);
     expect(r.json()).toMatchObject({ name: null, unavailable: true });
     ctx.osm.fail = null;
+  });
+  it("utilise les rues relevées par la dernière analyse, sans interroger Overpass", async () => {
+    await orga.upload('/api/events/' + eventId + '/tracks', gpxFrom([[[0, 3], [250, -2], [500, 2]]]));
+    ctx.osm.data = referenceNetwork();
+    expect((await orga.post('/api/events/' + eventId + '/analyses', {})).statusCode).toBe(201);
+    const before = ctx.osm.queries.length;
+    ctx.osm.fail = new Error('Overpass ne doit pas être appelé');
+    const [lon, lat] = at(250, 3);
+    const r = (await orga.get('/api/events/' + eventId + '/nom-de-lieu?lon=' + lon + '&lat=' + lat)).json();
+    ctx.osm.fail = null;
+    expect(r.source).toBe('analyse');
+    expect(r.name).toMatch(/^Rue A( × .+)?$/);
+    expect(ctx.osm.queries.length).toBe(before);
   });
   it("réservé aux organisateurs de l'événement", async () => {
     const autre = new Agent(ctx.app);

@@ -29,6 +29,8 @@ interface Consequences { missions: { team: string; status: string }[]; suggestio
 
 export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, onDeleted, onPhotos, teams, onTeamsChanged }: Props) {
   const [busy, setBusy] = useState(false);
+  const [streetBusy, setStreetBusy] = useState(false);
+  const [streetNote, setStreetNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<Consequences | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
@@ -98,7 +100,27 @@ export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, 
         <b className="grow">{isNew ? 'Nouveau point' : 'Point #' + edit.id}</b>
         <button type="button" className="link" onClick={onClose} aria-label="Fermer">✕</button>
       </div>
-      <label>Nom<input ref={nameRef} value={edit.name} onChange={(e) => set({ name: e.target.value })} required maxLength={200} /></label>
+      <label>Nom
+        <div className="row">
+          <input className="grow" ref={nameRef} value={edit.name} onChange={(e) => set({ name: e.target.value })} required maxLength={200} />
+          <button type="button" disabled={streetBusy} title="Nommer d’après la rue ou le croisement (OpenStreetMap)" onClick={async () => {
+            setStreetBusy(true);
+            setStreetNote(null);
+            try {
+              const r = await api.get<{ name: string | null; unavailable?: boolean }>(
+                '/api/events/' + eventId + '/nom-de-lieu?lon=' + edit.position[0] + '&lat=' + edit.position[1]);
+              if (r.name) set({ name: r.name });
+              else setStreetNote(r.unavailable ? 'OpenStreetMap ne répond pas, réessayez plus tard.' : 'Aucune rue nommée à moins de 30 m.');
+            } catch {
+              setStreetNote('Nom de rue indisponible.');
+            } finally {
+              setStreetBusy(false);
+            }
+          }}>{streetBusy ? '…' : 'Nom de la rue'}</button>
+        </div>
+      </label>
+      {(edit.namePending || streetBusy) && <p className="muted small" role="status">Recherche du nom de la rue…</p>}
+      {streetNote && <p className="muted small">{streetNote}</p>}
       <label>Type
         <select value={edit.type} onChange={(e) => set({ type: e.target.value })}>
           {POINT_TYPES.map((k) => <option key={k} value={k}>{SUGGESTION_TYPES[k]}</option>)}

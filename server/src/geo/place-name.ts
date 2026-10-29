@@ -57,3 +57,19 @@ export function placeName(osm: OverpassResponse, p: Position): PlaceName {
 export function placeNameQuery(p: Position, radius = STREET_RADIUS + 10): string {
   return `[out:json][timeout:15];way(around:${radius},${p[1]},${p[0]})[highway][~"^(name|ref)$"~"."];(._;>;);out body;`;
 }
+
+/** Réseau réduit aux voies nommées et à leurs nœuds (coordonnées seules), à conserver avec une analyse. */
+export function streetNetwork(osm: OverpassResponse): OverpassResponse {
+  const ways = osm.elements.filter((e): e is OsmWay => e.type === 'way' && !!e.tags?.highway && !!label(e));
+  const needed = new Set(ways.flatMap((w) => w.nodes));
+  const nodes = osm.elements
+    .filter((e): e is OsmNode => e.type === 'node' && needed.has(e.id))
+    .map((n): OsmNode => ({ type: 'node', id: n.id, lat: +n.lat.toFixed(7), lon: +n.lon.toFixed(7) }));
+  const slim = ways.map((w): OsmWay => {
+    const tags: Record<string, string> = { highway: w.tags!.highway! };
+    if (w.tags!.name) tags.name = w.tags!.name;
+    if (w.tags!.ref) tags.ref = w.tags!.ref;
+    return { type: 'way', id: w.id, nodes: w.nodes, tags };
+  });
+  return { elements: [...nodes, ...slim] };
+}
