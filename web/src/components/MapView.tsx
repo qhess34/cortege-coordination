@@ -301,6 +301,9 @@ export function MapView(props: Props) {
         });
         marker.on('dragstart', () => {
           dragging.current = key;
+          // MapLibre ne suit le glisser qu'à travers les événements reçus par la carte : pendant le geste, les
+          // éléments posés dessus (panneau Panoramax, bulle, barre d'outils) laissent passer la souris.
+          m.getContainer().parentElement?.classList.add('glisser-en-cours');
           const id = Number(el.dataset.id);
           const edit = latest.current.edit;
           // Glisser un point qui n'est pas en cours d'édition ouvre sa bulle.
@@ -313,6 +316,7 @@ export function MapView(props: Props) {
         });
         marker.on('dragend', () => {
           dragging.current = null;
+          m.getContainer().parentElement?.classList.remove('glisser-en-cours');
           lastDragEnd.current = Date.now();
           const ll = marker.getLngLat();
           latest.current.onEditMove([ll.lng, ll.lat]);

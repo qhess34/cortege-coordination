@@ -152,7 +152,8 @@ ol.missions { padding-left: 1.4rem; margin: .4rem 0; display: flex; flex-directi
 
 /* Points de mission sur la carte : pastille + nom, édition dans une bulle. */
 /* Pas de « position » ici : MapLibre positionne le marqueur en absolu (.maplibregl-marker). */
-.point-marker { width: 20px; height: 20px; cursor: pointer; }
+/* Spécificité renforcée : le viewer Panoramax impose .maplibregl-marker { width: 60px } à toute la page. */
+.maplibregl-marker.point-marker { width: 20px; height: 20px; cursor: pointer; }
 .point-marker .point-dot { position: absolute; inset: 0; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); }
 .point-marker .point-label {
   position: absolute; left: 24px; top: 50%; transform: translateY(-50%); white-space: nowrap; max-width: 220px;
@@ -188,3 +189,7 @@ ul.compact { margin: 0; padding-left: 1.1rem; }
   background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 8px;
   box-shadow: 0 3px 12px rgba(0,0,0,.3); padding: .6rem .7rem; will-change: transform;
 }
+
+/* Pendant le déplacement d'un point, les éléments posés sur la carte laissent passer la souris (voir MapView). */
+.map-pane.glisser-en-cours > :not(.map),
+.map-pane.glisser-en-cours > :not(.map) * { pointer-events: none !important; }
