@@ -1,0 +1,57 @@
+# Coordination de cortège — contexte de travail
+
+Application web de préparation du parcours d'une manifestation et de coordination des équipes d'encadrement le jour J.
+Dépôt : `qhess34/cortege-coordination`. C'est le **seul** projet de cette session de travail : ne pas modifier d'autres
+dépôts présents dans l'environnement.
+
+À lire d'abord : [AGENTS.md](AGENTS.md) (règles impératives) et les skills `.claude/skills/` (`architecture`,
+`nouvelle-fonctionnalite`, `verifier`, `tests-e2e`, `jour-j`). Conception : [docs/CONCEPTION.md](docs/CONCEPTION.md).
+Guides utilisateurs : [docs/guide-organisateur.md](docs/guide-organisateur.md), [docs/guide-membre.md](docs/guide-membre.md).
+
+## Façon de travailler avec l'utilisateur
+
+- Demandes et réponses en **français** ; textes de l'interface et commentaires en français.
+- Chaque demande : implémenter, tester (typecheck, tests serveur et web, e2e après `npm run build -w web`), mettre à jour
+  guides + README (+ CONCEPTION si le modèle change), commit en français, push sur la branche de travail. Pas de PR sans
+  demande explicite.
+- La base de l'utilisateur est **existante** : toute évolution du schéma passe par une nouvelle migration
+  `server/migrations/NNN_*.sql` (jamais en modifiant une migration appliquée).
+- Le bac à sable n'a accès ni aux tuiles de carte ni à Overpass ni à Docker Hub : fond gris dans les captures, pas de
+  `docker build` complet possible ici.
+
+## État actuel (octobre 2026)
+
+Migrations : `001_initial.sql` (schéma complet), `002_telephone.sql` (téléphone des comptes), `003_lieux.sql`
+(carrefours).
+
+**Préparation** : GPX, analyse OSM non destructive (un point par accès ou par carrefour), points nommés d'après la rue
+ou le croisement, équipes (points fixes, volante, ouverture, fermeture), missions ordonnées, roadbook imprimable,
+**carrefours** (accès regroupés automatiquement à la validation, regroupement manuel proposé sous 50 m dans la bulle du
+point, Séparer / Renommer), **GPX** par équipe ou complet, **un POI par carrefour** par défaut (`?regroupement=acces`
+pour un POI par point), remise de toutes les missions à « Affectée ».
+
+**Comptes** : créés par un administrateur ; membres d'équipe sans mot de passe (lien d'activation, lien par e-mail,
+QR « Connecter un appareil »), profil prénom / nom / e-mail / **téléphone**, expiration et suppression automatique.
+Responsables nommés par l'organisation (boutons *Nommer responsable* / *Ajouter comme responsable*).
+
+**Jour J — membres (vue terrain)** : la mission à traiter en premier (statut, consignes, En route / Arrivé / Terminé,
+🆘 Aide, Signaler un incident, **🧭 Aller au point suivant**), téléphone du responsable, carte, partage de position et
+OwnTracks réduits à une ligne, **points restants** avec leur distance depuis le point en cours, GPX de l'équipe.
+Plus d'itinéraire piéton ni de « Ma position » (service et `ROUTING_URL` retirés).
+Équipe volante : SOS et relèves en tête d'écran avec **🧭 Rejoindre le lieu**, vibration à chaque nouvelle demande.
+Bouton « 📍 La tête est ici » pour tout membre dont la position est connue (sauf la fermeture).
+
+**Jour J — organisation** : onglet *Direct* = compteurs (incidents, tête, queue, points à lever), **prochains points
+devant la tête** groupés par carrefour avec leur état (🆘, incident, relève, équipe en position, personne,
+« x/y accès tenus »), **statut de chaque équipe** avec raccourcis 📞 / 💬 SMS / ✉ message vers le responsable. Le bloc
+« Progression du cortège » et les compteurs En position / En route ont été retirés. **SOS et incidents affichés sur
+les cartes** (planification et coordination en direct), clignotants tant que non pris en charge.
+
+**Automatismes** : progression tête/queue calculée depuis les positions partagées de l'ouverture et de la fermeture ;
+arrivée automatique au point (30 m ou zone OwnTracks) ; **pas de double saisie** d'un incident (même nature, même
+mission ou < 30 m d'un incident ouvert → l'existant est complété) ; un incident sans position prend celle du point.
+
+## Pistes non faites
+
+Notifications push (téléphone verrouillé), mode hors ligne, saisie de secours de la progression par l'organisation,
+vidéo de présentation (script Playwright + ffmpeg, à lancer hors bac à sable pour avoir les cartes).
