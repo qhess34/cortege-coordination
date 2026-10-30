@@ -9,7 +9,7 @@ import { MISSION_STATUS } from '../labels';
 import type { Position } from '../types';
 import type { MemberPosition } from './MapView';
 import { loadVectorBasemap } from './vectorBasemap';
-import { syncIncidentMarkers, type MapIncident } from './incidentMarkers';
+import { syncSosMarkers, type MapSos } from './sosMarkers';
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -24,14 +24,14 @@ export interface LivePoint { position: Position; label: string; status: string; 
 type Feature = { type: 'Feature'; properties: Record<string, unknown>; geometry: { type: 'Point' | 'LineString'; coordinates: unknown } };
 const fc = (features: Feature[]) => ({ type: 'FeatureCollection' as const, features }) as never;
 
-export function LiveMap({ track, points, incidents, members }: { track: Position[][]; points: LivePoint[]; incidents: MapIncident[]; members: MemberPosition[] }) {
+export function LiveMap({ track, points, sos, members }: { track: Position[][]; points: LivePoint[]; sos: MapSos[]; members: MemberPosition[] }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const ready = useRef(false);
   const markers = useRef(new Map<number, maplibregl.Marker>());
-  const incidentMarkers = useRef(new Map<number, maplibregl.Marker>());
-  const latest = useRef({ track, points, incidents, members });
-  latest.current = { track, points, incidents, members };
+  const sosMarkers = useRef(new Map<number, maplibregl.Marker>());
+  const latest = useRef({ track, points, sos, members });
+  latest.current = { track, points, sos, members };
   const fitted = useRef(false);
   const [basemapError, setBasemapError] = useState(false);
 
@@ -43,7 +43,7 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
     (m.getSource('points') as GeoJSONSource).setData(fc(d.points.map((p) => ({
       type: 'Feature', properties: { color: STATUS_COLOR[p.status] ?? '#8d99ae', lever: p.passedByTail && p.status !== 'terminee' }, geometry: { type: 'Point', coordinates: p.position },
     }))));
-    syncIncidentMarkers(m, incidentMarkers.current, d.incidents);
+    syncSosMarkers(m, sosMarkers.current, d.sos);
     const seen = new Set<number>();
     for (const p of d.members) {
       seen.add(p.userId);
@@ -105,7 +105,7 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
       if (vector?.style) loadVectorBasemap(m, vector.style, 'parcours').catch(fallback);
       else fallback();
     });
-    return () => { ro.disconnect(); ready.current = false; for (const mk of markers.current.values()) mk.remove(); markers.current.clear(); for (const mk of incidentMarkers.current.values()) mk.remove(); incidentMarkers.current.clear(); m.remove(); map.current = null; };
+    return () => { ro.disconnect(); ready.current = false; for (const mk of markers.current.values()) mk.remove(); markers.current.clear(); for (const mk of sosMarkers.current.values()) mk.remove(); sosMarkers.current.clear(); m.remove(); map.current = null; };
     // La carte est créée une fois ; les données suivent par sync().
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

@@ -30,7 +30,7 @@ const CreateTeam = z.object({
 });
 const UpdateTeam = z.object(TeamFields).partial().extend({ version: z.number().int() });
 
-export const MISSION_STATUSES = ['a_preparer', 'affectee', 'en_deplacement', 'en_position', 'terminee', 'releve_necessaire', 'incident'] as const;
+export const MISSION_STATUSES = ['a_preparer', 'affectee', 'en_deplacement', 'en_position', 'terminee', 'releve_necessaire'] as const;
 type MissionStatus = (typeof MISSION_STATUSES)[number];
 
 /**
@@ -40,10 +40,9 @@ type MissionStatus = (typeof MISSION_STATUSES)[number];
 export const TRANSITIONS: Record<MissionStatus, MissionStatus[]> = {
   a_preparer: ['affectee'],
   affectee: ['a_preparer', 'en_deplacement', 'en_position'],
-  en_deplacement: ['affectee', 'en_position', 'incident'],
-  en_position: ['terminee', 'releve_necessaire', 'incident'],
-  releve_necessaire: ['en_position', 'terminee', 'incident'],
-  incident: ['en_deplacement', 'en_position', 'releve_necessaire', 'terminee'],
+  en_deplacement: ['affectee', 'en_position'],
+  en_position: ['terminee', 'releve_necessaire'],
+  releve_necessaire: ['en_position', 'terminee'],
   terminee: ['affectee'],
 };
 
@@ -243,7 +242,7 @@ export async function teamRoutes(app: FastifyInstance) {
   });
 
   // Remettre toutes les missions (de la manifestation, ou d'une équipe) à « Affectée » : après une répétition, ou pour
-  // repartir de zéro. Les affectations, l'ordre, les incidents et les messages sont conservés.
+  // repartir de zéro. Les affectations, l'ordre, les SOS et les messages sont conservés.
   app.post('/api/events/:id/missions/reinitialiser', async (req) => {
     const u = requireUser(req);
     const eventId = idParam(req);

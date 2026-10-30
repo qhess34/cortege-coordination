@@ -15,7 +15,7 @@ export const POINT_STATUS: Record<string, string> = {
 };
 export const MISSION_STATUS: Record<string, string> = {
   a_preparer: 'À préparer', affectee: 'Affectée', en_deplacement: 'En déplacement', en_position: 'En position',
-  terminee: 'Terminée', releve_necessaire: 'Relève nécessaire', incident: 'Incident signalé',
+  terminee: 'Terminée', releve_necessaire: 'Relève nécessaire',
 };
 export const EVENT_STATUS: Record<string, string> = {
   preparation: 'Préparation', pret: 'Prêt', en_cours: 'En cours', termine: 'Terminé', archive: 'Archivé',
@@ -30,10 +30,9 @@ export const MOTOR: Record<string, string> = {
 export const MISSION_TRANSITIONS: Record<string, string[]> = {
   a_preparer: ['affectee'],
   affectee: ['a_preparer', 'en_deplacement', 'en_position'],
-  en_deplacement: ['affectee', 'en_position', 'incident'],
-  en_position: ['terminee', 'releve_necessaire', 'incident'],
-  releve_necessaire: ['en_position', 'terminee', 'incident'],
-  incident: ['en_deplacement', 'en_position', 'releve_necessaire', 'terminee'],
+  en_deplacement: ['affectee', 'en_position'],
+  en_position: ['terminee', 'releve_necessaire'],
+  releve_necessaire: ['en_position', 'terminee'],
   terminee: ['affectee'],
 };
 

@@ -6,6 +6,7 @@ import { tx } from '../db.js';
 import { badRequest, conflict, notFound } from '../errors.js';
 import { requireCanCreateEvent, requireEventRole } from '../permissions.js';
 import { POINT_STATUS_SQL } from '../services/points.js';
+import { seedSosTypes } from './sos.js';
 
 const Status = z.enum(['preparation', 'pret', 'en_cours', 'termine', 'archive']);
 const EventFields = {
@@ -69,6 +70,7 @@ export async function eventRoutes(app: FastifyInstance) {
       );
       const e = r.rows[0];
       await c.query("INSERT INTO event_memberships(event_id, user_id, role) VALUES ($1, $2, 'organisateur')", [e.id, u.id]);
+      await seedSosTypes(c, e.id);
       await audit(c, { actorId: u.id, eventId: e.id, entity: 'event', entityId: e.id, action: 'creation', details: { name: b.name } });
       return e;
     });
