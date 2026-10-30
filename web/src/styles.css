@@ -398,3 +398,8 @@ button.icon { padding: .1rem .4rem; min-width: 1.8rem; }
 .table-wrap { overflow-x: auto; }
 .member-nav { gap: 1rem; margin-bottom: .3rem; }
 .member-home, .profile { max-width: 40rem; margin: 0 auto; }
+/* Vue terrain : blocs secondaires réduits à une ligne, bouton vers le point suivant. */
+.card.compact { padding: .35rem .6rem; }
+.card.compact .row { gap: .4rem; }
+.card.compact button { padding: .25rem .6rem; }
+a.button.big.next-point { gap: .3rem; font-weight: 500; }

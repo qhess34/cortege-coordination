@@ -10,7 +10,6 @@ import type { Db } from './db.js';
 import { HttpError } from './errors.js';
 import { LiveHub, runWithTracking } from './services/live.js';
 import type { OsmFetcher } from './services/overpass.js';
-import type { WalkRouter } from './services/routing.js';
 import type { Mailer } from './services/mailer.js';
 import { adminRoutes } from './routes/admin.js';
 import { authRoutes } from './routes/auth.js';
@@ -35,7 +34,6 @@ declare module 'fastify' {
     db: Db;
     config: Config;
     osm: OsmFetcher;
-    router: WalkRouter | null;
     mailer: Mailer | null;
     live: LiveHub;
   }
@@ -46,7 +44,6 @@ export interface AppDeps {
   config: Config;
   osm: OsmFetcher;
   /** Itinéraires piétons (facultatif : sans lui, l'application propose un lien vers une carte externe). */
-  router?: WalkRouter | null;
   /** Envoi d'e-mails (liens de connexion), facultatif. */
   mailer?: Mailer | null;
   logger?: boolean;
@@ -73,7 +70,6 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   app.decorate('db', deps.db);
   app.decorate('config', deps.config);
   app.decorate('osm', deps.osm);
-  app.decorate('router', deps.router ?? null);
   app.decorate('mailer', deps.mailer ?? null);
   app.decorate('live', new LiveHub());
   app.decorateRequest('user', null);

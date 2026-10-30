@@ -8,7 +8,6 @@ import type { OverpassResponse } from '../../src/geo/osm-analysis.js';
 import { migrate } from '../../src/migrate.js';
 import { resetLoginFailures } from '../../src/routes/auth.js';
 import { createLoginLink, resetMailThrottle } from '../../src/routes/login-links.js';
-import type { Position } from '../../src/geo/route.js';
 
 export const TEST_DB = process.env.TEST_DATABASE_URL ?? 'postgres://cortege:cortege@localhost:5432/cortege_test';
 
@@ -17,14 +16,12 @@ export interface TestContext {
   db: Db;
   /** Réponse Overpass renvoyée par le faux client ; modifiable entre deux analyses. */
   osm: { data: OverpassResponse; queries: string[]; fail: Error | null; respond: ((query: string, n: number) => OverpassResponse) | null };
-  /** Faux service d'itinéraire : ligne droite, ou erreur si `fail`. */
-  router: { calls: [Position, Position][]; fail: Error | null };
   /** E-mails envoyés (faux serveur SMTP). */
   mails: { to: string; subject: string; text: string }[];
   close: () => Promise<void>;
 }
 
-export async function setup(opts: { logStream?: NodeJS.WritableStream; linkRateLimit?: number; noRouter?: boolean } = {}): Promise<TestContext> {
+export async function setup(opts: { logStream?: NodeJS.WritableStream; linkRateLimit?: number } = {}): Promise<TestContext> {
   const db = createPool(TEST_DB);
   await db.query('DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public;');
   await migrate(db);
@@ -36,23 +33,16 @@ export async function setup(opts: { logStream?: NodeJS.WritableStream; linkRateL
     // Les tests ouvrent de nombreux liens depuis la même adresse.
     linkRateLimit: opts.linkRateLimit ?? 10_000,
     loginRateLimit: 20,
-    routingUrl: null,
     publicUrl: 'https://cortege.test',
     smtpUrl: null,
     mailFrom: 'test@cortege.test',
   };
   const osm: TestContext['osm'] = { data: { elements: [] }, queries: [], fail: null, respond: null };
-  const router: TestContext['router'] = { calls: [], fail: null };
   const mails: TestContext['mails'] = [];
   const app = await buildApp({
     db,
     config,
     mailer: async (to, subject, text) => { mails.push({ to, subject, text }); },
-    router: opts.noRouter ? null : async (from, to) => {
-      router.calls.push([from, to]);
-      if (router.fail) throw router.fail;
-      return { geometry: [from, to], distance: 123, duration: 90 };
-    },
     logStream: opts.logStream,
     osm: async (q) => {
       osm.queries.push(q);
@@ -60,7 +50,7 @@ export async function setup(opts: { logStream?: NodeJS.WritableStream; linkRateL
       return structuredClone(osm.respond ? osm.respond(q, osm.queries.length) : osm.data);
     },
   });
-  return { app, db, osm, router, mails, close: async () => { await app.close(); await db.end(); } };
+  return { app, db, osm, mails, close: async () => { await app.close(); await db.end(); } };
 }
 
 export async function createUser(db: Db, login: string, globalRole: 'admin' | 'organisateur' | 'aucun', password = 'mot-de-passe-solide'): Promise<number> {

@@ -45,7 +45,6 @@ export interface Terrain {
   canManageMembers: boolean;
   /** Points tenus par toutes les équipes (équipes sans point fixe). */
   eventPoints: { name: string; position: Position; distance: number | null; status: string; teamName: string; color: string }[];
-  routing: boolean;
   /** Partage de position autorisé par l'organisation ; `sharing` : ce compte partage actuellement. */
   locationSharing: boolean;
   sharing: boolean;
@@ -70,7 +69,6 @@ const ACTIONS: Record<string, { to: string; label: string; primary?: boolean }[]
 type Tab = 'mission' | 'messages' | 'incidents' | 'aide';
 
 const meters = (m: number) => (m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km');
-const minutes = (s: number) => Math.max(1, Math.round(s / 60)) + ' min';
 /**
  * Lien qui ouvre l'application de navigation du téléphone vers un point : Android propose le choix de l'application
  * (lien geo:), iPhone ouvre Plans en itinéraire à pied, un ordinateur ouvre Google Maps dans le navigateur.
@@ -92,9 +90,14 @@ function GpsButton({ to, label, big }: { to: Position; label: string; big?: bool
   );
 }
 
-const osmDirections = (from: Position | null, to: Position) =>
-  'https://www.openstreetmap.org/directions?engine=fossgis_osrm_foot&route=' +
-  (from ? from[1] + '%2C' + from[0] : '') + '%3B' + to[1] + '%2C' + to[0] + '#map=17/' + to[1] + '/' + to[0];
+/** Bouton qui ouvre l'application GPS du téléphone vers le point suivant de la liste. */
+function NextPointButton({ to, label }: { to: Position; label: string }) {
+  const l = gpsLink(to, label);
+  return (
+    <a className="button big next-point" href={l.href} {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+      aria-label={'Aller au point suivant : ' + label}>🧭 Aller au point suivant · <b>{label}</b></a>
+  );
+}
 
 export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; header?: ReactNode; onUnauthorized?: () => void }) {
   const scroller = useRef<HTMLElement>(null);
@@ -105,7 +108,6 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
   const [busy, setBusy] = useState(false);
   const [me, setMe] = useState<Position | null>(null);
   const [geoError, setGeoError] = useState<string | null>(null);
-  const [route, setRoute] = useState<{ geometry: Position[]; distance: number; duration: number } | null>(null);
   const [selected, setSelected] = useState<number | null>(null);
   const [, tick] = useState(0);
 
@@ -174,24 +176,17 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
     );
   });
 
-  const itinerary = async () => {
-    if (!current) return;
-    const from = me ?? (await locate());
-    if (!data?.routing || !from) {
-      window.open(osmDirections(from, current.point.position), '_blank', 'noopener');
-      return;
-    }
-    try {
-      setRoute(await api.get('/api/terrain/itineraire?from=' + from.join(',') + '&to=' + current.point.position.join(',')));
-    } catch (e) {
-      setToast({ kind: 'error', text: (e instanceof ApiError ? e.message : 'Itinéraire indisponible.') + ' Ouverture d’une carte externe.' });
-      window.open(osmDirections(from, current.point.position), '_blank', 'noopener');
-    }
-  };
-  useEffect(() => setRoute(null), [current?.id]);
-
   if (!data) return <div className="center">{error ?? 'Chargement…'}</div>;
   const progressTo = (m: FieldMission) => (data.progress && m.point.distance !== null ? m.point.distance - data.progress.distance : null);
+  // Points restants (non terminés) et leur distance sur le parcours depuis le point en cours.
+  const remaining = data.missions.filter((m) => m.status !== 'terminee');
+  const doneCount = data.missions.length - remaining.length;
+  const fromCurrent = (m: FieldMission) => {
+    if (m.id === current?.id) return 'point en cours';
+    if (!current || m.point.distance === null || current.point.distance === null) return '—';
+    const d = m.point.distance - current.point.distance;
+    return (d >= 0 ? '+' : '−') + km(Math.abs(d));
+  };
 
   return (
     <main ref={scroller} className="field" data-testid="vue-terrain" style={{ ['--team' as string]: data.team.color }}>
@@ -228,27 +223,6 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
           {data.messages.some((m) => m.urgent && m.read === false) && (
             <button className="urgent-banner" onClick={() => setTab('messages')}>⚠ Message urgent de l’organisation — lire</button>
           )}
-          {data.locationSharing && data.me.member && (
-            <div className={'card small' + (sharing.on ? ' sharing' : '')} data-testid="partage-position">
-              {sharing.on ? (
-                <div className="row">
-                  <span className="grow">📡 <b>Position partagée avec l’organisation</b>{sharing.lastSent ? ' · envoyée ' + ago(sharing.lastSent) : ''}.
-                    {data.team.kind === 'points' ? ' L’arrivée au point est enregistrée automatiquement.' : ''}</span>
-                  <button onClick={() => void sharing.stop()}>Arrêter</button>
-                </div>
-              ) : (
-                <div className="row">
-                  <span className="grow">L’organisation peut suivre les équipes en direct si vous partagez votre position (facultatif).</span>
-                  <button className="primary" onClick={sharing.start}>Partager ma position</button>
-                </div>
-              )}
-              <p className="muted">Seulement tant que l’application est ouverte à l’écran ; dernière position seulement, effacée à l’arrêt.</p>
-            </div>
-          )}
-          {data.locationSharing && data.me.member && (
-            <OwnTracksCard teamId={teamId} state={data.owntracks} reload={load} notify={setToast} />
-          )}
-          <Progression data={data} reload={load} setToast={setToast} locate={locate} />
           {data.team.kind !== 'points' && <RoleCard data={data} openIncidents={() => setTab('incidents')} />}
           {!current ? (data.team.kind !== 'points' ? null :
             <div className="card"><p>{data.missions.length ? 'Toutes les missions de l’équipe sont terminées. Merci !' : 'Aucune mission pour l’instant.'}</p></div>
@@ -280,42 +254,45 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
                 }), 'Demande d’aide envoyée à l’organisation.')}>🆘 Aide</button>
                 <button className="big" onClick={() => setTab('incidents')}>Signaler un incident</button>
               </div>
-              <div className="row">
-                <GpsButton to={current.point.position} label={current.point.name} big />
-              </div>
+              {next && (
+                <NextPointButton to={next.point.position} label={next.point.name} />
+              )}
             </div>
           )}
 
+          <Progression data={data} reload={load} setToast={setToast} locate={locate} />
           {(current || data.team.kind !== 'points') && (
             <div className="card">
               <FieldMap
                 track={data.track}
                 color={data.team.color}
                 me={me}
-                route={route?.geometry ?? null}
                 points={[
                   ...data.eventPoints.map((p) => ({ position: p.position, label: p.name + ' (' + p.teamName + ')', current: false, done: p.status === 'terminee', color: p.color })),
                   ...data.missions.map((m) => ({ position: m.point.position, label: m.point.name, current: m.id === current?.id, done: m.status === 'terminee' })),
                 ]}
               />
-              <div className="row small">
-                <button onClick={() => void locate()}>📍 Ma position</button>
-                {current && <button onClick={() => void itinerary()}>Itinéraire à pied</button>}
-                {route && <span className="muted">{meters(route.distance)} · environ {minutes(route.duration)}</span>}
-              </div>
               {geoError && <p className="muted small">{geoError}</p>}
-              <p className="muted small">
-                Votre position reste sur ce téléphone (elle n’est envoyée que pour calculer un itinéraire, sans être conservée).
-                Itinéraire indicatif : vérifiez sur place l’accès et la sécurité du trajet.
-              </p>
             </div>
           )}
 
-          {next && (
-            <div className="card small row" data-testid="point-suivant">
-              <span className="grow">Point suivant : <b>{next.point.name}</b> <span className="muted">({km(next.point.distance)})</span></span>
-              <GpsButton to={next.point.position} label={next.point.name} />
+          {data.locationSharing && data.me.member && (
+            <div className={'card compact small' + (sharing.on ? ' sharing' : '')} data-testid="partage-position">
+              {sharing.on ? (
+                <div className="row">
+                  <span className="grow">📡 <b>Position partagée avec l’organisation</b>{sharing.lastSent ? ' · ' + ago(sharing.lastSent) : ''}</span>
+                  <button onClick={() => void sharing.stop()}>Arrêter</button>
+                </div>
+              ) : (
+                <div className="row">
+                  <span className="grow">📍 Partage de position avec l’organisation (facultatif, application ouverte)</span>
+                  <button className="primary" onClick={sharing.start}>Partager ma position</button>
+                </div>
+              )}
             </div>
+          )}
+          {data.locationSharing && data.me.member && (
+            <OwnTracksCard teamId={teamId} state={data.owntracks} reload={load} notify={setToast} />
           )}
 
           {(data.event.instructions || data.team.instructions) && (
@@ -333,16 +310,18 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
             </details>
           )}
 
-          <details className="card" open={data.missions.length > 1}>
-            <summary>Toutes les missions ({data.missions.length})</summary>
-            <ol className="missions">
-              {data.missions.map((m) => (
-                <li key={m.id}>
-                  <button className="link" onClick={() => { setSelected(m.id); scroller.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}>{m.point.name}</button>
-                  <span className="muted small"> — {MISSION_STATUS[m.status] ?? m.status}{m.id === current?.id ? ' (affichée)' : ''}</span>
-                </li>
-              ))}
-            </ol>
+          <details className="card" open={remaining.length > 1} data-testid="points-restants">
+            <summary>Points restants ({remaining.length}){doneCount ? <span className="muted"> · {doneCount} terminé{doneCount > 1 ? 's' : ''}</span> : null}</summary>
+            {remaining.length === 0 ? <p className="muted small">Aucun point restant.</p> : (
+              <ol className="missions">
+                {remaining.map((m) => (
+                  <li key={m.id} className="row">
+                    <button className="link grow" onClick={() => { setSelected(m.id); scroller.current?.scrollTo({ top: 0, behavior: 'smooth' }); }}>{m.point.name}</button>
+                    <span className="muted small">{fromCurrent(m)} · {MISSION_STATUS[m.status] ?? m.status}</span>
+                  </li>
+                ))}
+              </ol>
+            )}
             {data.missions.length > 0 && (
               <p className="small"><a href={'/api/terrain/equipes/' + teamId + '/points.gpx'} download>⬇ GPX des points de l’équipe</a>
                 <span className="muted"> — à ouvrir dans OsmAnd, Organic Maps ou un GPS (un POI par point, et le parcours)</span></p>

@@ -10,7 +10,6 @@ import { HttpError, badRequest, conflict, forbidden, notFound } from '../errors.
 import { simplify, type Position } from '../geo/route.js';
 import { eventRole, requireEventRole } from '../permissions.js';
 import { POSITION_MAX_AGE, autoProgress, detectArrival, isTeamMember, storePosition } from '../services/locations.js';
-import { RoutingError } from '../services/routing.js';
 import { currentTrack } from '../services/track.js';
 import { TRANSITIONS } from './teams.js';
 
@@ -212,7 +211,6 @@ export async function terrainRoutes(app: FastifyInstance) {
           WHERE user_id = $1 AND team_id = $2 AND revoked_at IS NULL AND expires_at > now() ORDER BY created_at DESC LIMIT 1`,
         [u.id, teamId],
       )).rows[0] ?? null,
-      routing: !!app.router,
     };
   });
 
@@ -500,24 +498,6 @@ export async function terrainRoutes(app: FastifyInstance) {
       canDeclare: await canDeclare(app.db, u, eventId),
       live: app.live.count(eventId),
     };
-  });
-
-  // --- Itinéraire piéton ------------------------------------------------------------------------------------------
-  // La position de départ n'est ni conservée ni journalisée (les journaux ne gardent pas la query string).
-  app.get('/api/terrain/itineraire', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
-    requireUser(req);
-    const q = z.object({ from: z.string(), to: z.string() }).parse(req.query);
-    const pos = (s: string): Position => {
-      const [lon, lat] = s.split(',').map(Number);
-      return z.tuple([Lon, Lat]).parse([lon, lat]) as Position;
-    };
-    if (!app.router) throw new HttpError(501, 'Aucun service d’itinéraire n’est configuré sur ce serveur.');
-    try {
-      return await app.router(pos(q.from), pos(q.to));
-    } catch (e) {
-      if (e instanceof RoutingError) throw new HttpError(502, e.message);
-      throw e;
-    }
   });
 
   // --- Partage de position en direct (facultatif) ------------------------------------------------------------------

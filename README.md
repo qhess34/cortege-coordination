@@ -125,8 +125,9 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
 
 - **Vue terrain** (téléphone) pour chaque membre d'équipe : mission en cours, consignes, carte du point et du
   parcours, grands boutons *En route*, *Arrivé*, *Terminé*, *Relève nécessaire*, *🆘 Aide* et *Signaler un
-  incident*, bouton *🧭 GPS* vers l'application de navigation, point suivant, liste des missions, indicateur
-  « ● direct ». Les membres y arrivent directement après connexion.
+  incident*, bouton *🧭 Aller au point suivant* (ouvre l'application GPS du téléphone), points restants avec leur
+  distance depuis le point en cours, indicateur « ● direct ». Le point à traiter est en haut de l'écran ; partage de
+  position et OwnTracks sont réduits à une ligne en dessous. Les membres y arrivent directement après connexion.
 - **Statuts depuis le terrain** : un membre ne peut qu'avancer sa mission (revenir en arrière ou réaffecter reste
   une décision de l'organisation) ; qui a changé le statut, et quand, est affiché.
 - **Incidents** (aide, sécurité, santé, circulation, matériel…) liés à la mission et, si la personne le choisit, à sa
@@ -151,9 +152,6 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   - **Déclarée** sinon, ou pour corriger : par l'organisation (tête et queue), l'ouverture ou les responsables
     (tête), la fermeture (queue), en km parcourus ou « 📍 ici » (position du téléphone ramenée sur le parcours).
   - C'est une indication, à confirmer sur le terrain.
-- **Itinéraire à pied** vers le point : par un serveur compatible OSRM si `ROUTING_URL` est configuré (par exemple
-  `https://routing.openstreetmap.de/routed-foot`, à utiliser selon ses conditions, ou une instance auto-hébergée),
-  sinon lien vers la carte OpenStreetMap. Indicatif : accès et sécurité à vérifier sur place.
 - **Onglet « Coordination »** de l'organisation : compteurs, **prochains points devant la tête** et leur état (équipe en position,
   personne, besoin d'aide, incident),
   **statut résumé de chaque équipe** avec raccourcis vers son responsable (appel, SMS, message dans l'application),
@@ -165,8 +163,8 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
 
 ## Partage de position (facultatif)
 
-Sans partage, la position du téléphone n'est demandée qu'à l'usage (*Ma position*, *📍 ici*, itinéraire, incident) et
-n'est envoyée que pour ces actions.
+Sans partage, la position du téléphone n'est demandée qu'à l'usage (*📍 ici*, incident avec position) et n'est
+envoyée que pour ces actions.
 
 - **Double accord** : l'organisation l'autorise pour la manifestation (Synthèse → Modifier → *Autoriser le partage de
   position en direct*), puis chaque membre choisit *Partager ma position* sur son téléphone, et peut l'arrêter à tout
@@ -268,7 +266,6 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 | `COOKIE_SECURE` | Cookies réservés à HTTPS | `true` en production |
 | `SESSION_TTL_HOURS` | Durée des sessions (glissante) | `12` |
 | `LOGIN_RATE_LIMIT` | Tentatives de connexion par minute et par adresse IP | `20` |
-| `ROUTING_URL` | Serveur d'itinéraires compatible OSRM (profil piéton), facultatif | — (lien vers la carte OSM) |
 | `PUBLIC_URL` | Adresse publique du site (`https://…`), pour la configuration OwnTracks | déduite de la requête |
 | `SMTP_URL` | Serveur d'envoi d'e-mails (`smtps://utilisateur:motdepasse@hôte:465`) pour les liens de connexion, facultatif | — |
 | `MAIL_FROM` | Expéditeur des e-mails | `Coordination de cortège <no-reply@localhost>` |
@@ -304,8 +301,6 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
 - **Panoramax** : photos de rue libres (licences indiquées par le viewer, le plus souvent CC-BY-SA). Le navigateur
   interroge directement l'instance configurée (`VITE_PANORAMAX_URL`) : la position cliquée lui est donc transmise.
   Une instance Panoramax auto-hébergée peut être utilisée.
-- **Routage piéton** : serveur compatible OSRM (`ROUTING_URL`), de préférence auto-hébergé ; les serveurs de
-  démonstration ne sont pas faits pour la production.
 
 ## Sécurité
 

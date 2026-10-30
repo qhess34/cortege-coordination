@@ -7,14 +7,12 @@ import { createPool } from './db.js';
 import { migrate } from './migrate.js';
 import { scheduleAccountPurge } from './services/expiry.js';
 import { overpassFetcher } from './services/overpass.js';
-import { osrmRouter } from './services/routing.js';
 import { smtpMailer } from './services/mailer.js';
 
 const config = loadConfig();
 const db = createPool(config.databaseUrl);
 const applied = await migrate(db);
 const app = await buildApp({ db, config, osm: overpassFetcher(config.overpassUrls, config.userAgent),
-  router: config.routingUrl ? osrmRouter(config.routingUrl, config.userAgent) : null,
   mailer: config.smtpUrl ? smtpMailer(config.smtpUrl, config.mailFrom) : null,
   logger: true,
  });

@@ -159,7 +159,7 @@ Dans la section **Membres** d'une équipe :
   cartes zoomées de chaque lieu, les consignes et les points regroupés par lieu, et il est prêt à imprimer.
 - **GPX de l'équipe** (lien *⬇ GPX de l'équipe* sur chaque équipe) : un **POI par point** de l'équipe, numéroté dans
   l'ordre des missions, avec le parcours. À ouvrir dans OsmAnd, Organic Maps, un GPS… Les membres le téléchargent
-  aussi depuis leur vue terrain (*Toutes les missions*).
+  aussi depuis leur vue terrain (*Points restants*).
 - **GPX de tous les points** (bas de l'onglet *Équipes*), à charger dans une application de navigation.
 - **↺ Remettre toutes les missions à « Affectée »** (bas de l'onglet *Équipes*, ou réglages d'une équipe pour elle
   seule) : après une répétition, ou pour repartir de zéro. Les affectations et l'ordre sont conservés ; les incidents,

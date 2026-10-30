@@ -131,21 +131,6 @@ describe('progression déclarée', () => {
   });
 });
 
-describe('itinéraire piéton', () => {
-  it('passe par le service configuré ; erreur claire s’il échoue', async () => {
-    const r = await alice.get('/api/terrain/itineraire?from=2.35,48.85&to=2.351,48.851');
-    expect(r.json()).toMatchObject({ distance: 123, duration: 90 });
-    expect(ctx.router.calls.at(-1)).toEqual([[2.35, 48.85], [2.351, 48.851]]);
-    ctx.router.fail = new (await import('../src/services/routing.js')).RoutingError('Aucun itinéraire piéton trouvé.');
-    const e = await alice.get('/api/terrain/itineraire?from=2.35,48.85&to=2.351,48.851');
-    expect(e.statusCode).toBe(502);
-    expect(e.json().error).toBe('Aucun itinéraire piéton trouvé.');
-    ctx.router.fail = null;
-    expect((await alice.get('/api/terrain/itineraire?from=999,48&to=2,48')).statusCode).toBe(400);
-    expect((await new Agent(ctx.app).get('/api/terrain/itineraire?from=2,48&to=2,48')).statusCode).toBe(401);
-  });
-});
-
 describe('direct (WebSocket)', () => {
   // Les messages sont collectés dès l'ouverture (le premier arrive avant la fin de la poignée de main).
   const open = async (who: Agent, ev: number) => {

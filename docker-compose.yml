@@ -32,7 +32,6 @@ services:
       COOKIE_SECURE: ${COOKIE_SECURE:-true}
       OVERPASS_URL: ${OVERPASS_URL:-https://overpass-api.de/api/interpreter}
       OSM_USER_AGENT: ${OSM_USER_AGENT:-cortege-coordination}
-      ROUTING_URL: ${ROUTING_URL:-}
       PUBLIC_URL: ${PUBLIC_URL:-}
       SMTP_URL: ${SMTP_URL:-}
       MAIL_FROM: ${MAIL_FROM:-}

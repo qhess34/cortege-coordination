@@ -58,7 +58,6 @@ développement et les risques. Les décisions marquées **[à valider]** mérite
 |---|---|---|---|
 | Overpass API (`overpass-api.de`) | Une requête par analyse, limitée à un couloir autour du parcours | Quelques requêtes par minute et par IP, temps de réponse variable, pas de SLA | Instance Overpass auto-hébergée sur un extrait Geofabrik régional ; URL configurable `OVERPASS_URL` |
 | Tuiles `tile.openstreetmap.org` | Fond de carte | [Politique d'usage](https://operations.osmfoundation.org/policies/tiles/) : usage modéré, en-tête identifiant, pas de pré-chargement massif | Fournisseur commercial, ou tuiles vectorielles auto-hébergées (Protomaps/PMTiles, OpenMapTiles) ; URL configurable `VITE_TILE_URL` |
-| Routage piéton | Itinéraire vers le prochain point | Serveurs de démonstration OSRM/Valhalla non destinés à la production | OSRM ou Valhalla auto-hébergés (profil piéton) |
 
 Les données OSM sont sous licence **ODbL** : l'attribution « © contributeurs OpenStreetMap » est affichée en permanence
 sur la carte, et sur toute fiche de mission exportée. Chaque analyse conserve la date des données
@@ -165,10 +164,11 @@ analyse signalées (jamais supprimées). Le rapport présente ces groupes sépar
 
 **Membre d'équipe (PWA mobile)**
 1. *Connexion par lien* — lien d'activation ou de connexion, confirmation *Se connecter* ; *Mes équipes* ; *Profil*.
-2. *Ma mission* — carte du point, consignes, statut, grands boutons *En route*, *Arrivé*, *Terminé*, *Incident*,
-   *Aide* ; prochain point ; responsable ; derniers messages ; indicateur de synchronisation.
-3. *Itinéraire* — tracé piéton avec avertissement sur ses limites.
-4. *Messages* et *Incidents*.
+2. *Ma mission* — en haut : point à traiter, statut, consignes, grands boutons *En route*, *Arrivé*, *Terminé*,
+   *Aide*, *Signaler un incident*, *Aller au point suivant* (application GPS du téléphone) ; puis carte, partage de
+   position et OwnTracks (une ligne chacun), points restants avec leur distance depuis le point en cours ;
+   indicateur de synchronisation.
+3. *Messages* et *Incidents*.
 
 ## 5. Comptes et authentification
 

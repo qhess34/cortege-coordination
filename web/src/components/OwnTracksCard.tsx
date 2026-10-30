@@ -39,24 +39,23 @@ export function OwnTracksCard({ teamId, state, reload, notify }: {
 
   if (state && !link) {
     return (
-      <div className="card small sharing" data-testid="owntracks">
+      <div className="card compact small sharing" data-testid="owntracks">
         <div className="row">
           <span className="grow">🛰 <b>OwnTracks actif</b>
-            {state.lastSeenAt ? ' · dernier envoi ' + ago(state.lastSeenAt) : ' · en attente du premier envoi de l’application'}
-            {state.battery !== null ? ' · batterie ' + state.battery + ' %' : ''}</span>
+            {state.lastSeenAt ? ' · ' + ago(state.lastSeenAt) : ' · en attente'}
+            {state.battery !== null ? ' · 🔋 ' + state.battery + ' %' : ''}</span>
+          <button className="link" onClick={() => void configure()} title="Configurer un autre téléphone (désactive celui-ci)">Reconfigurer</button>
           <button onClick={() => void stop()}>Arrêter</button>
         </div>
-        <p className="muted">Votre position est envoyée même écran éteint. Reconfigurer sur un autre téléphone désactive celui-ci.
-          <button className="link small" onClick={() => void configure()}>Reconfigurer</button></p>
       </div>
     );
   }
 
   return (
-    <div className="card small" data-testid="owntracks">
+    <div className={'card small' + (!open && !link ? ' compact' : '')} data-testid="owntracks">
       {!open && !link ? (
         <div className="row">
-          <span className="grow">Suivi même <b>écran éteint</b> : avec l’application gratuite OwnTracks (facultatif).</span>
+          <span className="grow">🛰 Suivi <b>écran éteint</b> avec OwnTracks (facultatif)</span>
           <button onClick={() => setOpen(true)}>Configurer</button>
         </div>
       ) : (

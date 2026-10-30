@@ -79,11 +79,10 @@ test('jour J : statut, aide, message urgent et progression circulent en direct',
   // Un simple membre ne déclare pas la progression.
   await expect(field.getByTestId('progression').getByRole('button', { name: 'Déclarer' })).toHaveCount(0);
 
-  // 5. Itinéraire : sans service configuré, ouvre une carte externe depuis la position du téléphone.
-  await phoneCtx.route('https://www.openstreetmap.org/**', (r) => r.fulfill({ body: 'ok' }));
-  const [popup] = await Promise.all([phone.waitForEvent('popup'), field.getByRole('button', { name: 'Itinéraire à pied' }).click()]);
-  expect(popup.url()).toContain('engine=fossgis_osrm_foot');
-  expect(popup.url()).toContain(lat.toFixed(4).slice(0, 6));
+  // 5. Mission unique : pas de bouton vers un point suivant, ni « Ma position » ni itinéraire.
+  await expect(field.getByRole('link', { name: /Aller au point suivant/ })).toHaveCount(0);
+  await expect(field.getByRole('button', { name: 'Itinéraire à pied' })).toHaveCount(0);
+  await expect(field.getByRole('button', { name: '📍 Ma position' })).toHaveCount(0);
 
   // 6. Terminer la mission.
   await field.getByRole('button', { name: 'Reprendre la position' }).click();
@@ -104,7 +103,7 @@ test('application installable : manifeste, icône et service worker servis', asy
   expect((await request.get('/icone.svg')).ok()).toBe(true);
 });
 
-test('vue terrain sur téléphone : la page défile, bouton GPS, tuiles de carte avec Referer', async ({ page, browser }) => {
+test('vue terrain sur téléphone : la page défile, bouton vers le point suivant, points restants, tuiles avec Referer', async ({ page, browser }) => {
   await page.request.post('/api/auth/login', { data: { login: 'admin', password: 'admin-e2e-motdepasse' }, headers: H });
   const ev = await (await page.request.post('/api/events', { data: { name: 'Téléphone', instructions: 'Consignes.\n'.repeat(40) }, headers: H })).json();
   await page.request.post('/api/events/' + ev.id + '/tracks', {
@@ -137,13 +136,17 @@ test('vue terrain sur téléphone : la page défile, bouton GPS, tuiles de carte
   await expect.poll(() => referers.length).toBeGreaterThan(0);
   expect(referers.every((r) => r && new URL(r).pathname === '/')).toBe(true);
 
-  // GPS : lien geo: sur Android, vers le point en cours et le point suivant.
-  const gps = field.getByTestId('ma-mission').getByRole('link', { name: /GPS vers Rond-point/ });
-  expect(await gps.getAttribute('href')).toMatch(/^geo:48\.85\d+,2\.35\d+\?q=.*\(Rond-point\)$/);
-  await expect(field.getByTestId('point-suivant').getByRole('link', { name: /GPS vers Place du marché/ })).toBeVisible();
+  // Bouton vers le point suivant : lien geo: sur Android (choix de l'application GPS).
+  const gps = field.getByTestId('ma-mission').getByRole('link', { name: 'Aller au point suivant : Place du marché' });
+  expect(await gps.getAttribute('href')).toMatch(/^geo:48\.85\d+,2\.35\d+\?q=.*\(Place%20du%20march%C3%A9\)$/);
+  // Points restants, avec la distance depuis le point en cours.
+  const restants = field.getByTestId('points-restants');
+  await expect(restants.locator('summary')).toContainText('Points restants (2)');
+  await expect(restants.locator('li').nth(0)).toContainText('point en cours');
+  await expect(restants.locator('li').nth(1)).toContainText('+0,20 km');
 
   // La vue défile jusqu'en bas, sur un écran de téléphone comme sur un grand écran.
-  const last = field.locator('summary', { hasText: 'Toutes les missions' });
+  const last = field.locator('summary', { hasText: 'Points restants' });
   for (const size of [{ width: 390, height: 700 }, { width: 1280, height: 700 }]) {
     await phone.setViewportSize(size);
     await expect(last).not.toBeInViewport();

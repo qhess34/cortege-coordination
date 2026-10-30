@@ -36,7 +36,7 @@ test('configurer OwnTracks, positions reçues écran éteint, suivi visible et r
   expect(conf.waypoints[0].desc).toContain('Pont');
   await card.getByRole('button', { name: 'C’est fait' }).click();
   await expect(card).toContainText('OwnTracks actif');
-  await expect(card).toContainText('en attente du premier envoi');
+  await expect(card).toContainText('OwnTracks actif · en attente');
 
   // L'application (simulée) envoie une position, comme écran éteint.
   const [lon, lat] = at(120, 10);

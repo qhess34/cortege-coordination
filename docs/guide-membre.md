@@ -40,17 +40,18 @@ coupée et les informations datent de ce moment-là.
   - **Relève nécessaire** si vous devez être remplacé.
 - **🆘 Aide** : prévient immédiatement l'organisation que vous avez besoin d'aide à votre point.
 - **Signaler un incident** : ouvre l'onglet *Incidents*.
-- **🧭 GPS** : ouvre votre application de navigation (Google Maps, Waze, Plans…) vers le point en cours ou le point
-  suivant.
-- **La carte** montre le parcours, vos points et, si vous touchez **📍 Ma position**, l'endroit où vous êtes. Pour
-  déplacer la carte, utilisez **deux doigts** ; un doigt fait défiler la page.
-- **Itinéraire à pied** : trajet indicatif vers le point. Vérifiez sur place que le passage est possible et sûr.
+- **🧭 Aller au point suivant** : ouvre votre application de navigation (Google Maps, Waze, Plans…) vers le point
+  suivant de votre liste. Vérifiez sur place que le passage est possible et sûr.
+- **La carte** montre le parcours et vos points. Pour la déplacer, utilisez **deux doigts** ; un doigt fait défiler la
+  page.
 - **Tête du cortège à 350 m de ce point** : vous savez quand il arrive.
 - **« La fermeture du cortège a dépassé ce point »** : vous pourrez quitter le point **sur instruction** de
   l'organisation, puis toucher *Terminé*.
 - Sous le nom de l'équipe : le **📞 téléphone de votre responsable**, s'il l'a renseigné.
-- En bas : les **consignes** générales et d'équipe, et la liste de **toutes les missions**, avec **⬇ GPX des points
-  de l'équipe** à ouvrir dans OsmAnd, Organic Maps ou un GPS.
+- Sous la carte : le **partage de position** et **OwnTracks**, sur une ligne chacun (voir plus bas).
+- En bas : les **consignes** générales et d'équipe, et les **points restants**, avec leur distance sur le parcours
+  depuis le point en cours (« +0,35 km ») ; touchez un nom pour l'afficher. Le lien **⬇ GPX des points de l'équipe**
+  s'ouvre dans OsmAnd, Organic Maps ou un GPS.
 
 ## 3. Messages
 
