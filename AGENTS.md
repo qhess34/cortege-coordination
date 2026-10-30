@@ -28,3 +28,9 @@ npm run typecheck
 npm test
 npx playwright test
 ```
+
+## Skills
+
+Des skills de projet décrivent l'application et la façon d'y travailler (`.claude/skills/`) :
+`architecture` (carte du code), `nouvelle-fonctionnalite` (démarche de bout en bout), `verifier` (lancer les
+vérifications sans faux échecs), `tests-e2e` (Playwright), `jour-j` (règles métier du jour J).
