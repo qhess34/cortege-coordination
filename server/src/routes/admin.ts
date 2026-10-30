@@ -5,7 +5,7 @@ import { idParam, requireUser } from '../app.js';
 import { hashPassword, revokeUserSessions } from '../auth.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
-import { fullName } from './members.js';
+import { PhoneInput, fullName } from './members.js';
 import { createLoginLink, publicBase } from './login-links.js';
 import { conflict, forbidden, notFound } from '../errors.js';
 import { requireAdmin } from '../permissions.js';
@@ -23,6 +23,7 @@ const CreateUser = z.object({
   /** Nom affiché si prénom et nom sont vides (ex. « Pharmacie de la gare »). */
   displayName: z.string().trim().max(120).default(''),
   email: Email.nullable().default(null),
+  phone: PhoneInput.default(null),
   login: Login.nullable().default(null),
   password: z.string().min(12, 'Mot de passe : 12 caractères minimum.').max(200).nullable().default(null),
   expiresAt: Expiry.default(null),
@@ -40,12 +41,14 @@ const UpdateUser = z.object({
   disabled: z.boolean().optional(),
   /** Adresse e-mail (liens de connexion) ; null pour l'effacer. */
   email: Email.nullable().optional(),
+  /** Téléphone ; null pour l'effacer. */
+  phone: PhoneInput.optional(),
   expiresAt: Expiry.optional(),
 });
 
 const publicUser = (r: Record<string, unknown>) => ({
   id: r.id, login: r.login, displayName: r.display_name, firstName: r.first_name, lastName: r.last_name, globalRole: r.global_role,
-  disabledAt: r.disabled_at, createdAt: r.created_at, email: r.email ?? null, expiresAt: r.expires_at ?? null,
+  disabledAt: r.disabled_at, createdAt: r.created_at, email: r.email ?? null, phone: r.phone ?? null, expiresAt: r.expires_at ?? null,
 });
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -64,9 +67,9 @@ export async function adminRoutes(app: FastifyInstance) {
     const display = fullName(b.firstName, b.lastName, b.displayName).slice(0, 120);
     return tx(app.db, async (c) => {
       const r = await c.query(
-        `INSERT INTO users(login, display_name, first_name, last_name, password_hash, global_role, created_by, email, expires_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *`,
-        [b.login, display, b.firstName, b.lastName, hash, b.globalRole, me.id, b.email, b.expiresAt],
+        `INSERT INTO users(login, display_name, first_name, last_name, password_hash, global_role, created_by, email, expires_at, phone)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10) RETURNING *`,
+        [b.login, display, b.firstName, b.lastName, hash, b.globalRole, me.id, b.email, b.expiresAt, b.phone],
       ).catch((e: { code?: string }) => { if (e.code === '23505') throw conflict('Cet identifiant ou cette adresse e-mail existe déjà.'); throw e; });
       const user = r.rows[0];
       await audit(c, { actorId: me.id, eventId: null, entity: 'user', entityId: user.id, action: 'creation', details: { globalRole: b.globalRole, expiresAt: b.expiresAt } });
@@ -98,9 +101,11 @@ export async function adminRoutes(app: FastifyInstance) {
                 global_role = coalesce($6, global_role),
                 disabled_at = CASE WHEN $7::boolean IS NULL THEN disabled_at WHEN $7 THEN coalesce(disabled_at, now()) ELSE NULL END,
                 email = CASE WHEN $8::boolean THEN $9 ELSE email END,
-                expires_at = CASE WHEN $10::boolean THEN $11::timestamptz ELSE expires_at END
+                expires_at = CASE WHEN $10::boolean THEN $11::timestamptz ELSE expires_at END,
+                phone = CASE WHEN $12::boolean THEN $13 ELSE phone END
           WHERE id = $1 RETURNING *`,
-        [id, display, first, last, hash, b.globalRole ?? null, b.disabled ?? null, b.email !== undefined, b.email ?? null, b.expiresAt !== undefined, b.expiresAt ?? null],
+        [id, display, first, last, hash, b.globalRole ?? null, b.disabled ?? null, b.email !== undefined, b.email ?? null, b.expiresAt !== undefined, b.expiresAt ?? null,
+          b.phone !== undefined, b.phone ?? null],
       ).catch((e: { code?: string }) => { if (e.code === '23505') throw conflict('Cette adresse e-mail est déjà utilisée.'); throw e; });
       // Désactivation ou changement de mot de passe : sessions et liens de connexion révoqués immédiatement.
       if (b.disabled || b.password) {
@@ -111,7 +116,7 @@ export async function adminRoutes(app: FastifyInstance) {
       if (b.globalRole === 'membre') await c.query('DELETE FROM event_memberships WHERE user_id = $1', [id]);
       await audit(c, {
         actorId: me.id, eventId: null, entity: 'user', entityId: id, action: 'modification',
-        details: { globalRole: b.globalRole, disabled: b.disabled, passwordChanged: !!b.password, emailChanged: b.email !== undefined, expiresAt: b.expiresAt },
+        details: { globalRole: b.globalRole, disabled: b.disabled, passwordChanged: !!b.password, emailChanged: b.email !== undefined, phoneChanged: b.phone !== undefined, expiresAt: b.expiresAt },
       });
       return publicUser(r.rows[0]);
     });

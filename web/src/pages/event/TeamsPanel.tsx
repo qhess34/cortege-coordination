@@ -216,7 +216,11 @@ function TeamPoints({ team: t, data, canEdit, run, select }: PanelProps & { team
         </select>
       )}
       {!t.disabled && t.missions.length > 0 && (
-        <a className="small" href={'#/evenements/' + data.event.id + '/roadbook/equipe/' + t.id} aria-label={'Roadbook de l’équipe ' + t.name}>📄 Roadbook de l’équipe</a>
+        <p className="row small">
+          <a href={'#/evenements/' + data.event.id + '/roadbook/equipe/' + t.id} aria-label={'Roadbook de l’équipe ' + t.name}>📄 Roadbook de l’équipe</a>
+          <a href={'/api/events/' + data.event.id + '/roadbook.gpx?team=' + t.id} download aria-label={'GPX de l’équipe ' + t.name}
+            title="Un POI par point de l’équipe (dans l’ordre des missions) et le parcours">⬇ GPX de l’équipe</a>
+        </p>
       )}
     </div>
   );

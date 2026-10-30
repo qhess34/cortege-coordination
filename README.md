@@ -30,9 +30,9 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   les administrateurs créent tous les comptes (écran « Comptes ») :
   - **comptes d'organisation** (identifiant et mot de passe) : rôle global, désactivation, révocation des sessions,
     nouveau mot de passe, suppression ;
-  - **comptes de membres d'équipe** : prénom, nom, e-mail facultatif, sans identifiant ni mot de passe. Le **lien
+  - **comptes de membres d'équipe** : prénom, nom, e-mail et téléphone facultatifs, sans identifiant ni mot de passe. Le **lien
     d'activation** obtenu à la création connecte le membre sur son téléphone pour plusieurs jours ; il complète
-    ensuite son **profil** (prénom, nom, e-mail).
+    ensuite son **profil** (prénom, nom, e-mail, téléphone).
   - **date d'expiration** facultative pour tout compte : passé cette date, il ne peut plus se connecter et est
     **supprimé automatiquement** (vérification toutes les heures, suppression journalisée).
 - **Accès par manifestation** (onglet Synthèse) : recherche dans l'annuaire, rôle organisateur, responsable ou membre.
@@ -41,6 +41,8 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   d'organisation ayant accès à la manifestation), désigne les responsables, envoie un lien de connexion, retire un
   membre. Les responsables peuvent le faire depuis leur vue terrain si l'organisation le permet. Un **membre ne voit
   que ses équipes** (vue terrain), jamais la planification ni les autres équipes.
+- **Téléphone** (facultatif) : cliquable pour l'organisation (liste des membres, *Coordination* → « Joindre
+  l'équipe ») et pour les responsables ; le numéro d'un responsable est affiché aux membres de son équipe.
 - **Première page** : connexion par identifiant et mot de passe, ou par **lien de connexion** à usage unique :
   - QR code « 📱 Connecter un appareil » affiché par un appareil déjà connecté (10 min) ;
   - lien créé par un administrateur ou un responsable (72 h) ;
@@ -113,7 +115,8 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   de 50 m les uns des autres (ex. les accès d'un même carrefour) sont regroupés, avec une grande carte zoomée où
   les numéros des missions sont indiqués, puis pour chaque point coordonnées, distance sur le parcours, description,
   voie d'accès et consignes, et une zone de notes. Le roadbook complet liste aussi les points sans équipe.
-  **Export GPX** des points (dans l'ordre des missions) et du parcours, pour un téléphone ou un GPS.
+  **Export GPX** par équipe (un POI par point, numéroté dans l'ordre des missions, et le parcours), téléchargeable
+  aussi par les membres depuis leur vue terrain, ou de tous les points, pour un téléphone ou un GPS.
 - **Synthèse** : points validés sans équipe, répartition des statuts, analyse à relancer après changement de
   parcours.
 

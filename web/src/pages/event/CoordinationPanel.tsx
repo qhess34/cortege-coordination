@@ -6,10 +6,12 @@ import { MISSION_STATUS, TEAM_KIND, TEAM_KIND_SHORT, km } from '../../labels';
 import type { Position } from '../../types';
 import { ago } from '../../useLive';
 import type { MemberPosition } from '../../components/MapView';
+import { PhoneLink } from '../../components/PhoneLink';
 
 export interface Tableau {
   teams: {
     id: number; name: string; color: string; disabled: boolean; members: number; active: number; kind: string; sharing: number;
+    contacts: { id: number; displayName: string; phone: string; role: string }[];
     missions: {
       id: number; version: number; order: number; status: string; statusChangedAt: string | null; changedBy: string | null; pointName: string;
       distance: number | null; position: Position; passedByTail: boolean;
@@ -134,6 +136,13 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
               <span className="muted small" title="Membres ayant utilisé l’application ces 5 dernières minutes">{team.active}/{team.members} actif(s)</span>
               {sharingOf(team.id, team.sharing) > 0 && <span className="muted small" title="Membres partageant leur position (visible sur la carte)">📡 {sharingOf(team.id, team.sharing)}</span>}
             </p>
+            {team.contacts.length > 0 && (
+              <details className="small"><summary>📞 Joindre l’équipe ({team.contacts.length})</summary>
+                <ul className="plain">
+                  {team.contacts.map((c) => <li key={c.id}>{c.displayName}{c.role === 'responsable' ? ' (responsable)' : ''} <PhoneLink phone={c.phone} name={c.displayName} /></li>)}
+                </ul>
+              </details>
+            )}
             {team.missions.length === 0 ? <p className="muted small">{team.kind === 'points' ? 'Aucune mission.' : TEAM_KIND[team.kind] + ' (sans point fixe).'}</p> : (
               <ul className="plain small">
                 {[...team.missions].sort((a, b) => STATUS_ORDER.indexOf(a.status) - STATUS_ORDER.indexOf(b.status) || a.order - b.order).map((m) => (

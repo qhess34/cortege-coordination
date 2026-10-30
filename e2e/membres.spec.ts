@@ -44,11 +44,12 @@ test('compte membre : création, activation, équipe, profil, lien de connexion,
   // Il ne voit rien de la planification.
   expect((await phone.request.get('/api/events/' + ev.id)).status()).toBe(404);
 
-  // 4. Profil : nom et e-mail.
+  // 4. Profil : nom, e-mail et téléphone.
   await field.getByRole('link', { name: 'Profil' }).click();
   const profil = phone.getByTestId('profil');
   await profil.getByLabel('Nom', { exact: true }).fill('Martin-Durand');
   await profil.getByLabel('Adresse e-mail').fill('camille@exemple.org');
+  await profil.getByLabel('Téléphone').fill('06 12 34 56 78');
   await profil.getByRole('button', { name: 'Enregistrer' }).click();
   await expect(profil).toContainText('Profil enregistré.');
   await expect(profil).toContainText('supprimé automatiquement');
@@ -59,6 +60,8 @@ test('compte membre : création, activation, équipe, profil, lien de connexion,
   await page.reload();
   await page.getByRole('tab', { name: /Équipes/ }).click();
   const card2 = await openTeam(page, 'Équipe Nord', 'Membres');
+  // Le numéro saisi dans le profil est cliquable pour l'organisation.
+  await expect(card2.locator('li', { hasText: 'Camille Martin-Durand' }).getByRole('link', { name: 'Appeler Camille Martin-Durand' })).toHaveAttribute('href', 'tel:0612345678');
   await card2.locator('li', { hasText: 'Camille Martin-Durand' }).getByRole('button', { name: 'Lien de connexion' }).click();
   const relink = await card2.getByLabel('Lien de connexion du membre').inputValue();
   const other = await (await browser.newContext(PHONE)).newPage();

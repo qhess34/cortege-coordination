@@ -48,7 +48,7 @@ Chaque manifestation de la liste propose deux boutons :
 
 - Il n'y a **pas d'inscription en ligne**. Les comptes d'organisation sont créés par un administrateur (lien *Comptes*
   dans la barre du haut, réservé aux administrateurs). Il y a deux sortes de comptes :
-  - **Membre d'équipe** : prénom, nom, e-mail facultatif. Pas d'identifiant ni de mot de passe : à la création,
+  - **Membre d'équipe** : prénom, nom, e-mail et téléphone facultatifs. Pas d'identifiant ni de mot de passe : à la création,
     l'administrateur obtient un **lien d'activation** (72 h, une seule fois) à transmettre à la personne (SMS, messagerie).
     En l'ouvrant, elle est connectée sur son téléphone pour plusieurs jours. Ensuite, elle se reconnecte par lien :
     e-mail (si elle a renseigné son adresse), QR code depuis un autre de ses appareils, ou nouveau lien envoyé par
@@ -62,7 +62,10 @@ Chaque manifestation de la liste propose deux boutons :
   - **Organisateur** : peut tout modifier ;
   - **Responsable** : consulte la manifestation et gère son équipe si l'organisation le permet ;
   - **Membre** : consulte seulement.
-- Chaque personne gère son **profil** (prénom, nom, e-mail) depuis le lien *Profil*.
+- Chaque personne gère son **profil** (prénom, nom, e-mail, téléphone) depuis le lien *Profil*.
+- **Téléphone** : saisi par l'administrateur ou par la personne. Il est cliquable (📞) pour l'organisation dans la liste
+  des membres de l'équipe et dans *Coordination* (« Joindre l'équipe »), et pour les responsables dans leur liste de
+  membres. Le numéro d'un **responsable** est aussi affiché aux membres de son équipe, dans leur vue terrain.
 
 ## Manifestations
 
@@ -154,7 +157,10 @@ Dans la section **Membres** d'une équipe :
 
 - **Roadbook** complet ou par équipe (bas de l'onglet *Équipes*, ou section *Points* d'une équipe). Il contient les
   cartes zoomées de chaque lieu, les consignes et les points regroupés par lieu, et il est prêt à imprimer.
-- **GPX de tous les points**, à charger dans une application de navigation.
+- **GPX de l'équipe** (lien *⬇ GPX de l'équipe* sur chaque équipe) : un **POI par point** de l'équipe, numéroté dans
+  l'ordre des missions, avec le parcours. À ouvrir dans OsmAnd, Organic Maps, un GPS… Les membres le téléchargent
+  aussi depuis leur vue terrain (*Toutes les missions*).
+- **GPX de tous les points** (bas de l'onglet *Équipes*), à charger dans une application de navigation.
 
 ## Le jour J : onglet Coordination
 
@@ -180,8 +186,11 @@ coupure, l'écran se recharge toutes les 30 secondes.
 
 ## Suivi des positions (facultatif)
 
-- À activer dans *Synthèse* → *Modifier* → **Autoriser le partage de position en direct**. Ensuite, **chaque membre
-  choisit** de partager sa position, ou non.
+- **Activer** : onglet *Synthèse* de la manifestation → bouton **Modifier** (sous le titre) → cochez **Autoriser le
+  partage de position en direct** → **Enregistrer**. Il faut être organisateur de la manifestation.
+- Le bloc **Partager ma position** apparaît alors dans l'onglet *Mission* de la vue terrain de chaque membre (après
+  rechargement ou au prochain signal du direct). **Chaque membre choisit** de partager sa position, ou non.
+- La page doit être servie en **HTTPS** (sauf `localhost`) : sinon le navigateur refuse la géolocalisation.
 - Les membres qui partagent apparaissent sur la carte, avec la couleur de leur équipe. Le survol indique l'heure, la
   précision et la batterie.
 - **Arrivée automatique** : à moins de 30 m de son point, la mission passe d'elle-même « en position ».

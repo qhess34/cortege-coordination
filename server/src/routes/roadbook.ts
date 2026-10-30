@@ -1,11 +1,12 @@
 // Roadbook : données de la manifestation (ou d'une équipe) mises en forme pour l'impression, et export GPX.
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import { idParam, requireUser } from '../app.js';
 import type { Client } from '../db.js';
 import { notFound } from '../errors.js';
 import type { Suggestion } from '../geo/osm-analysis.js';
 import { requireEventRole } from '../permissions.js';
+import { requireTeamMember } from './terrain.js';
 
 const Query = z.object({ team: z.coerce.number().int().positive().optional() });
 
@@ -114,36 +115,48 @@ export async function roadbookRoutes(app: FastifyInstance) {
     return loadRoadbook(app.db, eventId, q.team);
   });
 
-  // GPX : parcours + points de mission dans l'ordre de chaque équipe, pour un téléphone ou un GPS.
+  // GPX : parcours + points de mission (POI) dans l'ordre de chaque équipe, pour un téléphone ou un GPS.
   app.get('/api/events/:id/roadbook.gpx', async (req, reply) => {
     const u = requireUser(req);
     const eventId = idParam(req);
     await requireEventRole(app.db, u, eventId, 'lecture');
     const q = Query.parse(req.query);
-    const rb = await loadRoadbook(app.db, eventId, q.team);
-    const wpts: string[] = [];
-    const wpt = (p: RoadbookPoint, name: string, extra: string) =>
-      '  <wpt lat="' + p.position[1].toFixed(7) + '" lon="' + p.position[0].toFixed(7) + '"><name>' + xml(name) + '</name>' +
-      '<desc>' + xml([p.description, extra].filter(Boolean).join(' — ')) + '</desc><type>' + xml(p.type) + '</type></wpt>';
-    for (const t of rb.teams) {
-      for (const m of t.missions) wpts.push(wpt(m.point, String(m.order).padStart(2, '0') + ' ' + m.point.name, 'Équipe ' + t.name));
-    }
-    for (const p of rb.unassigned) wpts.push(wpt(p, p.name, 'Sans équipe'));
-    const trk = rb.track
-      ? '  <trk><name>' + xml(rb.track.name ?? rb.event.name) + '</name>' +
-        (rb.track.geometry as { coordinates: [number, number][][] }).coordinates
-          .map((seg) => '<trkseg>' + seg.map(([lon, lat]) => '<trkpt lat="' + lat.toFixed(7) + '" lon="' + lon.toFixed(7) + '"/>').join('') + '</trkseg>')
-          .join('') + '</trk>'
-      : '';
-    const title = rb.event.name + (q.team && rb.teams[0] ? ' — ' + rb.teams[0].name : '');
-    const body =
-      '<?xml version="1.0" encoding="UTF-8"?>\n' +
-      '<gpx version="1.1" creator="cortege-coordination" xmlns="http://www.topografix.com/GPX/1/1">\n' +
-      '  <metadata><name>' + xml(title) + '</name><time>' + rb.generatedAt + '</time></metadata>\n' +
-      wpts.join('\n') + (wpts.length ? '\n' : '') + trk + '\n</gpx>\n';
-    reply
-      .header('content-type', 'application/gpx+xml; charset=utf-8')
-      .header('content-disposition', 'attachment; filename="roadbook-' + slug(title) + '.gpx"');
-    return body;
+    return sendGpx(reply, await loadRoadbook(app.db, eventId, q.team), !!q.team);
   });
+
+  // GPX d'une équipe pour ses membres (vue terrain) : ses points en POI et le parcours.
+  app.get('/api/terrain/equipes/:id/points.gpx', async (req, reply) => {
+    const u = requireUser(req);
+    const teamId = idParam(req);
+    const { eventId } = await requireTeamMember(app.db, u, teamId);
+    return sendGpx(reply, await loadRoadbook(app.db, eventId, teamId), true);
+  });
+}
+
+/** Fichier GPX : un POI (wpt) par point de mission, numéroté dans l'ordre de l'équipe, puis le parcours. */
+function sendGpx(reply: FastifyReply, rb: Awaited<ReturnType<typeof loadRoadbook>>, oneTeam: boolean) {
+  const wpts: string[] = [];
+  const wpt = (p: RoadbookPoint, name: string, extra: string) =>
+    '  <wpt lat="' + p.position[1].toFixed(7) + '" lon="' + p.position[0].toFixed(7) + '"><name>' + xml(name) + '</name>' +
+    '<desc>' + xml([p.description, extra].filter(Boolean).join(' — ')) + '</desc><type>' + xml(p.type) + '</type></wpt>';
+  for (const t of rb.teams) {
+    for (const m of t.missions) wpts.push(wpt(m.point, String(m.order).padStart(2, '0') + ' ' + m.point.name, 'Équipe ' + t.name));
+  }
+  if (!oneTeam) for (const p of rb.unassigned) wpts.push(wpt(p, p.name, 'Sans équipe'));
+  const trk = rb.track
+    ? '  <trk><name>' + xml(rb.track.name ?? rb.event.name) + '</name>' +
+      (rb.track.geometry as { coordinates: [number, number][][] }).coordinates
+        .map((seg) => '<trkseg>' + seg.map(([lon, lat]) => '<trkpt lat="' + lat.toFixed(7) + '" lon="' + lon.toFixed(7) + '"/>').join('') + '</trkseg>')
+        .join('') + '</trk>'
+    : '';
+  const title = rb.event.name + (oneTeam && rb.teams[0] ? ' — ' + rb.teams[0].name : '');
+  const body =
+    '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<gpx version="1.1" creator="cortege-coordination" xmlns="http://www.topografix.com/GPX/1/1">\n' +
+    '  <metadata><name>' + xml(title) + '</name><time>' + rb.generatedAt + '</time></metadata>\n' +
+    wpts.join('\n') + (wpts.length ? '\n' : '') + trk + '\n</gpx>\n';
+  reply
+    .header('content-type', 'application/gpx+xml; charset=utf-8')
+    .header('content-disposition', 'attachment; filename="roadbook-' + slug(title) + '.gpx"');
+  return body;
 }

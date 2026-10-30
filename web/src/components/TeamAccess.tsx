@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
 import { dateTime } from '../labels';
 import type { TeamMember } from '../types';
+import { PhoneLink } from './PhoneLink';
 
 interface Candidate { id: number; displayName: string; globalRole: string; otherTeams: string | null }
 
@@ -67,6 +68,7 @@ export function TeamAccess({ teamId, organizer, onChanged }: {
                     {m.lastSeen ? ' · vu ' + dateTime(m.lastSeen) : ' · jamais connecté'}
                     {m.expiresAt ? ' · expire le ' + dateTime(m.expiresAt) : ''}
                   </span>
+                  {m.phone && <> <PhoneLink phone={m.phone} name={m.displayName} /></>}
                 </span>
                 {m.globalRole === 'membre' && (
                   <button title="Lien de connexion à usage unique (nouveau téléphone, accès perdu)" onClick={async () => {

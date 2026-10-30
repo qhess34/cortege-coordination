@@ -140,3 +140,49 @@ describe('expiration', () => {
     expect((await admin.request('DELETE', '/api/admin/users/' + me.id)).statusCode).toBe(409);
   });
 });
+
+describe('téléphone', () => {
+  it('saisi par l’administrateur ou le membre, normalisé ; visible de l’organisation et des responsables', async () => {
+    const r = await admin.post('/api/admin/users', { globalRole: 'membre', firstName: 'Tel', lastName: 'Membre', phone: '06 12 34 56 78' });
+    expect(r.json().phone).toBe('0612345678');
+    expect((await admin.post('/api/admin/users', { globalRole: 'membre', firstName: 'X', phone: 'abc' })).statusCode).toBe(400);
+    const m = new Agent(ctx.app);
+    await m.linkLogin(r.json().activation.path);
+    const id = r.json().id;
+    expect((await m.patch('/api/moi/profil', { firstName: 'Tel', lastName: 'Membre', email: null, phone: '+33 6.11.22.33.44' })).json().phone).toBe('+33611223344');
+    expect((await m.get('/api/moi/profil')).json().phone).toBe('+33611223344');
+    // Sans le champ, le numéro est conservé ; vide, il est effacé.
+    expect((await m.patch('/api/moi/profil', { firstName: 'Tel', lastName: 'Membre', email: null })).json().phone).toBe('+33611223344');
+
+    // Responsable de l'équipe avec un numéro : visible des membres dans leur vue terrain.
+    await orga.post('/api/teams/' + teamA + '/members', { userId: id, role: 'responsable' });
+    const other = await memberAgent(ctx, orga, teamA, 'Coéquipier');
+    expect((await other.get('/api/terrain/equipes/' + teamA)).json().contacts).toEqual([{ id, displayName: 'Tel Membre', phone: '+33611223344' }]);
+    // Liste des membres (organisation) et tableau de coordination.
+    expect((await orga.get('/api/teams/' + teamA + '/members')).json().find((x: { id: number }) => x.id === id).phone).toBe('+33611223344');
+    const t = (await orga.get('/api/events/' + eventId + '/tableau')).json();
+    expect(t.teams.find((x: { id: number }) => x.id === teamA).contacts).toEqual([{ id, displayName: 'Tel Membre', phone: '+33611223344', role: 'responsable' }]);
+    // Un compte d'organisation en simple lecture ne voit pas les numéros.
+    const lecteur = await createUser(ctx.db, 'lecteur.tel', 'organisateur');
+    await orga.put('/api/events/' + eventId + '/members', { userId: lecteur, role: 'membre' });
+    const la = new Agent(ctx.app);
+    await la.login('lecteur.tel');
+    expect((await la.get('/api/events/' + eventId + '/tableau')).json().teams.find((x: { id: number }) => x.id === teamA).contacts).toEqual([]);
+
+    expect((await m.patch('/api/moi/profil', { firstName: 'Tel', lastName: 'Membre', email: null, phone: '' })).json().phone).toBeNull();
+    expect((await admin.patch('/api/admin/users/' + id, { phone: '07 00 00 00 00' })).json().phone).toBe('0700000000');
+  });
+});
+
+describe('GPX de l’équipe', () => {
+  it('un membre télécharge les points de son équipe en POI, pas ceux d’une autre', async () => {
+    const m = await memberAgent(ctx, orga, teamA, 'Gpx');
+    const r = await m.get('/api/terrain/equipes/' + teamA + '/points.gpx');
+    expect(r.statusCode).toBe(200);
+    expect(r.headers['content-type']).toMatch(/application\/gpx\+xml/);
+    expect(r.body).toMatch(/<wpt lat="[\d.-]+" lon="[\d.-]+"><name>01 Angle<\/name>/);
+    expect(r.body).not.toContain('Sans équipe');
+    expect((await m.get('/api/terrain/equipes/' + teamB + '/points.gpx')).statusCode).toBe(404);
+    expect((await m.get('/api/events/' + eventId + '/roadbook.gpx?team=' + teamA)).statusCode).toBe(404);
+  });
+});

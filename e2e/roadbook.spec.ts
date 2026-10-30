@@ -30,6 +30,11 @@ test('roadbook d’équipe et roadbook complet', async ({ page }) => {
   await page.goto('/#/evenements/' + ev.id);
   await page.getByRole('tab', { name: 'Équipes' }).click();
   await openTeam(page, 'Nord', 'Points');
+  // GPX de l'équipe : ses points en POI.
+  const gpxHref = await page.getByRole('link', { name: 'GPX de l’équipe Nord' }).getAttribute('href');
+  const teamGpx = await (await page.request.get(gpxHref!)).text();
+  expect(teamGpx).toContain('<wpt ');
+  expect(teamGpx).not.toContain('Sans équipe');
   await page.getByRole('link', { name: 'Roadbook de l’équipe Nord' }).click();
   const rb = page.getByTestId('roadbook');
   await expect(rb.getByRole('heading', { name: 'Roadbook — Marche roadbook — Nord' })).toBeVisible();

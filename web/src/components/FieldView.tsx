@@ -7,6 +7,7 @@ import { ago, useLive } from '../useLive';
 import guideMembre from '../../../docs/guide-membre.md?raw';
 import { FieldMap } from './FieldMap';
 import { Markdown } from './Markdown';
+import { PhoneLink } from './PhoneLink';
 import { OwnTracksCard, type OwnTracksState } from './OwnTracksCard';
 import { TeamAccess } from './TeamAccess';
 import { useSharing } from './useSharing';
@@ -25,6 +26,8 @@ export interface FieldIncident {
 }
 export interface Progress { distance: number; note: string; at: string; authorName: string | null }
 export interface Terrain {
+  /** Responsables de l'équipe joignables par téléphone. */
+  contacts: { id: number; displayName: string; phone: string }[];
   me: { id: number; displayName: string; role: 'membre' | 'responsable'; organizer: boolean; member: boolean };
   event: { id: number; name: string; startsAt: string | null; instructions: string; status: string };
   team: { id: number; name: string; color: string; instructions: string; leaderName: string | null; closed: boolean; kind: TeamKind };
@@ -204,6 +207,11 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
           {data.event.name} · {data.me.displayName}{data.me.role === 'responsable' ? ' (responsable)' : ''}
           {data.team.leaderName ? ' · responsable : ' + data.team.leaderName : ''}
         </p>
+        {data.contacts.length > 0 && (
+          <p className="small row" data-testid="contacts">
+            {data.contacts.map((c) => <span key={c.id}>{c.displayName} <PhoneLink phone={c.phone} name={c.displayName} /></span>)}
+          </p>
+        )}
         {error && <p className="warning small" role="alert">{error}</p>}
         {data.team.closed && <p className="warning small">Équipe désactivée par l’organisation.</p>}
       </header>
@@ -335,6 +343,10 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
                 </li>
               ))}
             </ol>
+            {data.missions.length > 0 && (
+              <p className="small"><a href={'/api/terrain/equipes/' + teamId + '/points.gpx'} download>⬇ GPX des points de l’équipe</a>
+                <span className="muted"> — à ouvrir dans OsmAnd, Organic Maps ou un GPS (un POI par point, et le parcours)</span></p>
+            )}
           </details>
         </section>
       )}

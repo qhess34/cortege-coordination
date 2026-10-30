@@ -14,6 +14,8 @@ CREATE TABLE users (
   first_name    text NOT NULL DEFAULT '' CHECK (length(first_name) <= 80),
   last_name     text NOT NULL DEFAULT '' CHECK (length(last_name) <= 80),
   email         text,
+  -- Téléphone (facultatif), pour joindre la personne le jour J ; chiffres et « + » initial seulement.
+  phone         text CHECK (phone ~ '^\+?[0-9]{6,20}$'),
   password_hash text,
   global_role   text NOT NULL DEFAULT 'membre' CHECK (global_role IN ('admin', 'organisateur', 'membre', 'aucun')),
   expires_at    timestamptz,

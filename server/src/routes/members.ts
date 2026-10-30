@@ -24,6 +24,13 @@ async function teamMissions(db: Db, teamId: number) {
 }
 
 /** Nom affiché : « Prénom Nom », sinon le nom déjà connu. */
+/** Téléphone facultatif : espaces, points, tirets et parenthèses retirés ; « + » initial accepté. */
+export const Phone = z.string().trim().transform((s) => s.replace(/[\s.()-]/g, ''))
+  .pipe(z.string().regex(/^\+?[0-9]{6,20}$/, 'Numéro de téléphone invalide.'))
+  .nullable()
+  .transform((s) => s || null);
+export const PhoneInput = z.union([z.literal('').transform(() => null), Phone]);
+
 export const fullName = (first: string, last: string, fallback: string) => [first, last].map((x) => x.trim()).filter(Boolean).join(' ') || fallback;
 
 export async function memberRoutes(app: FastifyInstance) {
@@ -48,8 +55,8 @@ export async function memberRoutes(app: FastifyInstance) {
   // --- Profil (tout compte) ---------------------------------------------------------------------------------------
   app.get('/api/moi/profil', async (req) => {
     const u = requireUser(req);
-    const r = (await app.db.query('SELECT first_name, last_name, email, display_name, login, expires_at FROM users WHERE id = $1', [u.id])).rows[0];
-    return { firstName: r.first_name, lastName: r.last_name, email: r.email, displayName: r.display_name, login: r.login, expiresAt: r.expires_at };
+    const r = (await app.db.query('SELECT first_name, last_name, email, phone, display_name, login, expires_at FROM users WHERE id = $1', [u.id])).rows[0];
+    return { firstName: r.first_name, lastName: r.last_name, email: r.email, phone: r.phone, displayName: r.display_name, login: r.login, expiresAt: r.expires_at };
   });
 
   app.patch('/api/moi/profil', async (req) => {
@@ -58,14 +65,17 @@ export async function memberRoutes(app: FastifyInstance) {
       firstName: z.string().trim().max(80),
       lastName: z.string().trim().max(80),
       email: z.string().trim().toLowerCase().email('Adresse e-mail invalide.').max(200).nullable(),
+      phone: PhoneInput.optional(),
     }).parse(req.body);
     return tx(app.db, async (c) => {
       const cur = (await c.query('SELECT display_name FROM users WHERE id = $1', [u.id])).rows[0];
       const display = fullName(b.firstName, b.lastName, cur.display_name).slice(0, 120);
-      await c.query('UPDATE users SET first_name = $2, last_name = $3, email = $4, display_name = $5 WHERE id = $1', [u.id, b.firstName, b.lastName, b.email, display])
-        .catch((e: { code?: string }) => { if (e.code === '23505') throw conflict('Cette adresse e-mail est déjà utilisée par un autre compte.'); throw e; });
-      await audit(c, { actorId: u.id, eventId: null, entity: 'user', entityId: u.id, action: 'profil', details: { emailChanged: true } });
-      return { firstName: b.firstName, lastName: b.lastName, email: b.email, displayName: display };
+      const phone = (await c.query(
+        'UPDATE users SET first_name = $2, last_name = $3, email = $4, display_name = $5, phone = CASE WHEN $6::boolean THEN $7 ELSE phone END WHERE id = $1 RETURNING phone',
+        [u.id, b.firstName, b.lastName, b.email, display, b.phone !== undefined, b.phone ?? null],
+      ).catch((e: { code?: string }) => { if (e.code === '23505') throw conflict('Cette adresse e-mail est déjà utilisée par un autre compte.'); throw e; })).rows[0].phone;
+      await audit(c, { actorId: u.id, eventId: null, entity: 'user', entityId: u.id, action: 'profil', details: { emailChanged: true, phoneChanged: b.phone !== undefined } });
+      return { firstName: b.firstName, lastName: b.lastName, email: b.email, phone, displayName: display };
     });
   });
 
@@ -100,13 +110,13 @@ export async function memberRoutes(app: FastifyInstance) {
     const teamId = idParam(req);
     await requireTeamManager(app.db, u, teamId);
     const r = await app.db.query(
-      `SELECT u.id, u.display_name, u.global_role, u.email, u.disabled_at, u.expires_at, m.role, m.joined_at,
+      `SELECT u.id, u.display_name, u.global_role, u.email, u.phone, u.disabled_at, u.expires_at, m.role, m.joined_at,
               (SELECT max(s.last_seen_at) FROM sessions s WHERE s.user_id = u.id) AS last_seen
          FROM team_memberships m JOIN users u ON u.id = m.user_id WHERE m.team_id = $1 ORDER BY m.role DESC, u.display_name`,
       [teamId],
     );
     return r.rows.map((x) => ({
-      id: x.id, displayName: x.display_name, globalRole: x.global_role, hasEmail: !!x.email, role: x.role, joinedAt: x.joined_at,
+      id: x.id, displayName: x.display_name, globalRole: x.global_role, hasEmail: !!x.email, phone: x.phone ?? null, role: x.role, joinedAt: x.joined_at,
       lastSeen: x.last_seen, disabled: !!x.disabled_at, expiresAt: x.expires_at,
     }));
   });

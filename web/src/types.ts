@@ -51,7 +51,7 @@ export interface Team {
 }
 
 export interface TeamMember {
-  id: number; displayName: string; globalRole: Me['globalRole']; hasEmail: boolean; role: 'membre' | 'responsable'; joinedAt: string;
+  id: number; displayName: string; globalRole: Me['globalRole']; hasEmail: boolean; phone: string | null; role: 'membre' | 'responsable'; joinedAt: string;
   lastSeen: string | null; disabled: boolean; expiresAt: string | null;
 }
 /** Équipe d'un membre (page d'accueil d'un compte « membre »). */

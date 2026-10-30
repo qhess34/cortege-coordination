@@ -3,16 +3,17 @@
 import { useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../api';
 import { dateTime } from '../labels';
+import { formatPhone } from '../components/PhoneLink';
 
 type Role = 'admin' | 'organisateur' | 'membre' | 'aucun';
 interface Account {
   id: number; login: string | null; displayName: string; firstName: string; lastName: string; globalRole: Role;
-  disabledAt: string | null; createdAt: string; email: string | null; expiresAt: string | null;
+  disabledAt: string | null; createdAt: string; email: string | null; phone: string | null; expiresAt: string | null;
 }
 const ROLES: Record<Role, string> = { membre: 'Membre d’équipe', organisateur: 'Organisateur', admin: 'Administrateur', aucun: 'Compte sans rôle' };
 const toLocal = (s: string | null) => (s ? new Date(new Date(s).getTime() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 16) : '');
 const fromLocal = (s: string) => (s ? new Date(s).toISOString() : null);
-const EMPTY = { globalRole: 'membre' as Role, firstName: '', lastName: '', email: '', login: '', password: '', expiresAt: '' };
+const EMPTY = { globalRole: 'membre' as Role, firstName: '', lastName: '', email: '', phone: '', login: '', password: '', expiresAt: '' };
 
 export function AdminPage({ meId }: { meId: number }) {
   const [accounts, setAccounts] = useState<Account[] | null>(null);
@@ -44,7 +45,7 @@ export function AdminPage({ meId }: { meId: number }) {
     let created: (Account & { activation: { url: string; expiresAt: string } | null }) | null = null;
     const ok = await act(async () => {
       created = await api.post('/api/admin/users', {
-        globalRole: form.globalRole, firstName: form.firstName, lastName: form.lastName, email: form.email.trim() || null,
+        globalRole: form.globalRole, firstName: form.firstName, lastName: form.lastName, email: form.email.trim() || null, phone: form.phone.trim(),
         login: member ? null : form.login, password: member ? null : form.password, expiresAt: fromLocal(form.expiresAt),
       });
     }, 'Compte créé.');
@@ -55,7 +56,7 @@ export function AdminPage({ meId }: { meId: number }) {
     }
   };
 
-  const shown = (accounts ?? []).filter((a) => !filter || (a.displayName + ' ' + (a.login ?? '') + ' ' + (a.email ?? '')).toLowerCase().includes(filter.toLowerCase()));
+  const shown = (accounts ?? []).filter((a) => !filter || (a.displayName + ' ' + (a.login ?? '') + ' ' + (a.email ?? '') + ' ' + (a.phone ?? '')).toLowerCase().includes(filter.toLowerCase()));
 
   return (
     <main className="page" data-testid="administration">
@@ -92,6 +93,9 @@ export function AdminPage({ meId }: { meId: number }) {
         <label>E-mail (facultatif : pour recevoir soi-même un lien de connexion)
           <input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} autoComplete="off" />
         </label>
+        <label>Téléphone (facultatif : pour joindre la personne le jour J)
+          <input type="tel" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} autoComplete="off" maxLength={30} />
+        </label>
         {!member && (
           <div className="row">
             <label className="grow">Identifiant<input value={form.login} onChange={(e) => setForm({ ...form, login: e.target.value })} required pattern="[a-z0-9._\-]{3,64}" title="3 à 64 caractères : a-z, 0-9, . _ -" autoComplete="off" /></label>
@@ -115,7 +119,7 @@ export function AdminPage({ meId }: { meId: number }) {
             <tbody>
               {shown.map((a) => (
                 <tr key={a.id} data-testid={'compte-' + a.id}>
-                  <td>{a.displayName}{a.email ? <div className="muted small">{a.email}</div> : null}</td>
+                  <td>{a.displayName}{a.email || a.phone ? <div className="muted small">{[a.email, a.phone && formatPhone(a.phone)].filter(Boolean).join(' · ')}</div> : null}</td>
                   <td>{ROLES[a.globalRole]}</td>
                   <td className="small">{a.login ? 'identifiant « ' + a.login + ' »' : 'par lien'}</td>
                   <td className="small">{a.expiresAt ? dateTime(a.expiresAt) : '—'}</td>
@@ -150,12 +154,12 @@ export function AdminPage({ meId }: { meId: number }) {
 function EditAccount({ account: a, self, act, onClose }: {
   account: Account; self: boolean; act: (fn: () => Promise<unknown>, ok: string) => Promise<boolean>; onClose: () => void;
 }) {
-  const [f, setF] = useState({ firstName: a.firstName, lastName: a.lastName, email: a.email ?? '', globalRole: a.globalRole, expiresAt: toLocal(a.expiresAt) });
+  const [f, setF] = useState({ firstName: a.firstName, lastName: a.lastName, email: a.email ?? '', phone: a.phone ?? '', globalRole: a.globalRole, expiresAt: toLocal(a.expiresAt) });
   const url = '/api/admin/users/' + a.id;
   const save = async (e: FormEvent) => {
     e.preventDefault();
     const ok = await act(() => api.patch(url, {
-      firstName: f.firstName, lastName: f.lastName, email: f.email.trim() || null,
+      firstName: f.firstName, lastName: f.lastName, email: f.email.trim() || null, phone: f.phone.trim(),
       ...(self ? {} : { globalRole: f.globalRole, expiresAt: fromLocal(f.expiresAt) }),
     }), 'Compte enregistré.');
     if (ok) onClose();
@@ -168,6 +172,7 @@ function EditAccount({ account: a, self, act, onClose }: {
         <label className="grow">Nom<input value={f.lastName} onChange={(e) => setF({ ...f, lastName: e.target.value })} maxLength={80} /></label>
       </div>
       <label>E-mail<input type="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></label>
+      <label>Téléphone<input type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} maxLength={30} /></label>
       {!self && (
         <>
           <label>Type de compte

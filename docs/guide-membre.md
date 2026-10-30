@@ -12,7 +12,8 @@ permet de **prévenir l'organisation** en un geste.
    votre **téléphone**.
 2. Touchez **Se connecter**. Votre équipe s'affiche directement ; si vous êtes dans plusieurs équipes, choisissez-la
    dans *Mes équipes*.
-3. Ouvrez **Profil** pour vérifier votre **prénom**, votre **nom** et, si vous le souhaitez, votre **e-mail**.
+3. Ouvrez **Profil** pour vérifier votre **prénom**, votre **nom** et, si vous le souhaitez, votre **e-mail** et votre
+   **téléphone** (pour que l'organisation et votre responsable puissent vous appeler).
 
 Il n'y a **pas de mot de passe** : ce téléphone reste connecté plusieurs jours. Pour vous reconnecter plus tard :
 
@@ -47,7 +48,9 @@ coupée et les informations datent de ce moment-là.
 - **Tête du cortège à 350 m de ce point** : vous savez quand il arrive.
 - **« La fermeture du cortège a dépassé ce point »** : vous pourrez quitter le point **sur instruction** de
   l'organisation, puis toucher *Terminé*.
-- En bas : les **consignes** générales et d'équipe, et la liste de **toutes les missions**.
+- Sous le nom de l'équipe : le **📞 téléphone de votre responsable**, s'il l'a renseigné.
+- En bas : les **consignes** générales et d'équipe, et la liste de **toutes les missions**, avec **⬇ GPX des points
+  de l'équipe** à ouvrir dans OsmAnd, Organic Maps ou un GPS.
 
 ## 3. Messages
 
@@ -76,7 +79,8 @@ coupée et les informations datent de ce moment-là.
 
 ## 6. Partager sa position (facultatif)
 
-Si l'organisation l'a autorisé, le bloc **Partager ma position** apparaît.
+Si l'organisation l'a autorisé pour la manifestation, le bloc **Partager ma position** apparaît dans l'onglet
+*Mission*. Sinon, il n'est pas affiché : demandez à l'organisation de l'activer.
 
 - C'est **votre choix** : vous pouvez l'arrêter à tout moment (*Arrêter*).
 - L'organisation voit seulement **votre dernière position**, sans historique. Elle est effacée quand vous arrêtez.
@@ -112,7 +116,7 @@ Il s'arrête tout seul après la manifestation, et vous pourrez alors désinstal
 
 L'application conserve :
 
-- votre **prénom**, votre **nom**, votre **e-mail** si vous l'avez indiqué, et vos équipes ;
+- votre **prénom**, votre **nom**, votre **e-mail** et votre **téléphone** si vous les avez indiqués, et vos équipes ;
 - vos actions sur les missions (statuts, incidents, messages) ;
 - si vous la partagez, **votre dernière position seulement**.
 

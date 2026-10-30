@@ -173,7 +173,16 @@ export async function terrainRoutes(app: FastifyInstance) {
     ]);
     const e = ev.rows[0];
     const t = team.rows[0];
+    // Responsables de l'équipe à joindre par téléphone (numéro renseigné dans leur profil).
+    const contacts = (await app.db.query(
+      `SELECT u.id, u.display_name, u.phone FROM users u
+        WHERE u.id <> $2 AND u.phone IS NOT NULL AND (u.id = (SELECT leader_user_id FROM teams WHERE id = $1)
+              OR EXISTS (SELECT 1 FROM team_memberships m WHERE m.team_id = $1 AND m.user_id = u.id AND m.role = 'responsable'))
+        ORDER BY u.display_name`,
+      [teamId, u.id],
+    )).rows.map((c) => ({ id: c.id, displayName: c.display_name, phone: c.phone }));
     return {
+      contacts,
       me: { id: u.id, displayName: u.displayName, role: access.role, organizer: access.asOrganizer, member: await isTeamMember(app.db, u.id, teamId) },
       event: { id: e.id, name: e.name, startsAt: e.starts_at, endsAt: e.ends_at, instructions: e.instructions, status: e.status },
       team: { id: t.id, name: t.name, color: t.color, instructions: t.instructions, leaderName: t.leader_name, closed: !!t.disabled_at, kind: access.kind },
@@ -440,6 +449,20 @@ export async function terrainRoutes(app: FastifyInstance) {
       ),
     ]);
     const pres = new Map(presence.rows.map((p) => [p.team_id, p]));
+    // Numéros des membres (renseignés dans les profils), pour l'organisation seulement.
+    const phones = new Map<number, { id: number; displayName: string; phone: string; role: string }[]>();
+    if ((await eventRole(app.db, u, eventId)) === 'organisateur') {
+      const r = await app.db.query(
+        `SELECT tm.team_id, u.id, u.display_name, u.phone, tm.role FROM team_memberships tm JOIN teams t ON t.id = tm.team_id JOIN users u ON u.id = tm.user_id
+          WHERE t.event_id = $1 AND u.phone IS NOT NULL ORDER BY tm.role DESC, u.display_name`,
+        [eventId],
+      );
+      for (const x of r.rows) {
+        const list = phones.get(x.team_id) ?? [];
+        list.push({ id: x.id, displayName: x.display_name, phone: x.phone, role: x.role });
+        phones.set(x.team_id, list);
+      }
+    }
     const shared = new Map((await app.db.query(
       `SELECT team_id, count(*)::int AS n FROM member_locations WHERE event_id = $1 AND updated_at > now() - $2::interval GROUP BY team_id`,
       [eventId, POSITION_MAX_AGE],
@@ -448,6 +471,7 @@ export async function terrainRoutes(app: FastifyInstance) {
       teams: teams.rows.map((t) => ({
         id: t.id, name: t.name, color: t.color, disabled: !!t.disabled_at, kind: t.kind,
         members: Number(pres.get(t.id)?.members ?? 0), active: Number(pres.get(t.id)?.active ?? 0), sharing: shared.get(t.id) ?? 0,
+        contacts: phones.get(t.id) ?? [],
         missions: missions.rows.filter((m) => m.team_id === t.id).map((m) => ({
           id: m.id, version: m.version, order: m.position, status: m.status, statusChangedAt: m.status_changed_at, changedBy: m.changed_by,
           pointName: m.name, distance: m.distance_m, position: [m.lon, m.lat], passedByTail: passed(tail, m.distance_m),
