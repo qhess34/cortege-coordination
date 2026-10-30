@@ -377,7 +377,7 @@ function Progression({ data, reload, setToast, locate }: {
         return (
           <div key={part} data-testid={'progression-' + part}>
             {p
-              ? <p>{PART[part].title} déclarée au <b>{km(p.distance)}</b> <span className="muted">— {ago(p.at)}{p.note ? ' · ' + p.note : ''}</span></p>
+              ? <p>{PART[part].title} au <b>{km(p.distance)}</b> <span className="muted">— {ago(p.at)}{p.note ? ' · ' + p.note : ''}</span></p>
               : <p className="muted">{PART[part].title} : non déclarée.</p>}
             {data.canDeclare[part] && (
               <form className="row" onSubmit={(e: FormEvent) => { e.preventDefault(); void send(part, { distance: Math.round(Number((value[part] ?? '').replace(',', '.')) * 1000) }); }}>

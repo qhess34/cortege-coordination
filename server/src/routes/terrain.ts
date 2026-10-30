@@ -9,7 +9,7 @@ import { tx, type Client } from '../db.js';
 import { HttpError, badRequest, conflict, forbidden, notFound } from '../errors.js';
 import { simplify, type Position } from '../geo/route.js';
 import { eventRole, requireEventRole } from '../permissions.js';
-import { POSITION_MAX_AGE, detectArrival, isTeamMember, storePosition } from '../services/locations.js';
+import { POSITION_MAX_AGE, autoProgress, detectArrival, isTeamMember, storePosition } from '../services/locations.js';
 import { RoutingError } from '../services/routing.js';
 import { currentTrack } from '../services/track.js';
 import { TRANSITIONS } from './teams.js';
@@ -495,9 +495,11 @@ export async function terrainRoutes(app: FastifyInstance) {
       if (!(await isTeamMember(c, u.id, teamId))) throw forbidden();
       await storePosition(c, { userId: u.id, eventId: access.eventId, teamId, position: b.position as Position, accuracy: b.accuracy, source: 'web' });
       const arrived = await detectArrival(c, { userId: u.id, eventId: access.eventId, teamId, position: b.position as Position, accuracy: b.accuracy });
-      return { eventId: access.eventId, arrived };
+      const progressed = await autoProgress(c, { eventId: access.eventId, teamId });
+      return { eventId: access.eventId, arrived, progressed };
     });
     app.live.publish(out.eventId, 'positions');
+    if (out.progressed) app.live.publish(out.eventId);
     return { ok: true, arrived: out.arrived };
   });
 

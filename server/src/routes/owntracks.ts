@@ -12,7 +12,7 @@ import { tx, type Client } from '../db.js';
 import { HttpError, forbidden, notFound } from '../errors.js';
 import type { Position } from '../geo/route.js';
 import { eventRole, requireEventRole } from '../permissions.js';
-import { detectArrival, isTeamMember, storePosition } from '../services/locations.js';
+import { autoProgress, detectArrival, isTeamMember, storePosition } from '../services/locations.js';
 import { requireTeamMember } from './terrain.js';
 
 /** Positions plus anciennes (envoyées en différé après une coupure) : ignorées pour le suivi en direct. */
@@ -197,6 +197,7 @@ export async function owntracksRoutes(app: FastifyInstance) {
     const result = await tx(app.db, async (c) => {
       await c.query('UPDATE trackers SET last_seen_at = now(), battery = coalesce($2, battery) WHERE id = $1', [k.id, msg?.batt ?? null]);
       let moved = false;
+      let progressed = false;
       if (msg && (msg._type === 'location' || msg._type === 'transition') && msg.lat !== undefined && msg.lon !== undefined) {
         const position: Position = [msg.lon, msg.lat];
         const fresh = msg.tst === undefined || Date.now() / 1000 - msg.tst <= MAX_FIX_AGE_S;
@@ -208,17 +209,19 @@ export async function owntracksRoutes(app: FastifyInstance) {
           await detectArrival(c, {
             userId: k.user_id, eventId: k.event_id, teamId: k.team_id, position, accuracy: msg.acc ?? null, zoneMissionId: zone ? Number(zone[1]) : null,
           });
+          progressed = await autoProgress(c, { eventId: k.event_id, teamId: k.team_id });
         }
       }
       // Zones à jour ? Sinon elles sont renvoyées dans la réponse.
       const { zones, version } = await teamZones(c, k.team_id, ev.zone_radius_m);
       if (version !== k.waypoints_version) {
         await c.query('UPDATE trackers SET waypoints_version = $2 WHERE id = $1', [k.id, version]);
-        return { moved, reply: setZones(zones) };
+        return { moved, progressed, reply: setZones(zones) };
       }
-      return { moved, reply: [] };
+      return { moved, progressed, reply: [] };
     });
     if (result.moved) app.live.publish(k.event_id, 'positions');
+    if (result.progressed) app.live.publish(k.event_id);
     return result.reply;
   });
 }

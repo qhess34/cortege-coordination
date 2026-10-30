@@ -68,8 +68,10 @@ coupée et les informations datent de ce moment-là.
 - **Équipe volante** : vous n'avez pas de point fixe. Les incidents de toute la manifestation s'affichent dans
   *Incidents*. Touchez **J'y vais** pour indiquer que vous intervenez, **🧭 GPS** pour vous y rendre, et **Résolu** une
   fois réglé.
-- **Ouverture** : vous marchez en tête. Touchez régulièrement **📍 La tête est ici**, ou indiquez les km parcourus.
-- **Fermeture** : vous fermez la marche. Touchez régulièrement **📍 La queue est ici**. Les équipes dont le point est
+- **Ouverture** : vous marchez en tête. Si vous partagez votre position, la tête du cortège avance **toute seule**.
+  Sinon, touchez régulièrement **📍 La tête est ici**, ou indiquez les km parcourus.
+- **Fermeture** : vous fermez la marche. Même principe : votre position partagée fait avancer la queue, sinon touchez
+  régulièrement **📍 La queue est ici**. Les équipes dont le point est
   dépassé en sont informées.
 
 ## 6. Partager sa position (facultatif)
@@ -79,6 +81,8 @@ Si l'organisation l'a autorisé, le bloc **Partager ma position** apparaît.
 - C'est **votre choix** : vous pouvez l'arrêter à tout moment (*Arrêter*).
 - L'organisation voit seulement **votre dernière position**, sans historique. Elle est effacée quand vous arrêtez.
 - **Arrivée automatique** : à moins de 30 m de votre point, vous passez « en position » sans rien toucher.
+- **Ouverture et fermeture** : votre position fait avancer la tête ou la queue du cortège (seule la distance sur le
+  parcours est retenue, sans votre nom).
 - Le partage ne fonctionne que **tant que l'application est ouverte à l'écran**. L'écran reste allumé pendant le partage.
 
 **Suivi écran éteint avec OwnTracks** (facultatif) :

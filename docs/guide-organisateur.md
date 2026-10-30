@@ -163,9 +163,12 @@ tout s'y met à jour **en direct**. L'indicateur **● direct** à côté du nom
 coupure, l'écran se recharge toutes les 30 secondes.
 
 - **Compteurs** : points en position, en route, incidents ouverts, tête et queue du cortège, **points à lever**.
-- **Progression du cortège** : la tête et la queue sont déclarées en km parcourus, par l'organisation, l'équipe
-  d'ouverture (tête) ou de fermeture (queue). Ce n'est pas un suivi GPS. Chaque membre voit à quelle distance la tête
-  se trouve de son point.
+- **Progression du cortège** : si le partage de position est autorisé, la tête et la queue avancent **automatiquement**
+  avec les positions des membres de l'**ouverture** (le plus avancé) et de la **fermeture** (le plus en arrière),
+  ramenées sur le parcours (au plus une mise à jour par minute ; positions à plus de 150 m du parcours ou trop
+  imprécises ignorées). Sinon, ou pour corriger, elles se déclarent à la main en km parcourus, par l'organisation,
+  l'ouverture (tête) ou la fermeture (queue). Chaque membre voit à quelle distance la tête se trouve de son point.
+  C'est une indication, à confirmer sur le terrain.
 - **Incidents** : les prioritaires (aide, santé, sécurité) en premier. *Je m'en occupe* indique à l'équipe que c'est
   pris en charge, *Résolu* clôt l'incident. L'équipe volante peut aussi les prendre en charge.
 - **Équipes** : statut de chaque point (qui l'a changé, quand), nombre de membres actifs, badge **à lever** quand la

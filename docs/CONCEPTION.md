@@ -87,7 +87,7 @@ distinctes**. Valider une suggestion crée un point opérationnel qui la référ
 | `login_links` | Liens de connexion à usage unique | Seul le **hash** du jeton est stocké ; origine ∈ `appareil`, `admin`, `email`, `equipe` ; expiration ; `used_at` |
 | `messages`, `message_receipts` | Communication ciblée, accusés de réception | Fil d'équipe ou annonce à tous ; urgent |
 | `incidents` | Incidents | Catégorie, priorité, statut, responsable du suivi, position facultative, verrou optimiste |
-| `event_progress` | Progression **déclarée** du cortège | Tête ou queue, distance cumulée, auteur, horodatage ; jamais confondue avec une position GPS |
+| `event_progress` | Progression du cortège | Tête ou queue, distance cumulée, horodatage ; déclarée (auteur) ou calculée à partir des positions partagées de l'ouverture et de la fermeture (sans auteur ni coordonnées) |
 | `member_locations` | Dernière position partagée volontairement | Une ligne par membre, sans historique ; source (navigateur, OwnTracks), batterie ; purge après 2 h |
 | `trackers` | Identifiants de suivi OwnTracks | Hash du secret, expiration, révocation, version des zones envoyées |
 | `audit_logs` | Journal des modifications importantes | Acteur, action, entité, avant/après (sans secret) |
@@ -231,7 +231,7 @@ aux missions de l'équipe et efface sa position partagée.
 expiration et suppression automatique des comptes, profil, membres des équipes, révocation.
 
 **Phase 3** ✔ — PWA, vue de mission, transitions de mission par les membres, routage piéton, WebSocket, tableau de bord
-partagé, messages, incidents, progression déclarée du cortège. Le temps réel est un simple signal d'invalidation (aucune donnée dans le
+partagé, messages, incidents, progression du cortège (automatique ou déclarée). Le temps réel est un simple signal d'invalidation (aucune donnée dans le
 WebSocket) émis après validation de la transaction, à partir des écritures du journal d'audit ; le routage piéton passe
 par un serveur compatible OSRM configurable, avec repli sur un lien vers la carte OpenStreetMap.
 

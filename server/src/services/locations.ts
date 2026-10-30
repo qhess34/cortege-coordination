@@ -2,6 +2,7 @@
 import { audit } from '../audit.js';
 import type { Client } from '../db.js';
 import type { Position } from '../geo/route.js';
+import { currentTrack } from './track.js';
 
 /** Distance (m) au point de mission en deçà de laquelle l'arrivée est enregistrée automatiquement. */
 export const ARRIVAL_RADIUS = 30;
@@ -9,6 +10,13 @@ export const ARRIVAL_RADIUS = 30;
 export const ARRIVAL_MAX_ACCURACY = 50;
 /** Une position plus ancienne n'est plus affichée. */
 export const POSITION_MAX_AGE = '10 minutes';
+
+/** Progression automatique : précision GPS minimale (m) et distance maximale au parcours (m). */
+export const PROGRESS_MAX_ACCURACY = 100;
+export const PROGRESS_MAX_OFFSET = 150;
+/** Une nouvelle progression automatique n'est enregistrée qu'après ce délai (s) et ce déplacement (m). */
+export const PROGRESS_MIN_INTERVAL_S = 60;
+export const PROGRESS_MIN_MOVE = 20;
 
 export interface Arrival { missionId: number; pointName: string }
 
@@ -54,6 +62,46 @@ export async function detectArrival(c: Client, p: {
   );
   await audit(c, { actorId: p.userId, eventId: p.eventId, entity: 'mission', entityId: m.id, action: 'statut', details: { from: m.status, to: 'en_position', auto: true } });
   return { missionId: m.id, pointName: m.name };
+}
+
+/**
+ * Progression automatique du cortège à partir des positions partagées des équipes d'ouverture (tête) et de
+ * fermeture (queue) : chaque position récente et assez précise est ramenée sur le parcours (sur une boucle, le passage
+ * le plus proche de la progression précédente) ; la tête est la plus avancée, la queue la plus en arrière.
+ * Enregistrée au plus une fois par minute, et seulement si elle a bougé. Sans auteur ni coordonnées : la progression
+ * ne garde pas trace de la personne qui la porte. Retourne true si une progression a été enregistrée.
+ */
+export async function autoProgress(c: Client, p: { eventId: number; teamId: number }): Promise<boolean> {
+  const kind = (await c.query('SELECT kind FROM teams WHERE id = $1', [p.teamId])).rows[0]?.kind;
+  const part = kind === 'ouverture' ? 'tete' : kind === 'fermeture' ? 'queue' : null;
+  if (!part) return false;
+  const track = await currentTrack(c, p.eventId);
+  if (!track) return false;
+  // Verrou par manifestation et par partie : deux envois simultanés n'enregistrent pas deux progressions.
+  await c.query('SELECT pg_advisory_xact_lock($1, $2)', [p.eventId, part === 'tete' ? 1 : 2]);
+  const prev = (await c.query(
+    `SELECT distance_m, extract(epoch FROM now() - created_at) AS age FROM event_progress
+      WHERE event_id = $1 AND part = $2 ORDER BY created_at DESC, id DESC LIMIT 1`,
+    [p.eventId, part],
+  )).rows[0];
+  if (prev && Number(prev.age) < PROGRESS_MIN_INTERVAL_S) return false;
+  const rows = (await c.query(
+    `SELECT ST_X(l.geom) AS lon, ST_Y(l.geom) AS lat FROM member_locations l JOIN teams t ON t.id = l.team_id
+      WHERE l.event_id = $1 AND t.kind = $2 AND t.disabled_at IS NULL AND l.updated_at > now() - $3::interval
+        AND (l.accuracy_m IS NULL OR l.accuracy_m <= $4)`,
+    [p.eventId, kind, POSITION_MAX_AGE, PROGRESS_MAX_ACCURACY],
+  )).rows;
+  const ref = prev ? Number(prev.distance_m) : 0;
+  const distances = rows.flatMap((r) => {
+    const passages = track.route.passages([r.lon, r.lat], PROGRESS_MAX_OFFSET);
+    if (!passages.length) return [];
+    return [passages.reduce((a, b) => (Math.abs(b.distance - ref) < Math.abs(a.distance - ref) ? b : a)).distance];
+  });
+  if (!distances.length) return false;
+  const distance = Math.round(part === 'tete' ? Math.max(...distances) : Math.min(...distances));
+  if (prev && Math.abs(distance - ref) < PROGRESS_MIN_MOVE) return false;
+  await c.query("INSERT INTO event_progress(event_id, distance_m, note, author_id, part) VALUES ($1, $2, 'automatique (positions)', NULL, $3)", [p.eventId, distance, part]);
+  return true;
 }
 
 /** Le compte fait-il vraiment partie de l'équipe (membre ou responsable désigné), équipe active ? */

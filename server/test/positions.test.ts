@@ -91,3 +91,47 @@ describe('partage de position', () => {
     expect((await ctx.db.query('SELECT count(*)::int AS n FROM member_locations WHERE user_id = $1', [bobId])).rows[0].n).toBe(0);
   });
 });
+
+describe('progression automatique du cortège', () => {
+  it('tête et queue suivent les positions des équipes d’ouverture et de fermeture', async () => {
+    const head = (await orga.post('/api/events/' + eventId + '/teams', { name: 'Ouverture', color: '#2a9d8f', kind: 'ouverture' })).json().id;
+    const tail = (await orga.post('/api/events/' + eventId + '/teams', { name: 'Fermeture', color: '#264653', kind: 'fermeture' })).json().id;
+    const h1 = await memberAgent(ctx, orga, head, 'Tête 1');
+    const h2 = await memberAgent(ctx, orga, head, 'Tête 2');
+    const q1 = await memberAgent(ctx, orga, tail, 'Queue 1');
+    const tableau = async () => (await orga.get('/api/events/' + eventId + '/tableau')).json();
+    // Les progressions précédentes datent de plus d'une minute (sinon elles ne sont pas remplacées).
+    const age = () => ctx.db.query("UPDATE event_progress SET created_at = created_at - interval '2 minutes' WHERE event_id = $1", [eventId]);
+
+    await send(h1, head, 150, 5);
+    expect((await tableau()).progress).toMatchObject({ distance: 150, note: 'automatique (positions)', authorName: null });
+    // Au plus une par minute.
+    await send(h1, head, 180, 5);
+    expect((await tableau()).progress.distance).toBe(150);
+    // Plusieurs membres de l'ouverture : la tête est la plus avancée ; une position loin du parcours est ignorée.
+    await age();
+    await send(h2, head, 260, 0);
+    await send(h1, head, 230, 400);
+    expect((await tableau()).progress.distance).toBe(260);
+    // Position imprécise : ignorée.
+    await age();
+    await send(h2, head, 350, 0, 500);
+    expect((await tableau()).progress.distance).toBe(260);
+
+    // Queue : la fermeture dépasse le premier point (200 m), il apparaît « à lever ».
+    await send(q1, tail, 120, 0);
+    let t = await tableau();
+    expect(t.tail.distance).toBe(120);
+    const premier = (x: typeof t) => x.teams.find((y: { id: number }) => y.id === teamA).missions.find((m: { pointName: string }) => m.pointName === 'Premier');
+    expect(premier(t).passedByTail).toBe(false);
+    await age();
+    await send(q1, tail, 210, 0);
+    t = await tableau();
+    expect(t.tail.distance).toBe(210);
+    expect(premier(t).passedByTail).toBe(true);
+    // Une équipe à points fixes ne fait pas avancer le cortège.
+    await age();
+    await send(alice, teamA, 450, 0);
+    expect((await tableau()).progress.distance).toBe(260);
+  });
+});

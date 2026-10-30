@@ -1,4 +1,4 @@
-// Tableau de bord partagé du jour J : progression déclarée, incidents, état des équipes, messages.
+// Tableau de bord partagé du jour J : progression du cortège, incidents, état des équipes, messages.
 import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../../api';
 import { INCIDENT_CATEGORY, INCIDENT_STATUS, type FieldIncident, type Progress } from '../../components/FieldView';
@@ -175,7 +175,7 @@ function ProgressCard({ eventId, t, act }: { eventId: number; t: Tableau; act: (
   return (
     <div className="card">
       <h3>Progression du cortège</h3>
-      <p className="muted small">Déclarée par l’organisation, l’équipe d’ouverture (tête) ou de fermeture (queue) — ce n’est pas un suivi GPS.</p>
+      <p className="muted small">Calculée automatiquement à partir des positions partagées des équipes d’ouverture (tête) et de fermeture (queue), ou déclarée à la main. Indicative : à confirmer sur le terrain.</p>
       {line('Tête', t.progress)}
       {line('Queue', t.tail)}
       {(t.canDeclare.tete || t.canDeclare.queue) && (
