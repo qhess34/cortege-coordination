@@ -38,5 +38,33 @@ services:
     ports:
       - "127.0.0.1:3000:3000"
 
+  # Sauvegarde quotidienne de la base (pg_dump) vers le dossier hôte BACKUP_PATH (.env).
+  backup:
+    image: postgres:16-alpine
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: cortege
+      PGDATABASE: cortege
+      PGPASSWORD: ${POSTGRES_PASSWORD:?définir POSTGRES_PASSWORD dans .env}
+      # Heure de la sauvegarde (format cron) et rétention en jours.
+      BACKUP_CRON: ${BACKUP_CRON:-0 3 * * *}
+      BACKUP_KEEP_DAYS: ${BACKUP_KEEP_DAYS:-14}
+    volumes:
+      - ./backup/backup.sh:/usr/local/bin/backup.sh:ro
+      # Dossier de sauvegarde sur la machine hôte (à définir dans .env).
+      - ${BACKUP_PATH:?définir BACKUP_PATH dans .env}:/backups
+    # crond (busybox) ne transmet pas l'environnement : on l'enregistre pour le script, puis on programme la tâche.
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        printenv | grep -E '^(PG|BACKUP_KEEP_DAYS)' > /etc/cortege-backup.env
+        echo "$$BACKUP_CRON /usr/local/bin/backup.sh >> /proc/1/fd/1 2>&1" > /etc/crontabs/root
+        echo "Sauvegardes programmées ($$BACKUP_CRON) vers /backups, rétention $${BACKUP_KEEP_DAYS} jours."
+        exec crond -f -l 8
+    restart: unless-stopped
+
 volumes:
   db-data:
