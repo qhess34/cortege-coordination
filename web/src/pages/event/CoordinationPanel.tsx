@@ -16,6 +16,8 @@ export interface Tableau {
     leaders: { id: number; displayName: string; phone: string | null }[];
     missions: {
       id: number; version: number; order: number; status: string; statusChangedAt: string | null; changedBy: string | null; pointId: number; pointName: string;
+      /** Lieu (carrefour) regroupant ce point avec d'autres accès. */
+      place: { id: number; name: string; position: Position } | null;
       distance: number | null; position: Position; passedByTail: boolean;
     }[];
   }[];
@@ -250,45 +252,65 @@ const POINT_STATE: Record<PointState, { label: string; css: string }> = {
   termine: { label: 'Levé', css: 's-terminee' },
 };
 
-/** Prochains points devant la tête du cortège (ou depuis le départ si la tête n'est pas connue), avec leur état. */
-function NextPoints({ t }: { t: Tableau }) {
-  const head = t.progress?.distance ?? 0;
+type TeamMission = Tableau['teams'][number]['missions'][number] & { team: Tableau['teams'][number] };
+/** Un lieu suivi : carrefour (accès regroupés) ou point seul, avec ses missions et son état le plus grave. */
+export interface PlaceGroup {
+  key: string; name: string; position: Position; distance: number | null; missions: TeamMission[];
+  accesses: number; held: number; state: PointState; passedByTail: boolean;
+}
+
+/** Regroupe les missions des équipes actives par lieu (les accès d'un même carrefour ensemble). */
+export function placeGroups(t: Tableau): PlaceGroup[] {
   const open = t.incidents.filter((i) => i.status !== 'resolu');
-  const byPoint = new Map<number, { id: number; name: string; distance: number; missions: (Tableau['teams'][number]['missions'][number] & { team: Tableau['teams'][number] })[] }>();
+  const groups = new Map<string, TeamMission[]>();
   for (const team of t.teams.filter((x) => !x.disabled)) {
     for (const m of team.missions) {
-      if (m.distance === null || m.distance < head) continue;
-      const p = byPoint.get(m.pointId) ?? { id: m.pointId, name: m.pointName, distance: m.distance, missions: [] };
-      p.missions.push({ ...m, team });
-      byPoint.set(m.pointId, p);
+      const key = m.place ? 'lieu-' + m.place.id : 'point-' + m.pointId;
+      groups.set(key, [...(groups.get(key) ?? []), { ...m, team }]);
     }
   }
-  const next = [...byPoint.values()].sort((a, b) => a.distance - b.distance).slice(0, 6);
-  const state = (p: (typeof next)[number]): PointState => {
-    const ids = new Set(p.missions.map((m) => m.id));
+  return [...groups.entries()].map(([key, ms]) => {
+    const points = new Map(ms.map((m) => [m.pointId, m]));
+    const grouped = points.size > 1 && !!ms[0]!.place;
+    const ids = new Set(ms.map((m) => m.id));
     const inc = open.filter((i) => i.missionId !== null && ids.has(i.missionId));
-    const has = (s: string) => p.missions.some((m) => m.status === s);
-    if (inc.some((i) => i.category === 'aide')) return 'aide';
-    if (inc.length || has('incident')) return 'incident';
-    if (has('releve_necessaire')) return 'releve';
-    if (has('en_position')) return 'en_position';
-    if (p.missions.every((m) => m.status === 'terminee')) return 'termine';
-    if (has('en_deplacement')) return 'en_route';
-    return 'personne';
-  };
+    const has = (s: string) => ms.some((m) => m.status === s);
+    const state: PointState = inc.some((i) => i.category === 'aide') ? 'aide'
+      : inc.length || has('incident') ? 'incident'
+      : has('releve_necessaire') ? 'releve'
+      : has('en_position') ? 'en_position'
+      : ms.every((m) => m.status === 'terminee') ? 'termine'
+      : has('en_deplacement') ? 'en_route' : 'personne';
+    const distances = ms.map((m) => m.distance).filter((d): d is number => d !== null);
+    const held = [...points.keys()].filter((pid) => ms.some((m) => m.pointId === pid && (m.status === 'en_position' || m.status === 'releve_necessaire'))).length;
+    return {
+      key, name: grouped ? ms[0]!.place!.name : ms[0]!.pointName, position: grouped ? ms[0]!.place!.position : ms[0]!.position,
+      distance: distances.length ? Math.min(...distances) : null, missions: ms, accesses: points.size, held, state,
+      passedByTail: ms.some((m) => m.passedByTail && m.status !== 'terminee'),
+    };
+  });
+}
+
+/** Prochains lieux devant la tête du cortège (ou depuis le départ si la tête n'est pas connue), avec leur état. */
+function NextPoints({ t }: { t: Tableau }) {
+  const head = t.progress?.distance ?? 0;
+  const next = placeGroups(t).filter((g) => g.distance !== null && g.distance >= head).sort((a, b) => a.distance! - b.distance!).slice(0, 6);
   return (
     <div className="card" data-testid="prochains-points">
       <h3>Prochains points {t.progress ? 'devant la tête' : 'depuis le départ'}</h3>
       {next.length === 0 ? <p className="muted small">{t.progress ? 'Aucun point devant la tête du cortège.' : 'Aucun point situé sur le parcours.'}</p> : (
         <ul className="plain small">
-          {next.map((p) => {
-            const st = POINT_STATE[state(p)];
+          {next.map((g) => {
+            const st = POINT_STATE[g.state];
+            const teams = [...new Map(g.missions.map((m) => [m.team.id, m.team])).values()];
             return (
-              <li key={p.id} className="row" data-testid={'prochain-point-' + p.id}>
-                <span className="muted next-dist">{t.progress ? (p.distance - head < 1000 ? Math.round(p.distance - head) + ' m' : km(p.distance - head)) : km(p.distance)}</span>
-                <span className="grow"><b>{p.name}</b> <span className="muted">· {p.missions.map((m) => (
-                  <span key={m.id}><span className="dot" style={{ background: m.team.color }} /> {m.team.name} </span>
-                ))}</span></span>
+              <li key={g.key} className="row" data-testid={'prochain-' + g.key}>
+                <span className="muted next-dist">{t.progress ? (g.distance! - head < 1000 ? Math.round(g.distance! - head) + ' m' : km(g.distance! - head)) : km(g.distance!)}</span>
+                <span className="grow"><b>{g.name}</b>
+                  {g.accesses > 1 && <span className="muted"> · {g.held}/{g.accesses} accès tenus</span>}
+                  <span className="muted"> · {teams.map((x) => (
+                    <span key={x.id}><span className="dot" style={{ background: x.color }} /> {x.name} </span>
+                  ))}</span></span>
                 <span className={'status-badge ' + st.css}>{st.label}</span>
               </li>
             );

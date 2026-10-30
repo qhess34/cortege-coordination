@@ -7,6 +7,7 @@ import { badRequest, conflict, HttpError } from '../errors.js';
 import type { Suggestion } from '../geo/osm-analysis.js';
 import { requireEntityAccess, requireEventRole } from '../permissions.js';
 import { getAnalysisJob, runAnalysis, startAnalysisJob } from '../services/analysis.js';
+import { junctionPlace, placeBaseName } from '../services/places.js';
 import { currentTrack } from '../services/track.js';
 
 const AnalysisBody = z
@@ -151,16 +152,20 @@ export async function suggestionRoutes(app: FastifyInstance) {
       if (existing.rowCount) throw conflict('Un point issu de cette suggestion existe déjà (éventuellement supprimé).');
       const data = s.data as Suggestion;
       const name = b.name ?? suggestionPointName(data, TYPE_LABEL[s.type] ?? s.type);
+      // Accès d'un carrefour : le point rejoint le lieu de ce carrefour (regroupement pour le GPX et le suivi).
+      const placeId = data.junction?.nodeId
+        ? await junctionPlace(c, eventId, data.junction.nodeId, placeBaseName(suggestionPointName(data, TYPE_LABEL[s.type] ?? s.type)), data.junction.position)
+        : null;
       let distance = s.distance_m as number | null;
       if (b.position) distance = (await currentTrack(c, eventId))?.route.locate(b.position)?.distance ?? null;
       const p = (
         await c.query(
-          `INSERT INTO mission_points(event_id, origin, suggestion_id, name, description, type, geom, distance_m, created_by)
+          `INSERT INTO mission_points(event_id, origin, suggestion_id, name, description, type, geom, distance_m, created_by, place_id)
            VALUES ($1, 'suggestion', $2, $3, $4, $5,
-                   CASE WHEN $9::float8 IS NULL THEN $6::geometry ELSE ST_SetSRID(ST_MakePoint($9, $10), 4326) END, $7, $8)
+                   CASE WHEN $9::float8 IS NULL THEN $6::geometry ELSE ST_SetSRID(ST_MakePoint($9, $10), 4326) END, $7, $8, $11)
            RETURNING id`,
           [eventId, id, name.slice(0, 200), b.description ?? fieldSummary(data), s.type, s.geom, distance, u.id,
-            b.position?.[0] ?? null, b.position?.[1] ?? null],
+            b.position?.[0] ?? null, b.position?.[1] ?? null, placeId],
         )
       ).rows[0];
       await c.query("UPDATE map_suggestions SET status = 'validee', decided_at = now(), decided_by = $2 WHERE id = $1", [id, u.id]);

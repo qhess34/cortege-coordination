@@ -9,13 +9,17 @@ import { INCIDENT_CATEGORY } from '../components/FieldView';
 import type { MemberPosition } from '../components/MapView';
 import type { EventInfo, Position, Track } from '../types';
 import { ago, useLive } from '../useLive';
-import { CoordinationPanel, type CoordSection, type Tableau } from './event/CoordinationPanel';
+import { CoordinationPanel, placeGroups, type CoordSection, type PlaceGroup, type Tableau } from './event/CoordinationPanel';
 
 type Tab = CoordSection | 'carte';
 const TABS: [Tab, string, string][] = [
   ['synthese', 'Direct', '📊'], ['incidents', 'Incidents', '⚠'], ['equipes', 'Équipes', '👥'], ['messages', 'Messages', '✉'], ['carte', 'Carte', '🗺'],
 ];
 const PREF = 'cortege.direct.onglet';
+/** Couleur d'un lieu sur la carte : celle du statut de mission correspondant à son état. */
+const STATE_STATUS: Record<PlaceGroup['state'], string> = {
+  aide: 'incident', incident: 'incident', releve: 'releve_necessaire', en_position: 'en_position', en_route: 'en_deplacement', personne: 'affectee', termine: 'terminee',
+};
 
 export function LiveCoordPage({ eventId }: { eventId: number }) {
   const [event, setEvent] = useState<EventInfo | null>(null);
@@ -53,9 +57,11 @@ export function LiveCoordPage({ eventId }: { eventId: number }) {
   if (error) return <main className="page"><p className="error">{error}</p><a href="#/">Retour</a></main>;
   if (!event) return <div className="center">Chargement…</div>;
 
-  const points: LivePoint[] = (tableau?.teams ?? []).filter((t) => !t.disabled).flatMap((t) => t.missions.map((m) => ({
-    position: m.position, label: m.pointName + ' (' + t.name + ')', status: m.status, passedByTail: m.passedByTail,
-  })));
+  // Un marqueur par lieu (les accès d'un carrefour regroupés), à la couleur de son état le plus grave.
+  const points: LivePoint[] = tableau ? placeGroups(tableau).map((g) => ({
+    position: g.position, label: g.name + (g.accesses > 1 ? ' (' + g.held + '/' + g.accesses + ' accès tenus)' : ''),
+    status: STATE_STATUS[g.state], passedByTail: g.passedByTail,
+  })) : [];
   const incidents = toMapIncidents(tableau?.incidents ?? [], INCIDENT_CATEGORY);
 
   return (

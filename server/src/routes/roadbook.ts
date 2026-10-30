@@ -9,6 +9,8 @@ import { requireEventRole } from '../permissions.js';
 import { requireTeamMember } from './terrain.js';
 
 const Query = z.object({ team: z.coerce.number().int().positive().optional() });
+/** GPX : un POI par carrefour (lieu, par défaut) ou un POI par accès (point). */
+const GpxQuery = Query.extend({ regroupement: z.enum(['carrefour', 'acces']).default('carrefour') });
 
 interface RoadbookPoint {
   id: number;
@@ -20,11 +22,14 @@ interface RoadbookPoint {
   distance: number | null;
   /** Éléments OSM utiles sur le terrain, pour un point issu d'une suggestion. */
   osm: { routeNames: string[]; branches: { name: string | null; highway: string; flow: string; motor: string }[]; uncertainties: string[] } | null;
+  /** Lieu (carrefour) auquel appartient le point, avec son centre. */
+  place: { id: number; name: string; position: [number, number] } | null;
 }
 
 const pointSelect = `
-  SELECT p.id, p.name, p.type, p.description, p.origin, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat, p.distance_m, s.data AS osm
-    FROM mission_points p LEFT JOIN map_suggestions s ON s.id = p.suggestion_id`;
+  SELECT p.id, p.name, p.type, p.description, p.origin, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat, p.distance_m, s.data AS osm,
+         p.place_id, pl.name AS place_name, ST_X(pl.geom) AS place_lon, ST_Y(pl.geom) AS place_lat
+    FROM mission_points p LEFT JOIN map_suggestions s ON s.id = p.suggestion_id LEFT JOIN places pl ON pl.id = p.place_id`;
 
 function toPoint(r: Record<string, unknown>): RoadbookPoint {
   const d = r.osm as Suggestion | null;
@@ -36,6 +41,7 @@ function toPoint(r: Record<string, unknown>): RoadbookPoint {
       branches: d.branches.map((b) => ({ name: b.name, highway: b.highway, flow: b.flow, motor: b.motor })),
       uncertainties: d.uncertainties,
     } : null,
+    place: r.place_id ? { id: r.place_id as number, name: r.place_name as string, position: [r.place_lon as number, r.place_lat as number] } : null,
   };
 }
 
@@ -120,8 +126,8 @@ export async function roadbookRoutes(app: FastifyInstance) {
     const u = requireUser(req);
     const eventId = idParam(req);
     await requireEventRole(app.db, u, eventId, 'lecture');
-    const q = Query.parse(req.query);
-    return sendGpx(reply, await loadRoadbook(app.db, eventId, q.team), !!q.team);
+    const q = GpxQuery.parse(req.query);
+    return sendGpx(reply, await loadRoadbook(app.db, eventId, q.team), !!q.team, q.regroupement === 'carrefour');
   });
 
   // GPX d'une équipe pour ses membres (vue terrain) : ses points en POI et le parcours.
@@ -129,20 +135,44 @@ export async function roadbookRoutes(app: FastifyInstance) {
     const u = requireUser(req);
     const teamId = idParam(req);
     const { eventId } = await requireTeamMember(app.db, u, teamId);
-    return sendGpx(reply, await loadRoadbook(app.db, eventId, teamId), true);
+    const q = GpxQuery.parse(req.query);
+    return sendGpx(reply, await loadRoadbook(app.db, eventId, teamId), true, q.regroupement === 'carrefour');
   });
 }
 
-/** Fichier GPX : un POI (wpt) par point de mission, numéroté dans l'ordre de l'équipe, puis le parcours. */
-function sendGpx(reply: FastifyReply, rb: Awaited<ReturnType<typeof loadRoadbook>>, oneTeam: boolean) {
-  const wpts: string[] = [];
-  const wpt = (p: RoadbookPoint, name: string, extra: string) =>
-    '  <wpt lat="' + p.position[1].toFixed(7) + '" lon="' + p.position[0].toFixed(7) + '"><name>' + xml(name) + '</name>' +
-    '<desc>' + xml([p.description, extra].filter(Boolean).join(' — ')) + '</desc><type>' + xml(p.type) + '</type></wpt>';
-  for (const t of rb.teams) {
-    for (const m of t.missions) wpts.push(wpt(m.point, String(m.order).padStart(2, '0') + ' ' + m.point.name, 'Équipe ' + t.name));
+/**
+ * Fichier GPX : les points de mission en POI (wpt), numérotés dans l'ordre de l'équipe, puis le parcours.
+ * Par carrefour (`grouped`) : les accès d'un même lieu ne forment qu'un POI, au centre du carrefour.
+ */
+function sendGpx(reply: FastifyReply, rb: Awaited<ReturnType<typeof loadRoadbook>>, oneTeam: boolean, grouped: boolean) {
+  interface Entry { point: RoadbookPoint; label: string; order: number | null }
+  const entries: Entry[] = [];
+  for (const t of rb.teams) for (const m of t.missions) entries.push({ point: m.point, label: 'Équipe ' + t.name, order: m.order });
+  if (!oneTeam) for (const p of rb.unassigned) entries.push({ point: p, label: 'Sans équipe', order: null });
+  // Regroupement : par lieu (s'il est partagé par plusieurs points de l'export), sinon le point seul.
+  const groups = new Map<string, Entry[]>();
+  for (const e of entries) {
+    const key = grouped && e.point.place ? 'l' + e.point.place.id : 'p' + e.point.id + ':' + e.label;
+    groups.set(key, [...(groups.get(key) ?? []), e]);
   }
-  if (!oneTeam) for (const p of rb.unassigned) wpts.push(wpt(p, p.name, 'Sans équipe'));
+  const wpt = (position: [number, number], name: string, desc: string, type: string) =>
+    '  <wpt lat="' + position[1].toFixed(7) + '" lon="' + position[0].toFixed(7) + '"><name>' + xml(name) + '</name>' +
+    '<desc>' + xml(desc) + '</desc><type>' + xml(type) + '</type></wpt>';
+  const num = (n: number | null) => (n === null ? '' : String(n).padStart(2, '0') + ' ');
+  const list = [...groups.values()];
+  // Export d'une équipe : ordre des missions (renuméroté par lieu) ; manifestation : équipes puis points sans équipe.
+  const rank = new Map(oneTeam ? [...list].sort((a, b) => Math.min(...a.map((e) => e.order ?? 1e9)) - Math.min(...b.map((e) => e.order ?? 1e9))).map((g, i) => [g, i + 1]) : []);
+  const wpts = list.map((g) => {
+    const first = g[0]!;
+    const accesses = [...new Map(g.map((e) => [e.point.id, e.point])).values()];
+    const order = oneTeam ? rank.get(g)! : first.order;
+    if (accesses.length === 1 || !first.point.place) {
+      return wpt(first.point.position, num(order) + first.point.name, [first.point.description, ...new Set(g.map((e) => e.label))].filter(Boolean).join(' — '), first.point.type);
+    }
+    const labels = [...new Set(g.map((e) => e.label))];
+    return wpt(first.point.place.position, num(order) + first.point.place.name + ' (' + accesses.length + ' accès)',
+      'Accès : ' + accesses.map((p) => p.name).join(', ') + ' — ' + labels.join(', '), 'carrefour');
+  });
   const trk = rb.track
     ? '  <trk><name>' + xml(rb.track.name ?? rb.event.name) + '</name>' +
       (rb.track.geometry as { coordinates: [number, number][][] }).coordinates

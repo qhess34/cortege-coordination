@@ -80,7 +80,8 @@ distinctes**. Valider une suggestion crée un point opérationnel qui la référ
 | `route_points` | Points de passage GPX (`wpt`) | Distance cumulée projetée |
 | `osm_analyses` | Historique des analyses | Paramètres, date des données OSM, rapport de comparaison, rues nommées relevées (nom des points) |
 | `map_suggestions` | Suggestions OSM | `stable_key` unique par événement ; statut ∈ `a_examiner`, `validee`, `ecartee` ; motif, attributs, incertitudes ; `last_seen_analysis_id` |
-| `mission_points` | Points opérationnels | Origine ∈ `suggestion`, `manuel`, `import` ; `distance_m` ; `deleted_at` (suppression logique tant que l'historique en dépend) |
+| `mission_points` | Points opérationnels | Origine ∈ `suggestion`, `manuel`, `import` ; `distance_m` ; `place_id` (carrefour) ; `deleted_at` (suppression logique tant que l'historique en dépend) |
+| `places` | Carrefours : accès regroupés | Nom, centre, nœud OSM d'origine (regroupement automatique) ou regroupement manuel ; sert au GPX et au suivi |
 | `missions` | Affectation point ↔ équipe, ordonnée | `position` ; statut ∈ `a_preparer`, `affectee`, `en_deplacement`, `en_position`, `terminee`, `releve_necessaire`, `incident` ; `version` (verrou optimiste) |
 | `sessions` | Sessions | Hash du jeton, expiration (glissante ; plusieurs jours pour un membre), `revoked_at`, dernière activité |
 | `login_links` | Liens de connexion à usage unique | Seul le **hash** du jeton est stocké ; origine ∈ `appareil`, `admin`, `email`, `equipe` ; expiration ; `used_at` |

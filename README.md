@@ -116,8 +116,13 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   de 50 m les uns des autres (ex. les accès d'un même carrefour) sont regroupés, avec une grande carte zoomée où
   les numéros des missions sont indiqués, puis pour chaque point coordonnées, distance sur le parcours, description,
   voie d'accès et consignes, et une zone de notes. Le roadbook complet liste aussi les points sans équipe.
-  **Export GPX** par équipe (un POI par point, numéroté dans l'ordre des missions, et le parcours), téléchargeable
-  aussi par les membres depuis leur vue terrain, ou de tous les points, pour un téléphone ou un GPS.
+  **Export GPX** par équipe (un POI par carrefour, ou par accès sur option, numéroté dans l'ordre des missions, et le
+  parcours), téléchargeable aussi par les membres depuis leur vue terrain, ou de tous les points, pour un téléphone
+  ou un GPS.
+- **Carrefours** : les accès validés d'un même carrefour sont regroupés automatiquement (nommés d'après le
+  croisement) ; les autres points proches (moins de 50 m) peuvent être regroupés depuis leur bulle, jamais d'office.
+  Chaque accès reste un point de mission ; le carrefour sert au GPX et au suivi (une ligne et un marqueur par
+  carrefour, « 1/3 accès tenus », état le plus grave).
 - **Synthèse** : points validés sans équipe, répartition des statuts, analyse à relancer après changement de
   parcours.
 

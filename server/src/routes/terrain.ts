@@ -456,8 +456,9 @@ export async function terrainRoutes(app: FastifyInstance) {
       app.db.query('SELECT id, name, color, disabled_at, kind FROM teams WHERE event_id = $1 ORDER BY name', [eventId]),
       app.db.query(
         `SELECT m.id, m.team_id, m.version, m.position, m.status, m.status_changed_at, m.mission_point_id, p.name, p.distance_m, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat,
-                cb.display_name AS changed_by
+                cb.display_name AS changed_by, p.place_id, pl.name AS place_name, ST_X(pl.geom) AS place_lon, ST_Y(pl.geom) AS place_lat
            FROM missions m JOIN mission_points p ON p.id = m.mission_point_id LEFT JOIN users cb ON cb.id = m.status_changed_by
+           LEFT JOIN places pl ON pl.id = p.place_id
           WHERE m.event_id = $1 AND m.cancelled_at IS NULL ORDER BY m.team_id, m.position`,
         [eventId],
       ),
@@ -516,7 +517,8 @@ export async function terrainRoutes(app: FastifyInstance) {
         leaders: leaders.get(t.id) ?? [],
         missions: missions.rows.filter((m) => m.team_id === t.id).map((m) => ({
           id: m.id, version: m.version, order: m.position, status: m.status, statusChangedAt: m.status_changed_at, changedBy: m.changed_by,
-          pointId: m.mission_point_id, pointName: m.name, distance: m.distance_m, position: [m.lon, m.lat], passedByTail: passed(tail, m.distance_m),
+          pointId: m.mission_point_id, pointName: m.name,
+          place: m.place_id ? { id: m.place_id, name: m.place_name, position: [m.place_lon, m.place_lat] } : null, distance: m.distance_m, position: [m.lon, m.lat], passedByTail: passed(tail, m.distance_m),
         })),
       })),
       incidents: incidents.rows.map(publicIncident),

@@ -21,13 +21,25 @@ interface Props {
   onPhotos: () => void;
   /** Équipes de la manifestation, pour affecter le point depuis la carte. */
   teams: Team[];
-  /** Après une affectation ou un retrait : recharger les données. */
+  /** Après une affectation ou un retrait (ou un regroupement) : recharger les données. */
   onTeamsChanged: (message: string) => Promise<void>;
+  /** Tous les points de la manifestation : propositions de regroupement avec les points proches. */
+  points: MissionPoint[];
 }
+
+/** Distance (m) entre deux positions, approximation locale suffisante à cette échelle. */
+const metersBetween = (a: [number, number], b: [number, number]) => {
+  const k = Math.PI / 180;
+  const x = (b[0] - a[0]) * k * Math.cos(((a[1] + b[1]) / 2) * k);
+  const y = (b[1] - a[1]) * k;
+  return Math.sqrt(x * x + y * y) * 6_371_000;
+};
+/** Rayon (m) des propositions de regroupement. */
+const GROUP_RADIUS = 50;
 
 interface Consequences { missions: { team: string; status: string }[]; suggestion: unknown }
 
-export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, onDeleted, onPhotos, teams, onTeamsChanged }: Props) {
+export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, onDeleted, onPhotos, teams, onTeamsChanged, points }: Props) {
   const [busy, setBusy] = useState(false);
   const [streetBusy, setStreetBusy] = useState(false);
   const [streetNote, setStreetNote] = useState<string | null>(null);
@@ -75,6 +87,24 @@ export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, 
       }
     } catch (err) {
       setError(err instanceof ApiError ? (err.status === 409 ? err.message + ' Fermez et rouvrez le point pour voir la version actuelle.' : err.message) : 'Enregistrement impossible.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Regroupement en lieu (carrefour) : proposé pour les points proches, jamais appliqué d'office.
+  const nearby = point ? points
+    .filter((p) => p.id !== point.id && (!point.place || p.place?.id !== point.place.id))
+    .map((p) => ({ p, d: metersBetween(point.position, p.position) }))
+    .filter((x) => x.d <= GROUP_RADIUS).sort((a, b) => a.d - b.d).slice(0, 4) : [];
+  const placeAction = async (fn: () => Promise<unknown>, message: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await fn();
+      await onTeamsChanged(message);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : 'Action impossible.');
     } finally {
       setBusy(false);
     }
@@ -173,6 +203,29 @@ export function PointEditor({ eventId, edit, point, onChange, onClose, onSaved, 
               </label>
             );
           })}
+        </fieldset>
+      )}
+      {point && !isNew && (point.place || nearby.length > 0) && (
+        <fieldset className="place-picker" data-testid="lieu-du-point">
+          <legend>Carrefour</legend>
+          {point.place && (
+            <div className="row small">
+              <span className="grow">📍 <b>{point.place.name}</b> · {point.place.size} accès regroupés (GPX et suivi)</span>
+              <button type="button" className="link" disabled={busy} onClick={() => {
+                const name = window.prompt('Nom du carrefour', point.place!.name)?.trim();
+                if (name && name !== point.place!.name) void placeAction(() => api.patch('/api/places/' + point.place!.id, { name }), 'Carrefour renommé.');
+              }}>Renommer</button>
+              <button type="button" disabled={busy} onClick={() => placeAction(() => api.post('/api/points/' + point.id + '/separer'), 'Point séparé du carrefour.')}>Séparer</button>
+            </div>
+          )}
+          {nearby.map(({ p, d }) => (
+            <div key={p.id} className="row small">
+              <span className="grow">{p.name} <span className="muted">à {Math.round(d)} m{p.place ? ' · carrefour « ' + p.place.name + ' »' : ''}</span></span>
+              <button type="button" disabled={busy} onClick={() => placeAction(() => api.post('/api/points/' + point.id + '/regrouper', { withPointId: p.id }), 'Points regroupés en un carrefour.')}>
+                Regrouper
+              </button>
+            </div>
+          ))}
         </fieldset>
       )}
       {error && <p className="error small" role="alert">{error}</p>}

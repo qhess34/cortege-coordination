@@ -3,13 +3,14 @@ import { z } from 'zod';
 import { idParam, requireUser } from '../app.js';
 import { audit } from '../audit.js';
 import { tx } from '../db.js';
-import { conflict } from '../errors.js';
+import { badRequest, conflict, notFound } from '../errors.js';
 import type { OverpassResponse } from '../geo/osm-analysis.js';
 import { placeName, placeNameQuery } from '../geo/place-name.js';
 import type { Position } from '../geo/route.js';
 import { requireEntityAccess, requireEventRole } from '../permissions.js';
 import { compactTeam } from '../services/missions.js';
 import { POINT_STATUSES, POINT_STATUS_SQL } from '../services/points.js';
+import { placeBaseName, tidyPlaces } from '../services/places.js';
 import { currentTrack } from '../services/track.js';
 
 export const POINT_TYPES = [
@@ -40,14 +41,18 @@ const POINT_SELECT = `
          coalesce((SELECT json_agg(json_build_object('missionId', m.id, 'teamId', t.id, 'teamName', t.name, 'color', t.color,
                                                      'position', m.position, 'status', m.status) ORDER BY t.name)
                      FROM missions m JOIN teams t ON t.id = m.team_id
-                    WHERE m.mission_point_id = p.id AND m.cancelled_at IS NULL), '[]') AS missions
-    FROM mission_points p`;
+                    WHERE m.mission_point_id = p.id AND m.cancelled_at IS NULL), '[]') AS missions,
+         pl.name AS place_name,
+         (SELECT count(*)::int FROM mission_points q WHERE q.place_id = p.place_id AND q.deleted_at IS NULL) AS place_size
+    FROM mission_points p LEFT JOIN places pl ON pl.id = p.place_id`;
 
 export function publicPoint(r: Record<string, unknown>) {
   return {
     id: r.id, eventId: r.event_id, origin: r.origin, suggestionId: r.suggestion_id, name: r.name, description: r.description,
     type: r.type, position: [r.lon, r.lat], distance: r.distance_m, distanceLocked: r.distance_locked, status: r.status,
     missions: r.missions, version: r.version, createdAt: r.created_at, updatedAt: r.updated_at,
+    /** Lieu (carrefour) regroupant ce point avec d'autres accès ; null si le point est seul. */
+    place: r.place_id && Number(r.place_size) > 1 ? { id: r.place_id, name: r.place_name, size: Number(r.place_size) } : null,
   };
 }
 
@@ -163,6 +168,7 @@ export async function pointRoutes(app: FastifyInstance) {
       if (b.position) { before.position = [cur.lon, cur.lat]; after.position = position; }
       if (distance !== cur.distance_m) { before.distance = cur.distance_m; after.distance = distance; }
       await audit(c, { actorId: u.id, eventId, entity: 'mission_point', entityId: id, action: b.position ? 'deplacement' : 'modification', details: { before, after } });
+      if (b.position && cur.place_id) await tidyPlaces(c, eventId);
       return publicPoint((await c.query(POINT_SELECT + ' WHERE p.id = $1', [id])).rows[0]);
     });
   });
@@ -203,7 +209,68 @@ export async function pointRoutes(app: FastifyInstance) {
         await c.query("UPDATE map_suggestions SET status = 'ecartee', dismissed_reason = 'Point de mission supprimé', decided_at = now(), decided_by = $2 WHERE id = $1", [p.suggestion_id, u.id]);
       }
       await audit(c, { actorId: u.id, eventId, entity: 'mission_point', entityId: id, action: 'suppression', details: { name: p.name, ...consequences } });
+      if (p.place_id) await tidyPlaces(c, eventId);
       return { ok: true, ...consequences };
+    });
+  });
+
+  // --- Lieux : regrouper les points d'un même carrefour (jamais d'office) --------------------------------------------
+  // Le point rejoint le lieu de l'autre point (créé au besoin, nommé d'après lui).
+  app.post('/api/points/:id/regrouper', async (req) => {
+    const u = requireUser(req);
+    const id = idParam(req);
+    const b = z.object({ withPointId: z.number().int().positive() }).parse(req.body);
+    if (b.withPointId === id) throw badRequest('Choisissez un autre point.');
+    return tx(app.db, async (c) => {
+      const eventId = await requireEntityAccess(c, u, 'mission_points', id, 'organisation');
+      const rows = (await c.query(
+        'SELECT id, event_id, name, place_id, deleted_at FROM mission_points WHERE id = ANY($1::bigint[]) FOR UPDATE', [[id, b.withPointId]],
+      )).rows;
+      const self = rows.find((r) => Number(r.id) === id);
+      const other = rows.find((r) => Number(r.id) === b.withPointId);
+      if (!self || !other || other.event_id !== self.event_id || self.deleted_at || other.deleted_at) throw notFound('Point');
+      let placeId = other.place_id ?? self.place_id;
+      if (!placeId) {
+        placeId = (await c.query(
+          'INSERT INTO places(event_id, name, geom) SELECT $1, $2, geom FROM mission_points WHERE id = $3 RETURNING id',
+          [eventId, placeBaseName(other.name), other.id],
+        )).rows[0].id;
+        await c.query('UPDATE mission_points SET place_id = $2 WHERE id = $1', [other.id, placeId]);
+      }
+      await c.query('UPDATE mission_points SET place_id = $2, version = version + 1, updated_at = now() WHERE id = $1', [id, placeId]);
+      await tidyPlaces(c, eventId);
+      await audit(c, { actorId: u.id, eventId, entity: 'mission_point', entityId: id, action: 'regroupement', details: { withPointId: b.withPointId, placeId } });
+      return publicPoint((await c.query(POINT_SELECT + ' WHERE p.id = $1', [id])).rows[0]);
+    });
+  });
+
+  // Le point quitte son lieu (il redevient un point seul).
+  app.post('/api/points/:id/separer', async (req) => {
+    const u = requireUser(req);
+    const id = idParam(req);
+    return tx(app.db, async (c) => {
+      const eventId = await requireEntityAccess(c, u, 'mission_points', id, 'organisation');
+      const p = (await c.query('SELECT place_id FROM mission_points WHERE id = $1 FOR UPDATE', [id])).rows[0];
+      if (!p.place_id) throw conflict('Ce point n’est regroupé avec aucun autre.');
+      await c.query('UPDATE mission_points SET place_id = NULL, version = version + 1, updated_at = now() WHERE id = $1', [id]);
+      await tidyPlaces(c, eventId);
+      await audit(c, { actorId: u.id, eventId, entity: 'mission_point', entityId: id, action: 'separation', details: { placeId: p.place_id } });
+      return publicPoint((await c.query(POINT_SELECT + ' WHERE p.id = $1', [id])).rows[0]);
+    });
+  });
+
+  // Nom d'un lieu (par défaut celui du croisement).
+  app.patch('/api/places/:id', async (req) => {
+    const u = requireUser(req);
+    const id = idParam(req);
+    const b = z.object({ name: z.string().trim().min(1).max(200) }).parse(req.body);
+    return tx(app.db, async (c) => {
+      const pl = (await c.query('SELECT event_id FROM places WHERE id = $1', [id])).rows[0];
+      if (!pl) throw notFound('Lieu');
+      await requireEventRole(c, u, pl.event_id, 'organisation');
+      await c.query('UPDATE places SET name = $2 WHERE id = $1', [id, b.name]);
+      await audit(c, { actorId: u.id, eventId: pl.event_id, entity: 'place', entityId: id, action: 'modification', details: { name: b.name } });
+      return { id, name: b.name };
     });
   });
 

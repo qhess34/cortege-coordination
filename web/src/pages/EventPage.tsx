@@ -282,6 +282,7 @@ export function EventPage({ eventId }: { eventId: number }) {
       }}
       onPhotos={() => openPhotos(edit.position)}
       teams={data.teams}
+      points={data.points}
       onTeamsChanged={async (message) => {
         setToast({ kind: 'ok', text: message });
         await reload();

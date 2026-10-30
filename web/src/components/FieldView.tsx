@@ -356,7 +356,8 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
             )}
             {data.missions.length > 0 && (
               <p className="small"><a href={'/api/terrain/equipes/' + teamId + '/points.gpx'} download>⬇ GPX des points de l’équipe</a>
-                <span className="muted"> — à ouvrir dans OsmAnd, Organic Maps ou un GPS (un POI par point, et le parcours)</span></p>
+                {' '}<a className="muted" href={'/api/terrain/equipes/' + teamId + '/points.gpx?regroupement=acces'} download>(par accès)</a>
+                <span className="muted"> — à ouvrir dans OsmAnd, Organic Maps ou un GPS (un POI par carrefour, et le parcours)</span></p>
             )}
           </details>
         </section>

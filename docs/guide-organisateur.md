@@ -109,6 +109,12 @@ Chaque manifestation de la liste propose deux boutons :
   **Nom de la rue** renomme un point existant.
 - **Modifier** : cliquez sur le point, une bulle s'ouvre (nom, type, description, équipes). **Déplacer** : faites glisser
   le point, puis *Enregistrer* (ou *Annuler*).
+- **Carrefours (accès regroupés)** : quand l'analyse propose un point par accès, les accès validés d'un même carrefour
+  sont **regroupés automatiquement** en un carrefour, nommé d'après le croisement (« Rue A × Rue B »). Chaque accès
+  reste un point à part entière (équipe, statut, arrivée). Pour les autres points, la bulle propose **Regrouper** avec
+  les points à moins de 50 m : rien n'est regroupé sans votre décision. *Séparer* et *Renommer* se font au même
+  endroit. Le carrefour sert au **GPX** (un POI par carrefour) et au **suivi** (une ligne par carrefour, « 1/3 accès
+  tenus »).
 - **Photos des lieux** : clic sur la carte → *📷 Voir les photos ici (Panoramax)*. La boussole sur la carte suit la
   direction regardée. La case *Couverture photos* montre les rues photographiées.
 - Fonds de carte : plan vectoriel (par défaut), plan OSM, plans IGN, vue satellite (menu en haut de la carte).
@@ -160,10 +166,12 @@ Dans la section **Membres** d'une équipe :
 
 - **Roadbook** complet ou par équipe (bas de l'onglet *Équipes*, ou section *Points* d'une équipe). Il contient les
   cartes zoomées de chaque lieu, les consignes et les points regroupés par lieu, et il est prêt à imprimer.
-- **GPX de l'équipe** (lien *⬇ GPX de l'équipe* sur chaque équipe) : un **POI par point** de l'équipe, numéroté dans
-  l'ordre des missions, avec le parcours. À ouvrir dans OsmAnd, Organic Maps, un GPS… Les membres le téléchargent
+- **GPX de l'équipe** (lien *⬇ GPX de l'équipe* sur chaque équipe) : un **POI par carrefour** (ses accès regroupés,
+  au centre du carrefour, « 03 Rue A × Rue B (3 accès) »), numéroté dans l'ordre des missions, avec le parcours. Le
+  lien *(par accès)* donne un POI par point. À ouvrir dans OsmAnd, Organic Maps, un GPS… Les membres le téléchargent
   aussi depuis leur vue terrain (*Points restants*).
-- **GPX de tous les points** (bas de l'onglet *Équipes*), à charger dans une application de navigation.
+- **GPX de tous les points** (bas de l'onglet *Équipes*), par carrefour ou *(par accès)*, à charger dans une
+  application de navigation.
 - **↺ Remettre toutes les missions à « Affectée »** (bas de l'onglet *Équipes*, ou réglages d'une équipe pour elle
   seule) : après une répétition, ou pour repartir de zéro. Les affectations et l'ordre sont conservés ; les incidents,
   les messages et la progression ne sont pas effacés.
@@ -175,7 +183,7 @@ tout s'y met à jour **en direct**. L'indicateur **● direct** à côté du nom
 coupure, l'écran se recharge toutes les 30 secondes.
 
 - **Compteurs** : incidents ouverts, tête et queue du cortège, **points à lever**.
-- **Prochains points devant la tête** : les six points suivants sur le parcours, avec la distance depuis la tête, leurs
+- **Prochains points devant la tête** : les six points (ou carrefours) suivants sur le parcours, avec la distance depuis la tête, leurs
   équipes et leur état, le plus grave d'abord : **🆘 Besoin d'aide** (demande d'aide en cours), **⚠ Incident**,
   *Relève nécessaire*, **✓ Équipe en position**, *Personne · équipe en route*, **Personne** (aucune équipe sur place),
   *Levé* (missions terminées). Tant que la tête n'est pas connue, la liste part du départ.

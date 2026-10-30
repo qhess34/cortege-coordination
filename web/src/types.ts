@@ -37,6 +37,8 @@ export interface PointMission { missionId: number; teamId: number; teamName: str
 export interface MissionPoint {
   id: number; origin: 'suggestion' | 'manuel' | 'import'; suggestionId: number | null; name: string; description: string; type: string;
   position: Position; distance: number | null; distanceLocked: boolean; status: string; missions: PointMission[]; version: number;
+  /** Lieu (carrefour) regroupant ce point avec d'autres accès ; null si le point est seul. */
+  place: { id: number; name: string; size: number } | null;
 }
 
 export interface TeamMission {

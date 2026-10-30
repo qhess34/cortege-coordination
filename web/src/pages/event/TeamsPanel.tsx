@@ -79,7 +79,8 @@ export function TeamsPanel(props: PanelProps) {
       <div className="row small exports">
         <span className="muted">Exports :</span>
         <a href={'#/evenements/' + data.event.id + '/roadbook'}>📄 Roadbook complet</a>
-        <a href={'/api/events/' + data.event.id + '/roadbook.gpx'} download>GPX de tous les points</a>
+        <a href={'/api/events/' + data.event.id + '/roadbook.gpx'} download title="Un POI par carrefour">GPX de tous les points</a>
+        <a className="muted" href={'/api/events/' + data.event.id + '/roadbook.gpx?regroupement=acces'} download>(par accès)</a>
         {canEdit && teams.some((t) => t.missions.some((m) => m.status !== 'affectee')) && (
           <button className="small" onClick={() => window.confirm('Remettre toutes les missions de la manifestation à « Affectée » ? Les affectations et l’ordre sont conservés ; les statuts actuels (en position, terminée…) sont perdus.')
             && run(() => api.post('/api/events/' + data.event.id + '/missions/reinitialiser', {}), 'Toutes les missions sont à « Affectée ».')}>
@@ -225,7 +226,9 @@ function TeamPoints({ team: t, data, canEdit, run, select }: PanelProps & { team
         <p className="row small">
           <a href={'#/evenements/' + data.event.id + '/roadbook/equipe/' + t.id} aria-label={'Roadbook de l’équipe ' + t.name}>📄 Roadbook de l’équipe</a>
           <a href={'/api/events/' + data.event.id + '/roadbook.gpx?team=' + t.id} download aria-label={'GPX de l’équipe ' + t.name}
-            title="Un POI par point de l’équipe (dans l’ordre des missions) et le parcours">⬇ GPX de l’équipe</a>
+            title="Un POI par carrefour (les accès d’un même carrefour regroupés), dans l’ordre des missions, et le parcours">⬇ GPX de l’équipe</a>
+          <a className="muted" href={'/api/events/' + data.event.id + '/roadbook.gpx?team=' + t.id + '&regroupement=acces'} download
+            aria-label={'GPX de l’équipe ' + t.name + ', un POI par accès'} title="Un POI par point (chaque accès séparément)">(par accès)</a>
         </p>
       )}
     </div>
