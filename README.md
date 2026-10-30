@@ -154,8 +154,10 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
 - **Itinéraire à pied** vers le point : par un serveur compatible OSRM si `ROUTING_URL` est configuré (par exemple
   `https://routing.openstreetmap.de/routed-foot`, à utiliser selon ses conditions, ou une instance auto-hébergée),
   sinon lien vers la carte OpenStreetMap. Indicatif : accès et sécurité à vérifier sur place.
-- **Onglet « Coordination »** de l'organisation : compteurs, incidents ouverts, état de chaque mission par équipe,
-  membres actifs, messages, progression — tout se met à jour **en direct**.
+- **Onglet « Coordination »** de l'organisation : compteurs, **prochains points devant la tête** et leur statut,
+  **statut résumé de chaque équipe** avec raccourcis vers son responsable (appel, SMS, message dans l'application),
+  incidents ouverts, état de chaque mission par équipe, membres actifs, messages, progression — tout se met à jour
+  **en direct**.
 - **Direct** : WebSocket `/api/direct?event=<id>` qui envoie un simple signal « mise à jour » après chaque modification
   validée ; l'écran recharge ce que ses droits lui permettent de voir (le signal ne contient aucune donnée). En cas de
   coupure : reconnexion automatique et rechargement toutes les 30 s.

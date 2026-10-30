@@ -172,6 +172,11 @@ tout s'y met à jour **en direct**. L'indicateur **● direct** à côté du nom
 coupure, l'écran se recharge toutes les 30 secondes.
 
 - **Compteurs** : points en position, en route, incidents ouverts, tête et queue du cortège, **points à lever**.
+- **Prochains points devant la tête** : les six points suivants sur le parcours, avec la distance depuis la tête, leur
+  équipe et leur statut (depuis le départ tant que la tête n'est pas connue).
+- **Équipes** (onglet *Direct*) : le statut résumé de chaque équipe (le plus urgent d'abord : incident, relève, en
+  route, en position…), son responsable et des raccourcis pour le joindre : **📞 appel** et **💬 SMS** si son
+  téléphone est renseigné, **✉ message** dans l'application à toute l'équipe.
 - **Progression du cortège** : si le partage de position est autorisé, la tête et la queue avancent **automatiquement**
   avec les positions des membres de l'**ouverture** (le plus avancé) et de la **fermeture** (le plus en arrière),
   ramenées sur le parcours (au plus une mise à jour par minute ; positions à plus de 150 m du parcours ou trop

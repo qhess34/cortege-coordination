@@ -6,12 +6,14 @@ import { MISSION_STATUS, TEAM_KIND, TEAM_KIND_SHORT, km } from '../../labels';
 import type { Position } from '../../types';
 import { ago } from '../../useLive';
 import type { MemberPosition } from '../../components/MapView';
-import { PhoneLink } from '../../components/PhoneLink';
+import { PhoneLink, formatPhone } from '../../components/PhoneLink';
 
 export interface Tableau {
   teams: {
     id: number; name: string; color: string; disabled: boolean; members: number; active: number; kind: string; sharing: number;
     contacts: { id: number; displayName: string; phone: string; role: string }[];
+    /** Responsables de l'équipe ; numéro visible de l'organisation seulement. */
+    leaders: { id: number; displayName: string; phone: string | null }[];
     missions: {
       id: number; version: number; order: number; status: string; statusChangedAt: string | null; changedBy: string | null; pointName: string;
       distance: number | null; position: Position; passedByTail: boolean;
@@ -100,6 +102,8 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
         <div className="stat"><b className={toRelease ? 'alert' : ''}>{toRelease}</b><span>Points à lever</span></div>
       </div>
 
+      <NextPoints t={t} />
+      <TeamsStatus eventId={eventId} t={t} canEdit={canEdit} act={act} />
       <ProgressCard eventId={eventId} t={t} act={act} />
       </>}
 
@@ -275,6 +279,99 @@ function MessagesCard({ eventId, teams, messages, canEdit, act }: {
             <p className="pre">{m.body}</p>
           </li>
         ))}
+      </ul>
+    </div>
+  );
+}
+
+/** Prochains points devant la tête du cortège (ou depuis le départ si la tête n'est pas connue), avec leur statut. */
+function NextPoints({ t }: { t: Tableau }) {
+  const head = t.progress?.distance ?? 0;
+  const next = t.teams.filter((x) => !x.disabled)
+    .flatMap((x) => x.missions.map((m) => ({ ...m, team: x })))
+    .filter((m) => m.distance !== null && m.distance >= head)
+    .sort((a, b) => a.distance! - b.distance! || a.team.name.localeCompare(b.team.name))
+    .slice(0, 6);
+  return (
+    <div className="card" data-testid="prochains-points">
+      <h3>Prochains points {t.progress ? 'devant la tête' : 'depuis le départ'}</h3>
+      {next.length === 0 ? <p className="muted small">{t.progress ? 'Aucun point devant la tête du cortège.' : 'Aucun point situé sur le parcours.'}</p> : (
+        <ul className="plain small">
+          {next.map((m) => (
+            <li key={m.id} className="row">
+              <span className="muted next-dist">{t.progress ? (m.distance! - head < 1000 ? Math.round(m.distance! - head) + ' m' : km(m.distance! - head)) : km(m.distance!)}</span>
+              <span className="grow"><b>{m.pointName}</b> <span className="muted">· <span className="dot" style={{ background: m.team.color }} /> {m.team.name}</span></span>
+              <span className={'status-badge s-' + m.status}>{MISSION_STATUS[m.status] ?? m.status}</span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** Statut résumé d'une équipe : le plus urgent d'abord, sinon l'avancement de ses missions. */
+function teamSummary(team: Tableau['teams'][number]): { status: string; label: string } {
+  const ms = team.missions;
+  if (!ms.length) return { status: 'affectee', label: team.kind === 'points' ? 'Aucune mission' : TEAM_KIND_SHORT[team.kind] ?? team.kind };
+  for (const s of ['incident', 'releve_necessaire']) if (ms.some((m) => m.status === s)) return { status: s, label: MISSION_STATUS[s]! };
+  const n = (s: string) => ms.filter((m) => m.status === s).length;
+  if (n('terminee') === ms.length) return { status: 'terminee', label: 'Terminée' };
+  if (n('en_position') + n('terminee') === ms.length) return { status: 'en_position', label: 'En position ' + n('en_position') + '/' + ms.length };
+  if (n('en_deplacement')) return { status: 'en_deplacement', label: 'En route · ' + n('en_position') + '/' + ms.length + ' en position' };
+  if (n('en_position')) return { status: 'en_position', label: n('en_position') + '/' + ms.length + ' en position' };
+  return { status: 'affectee', label: MISSION_STATUS.affectee! };
+}
+
+/** État de chaque équipe et raccourcis pour joindre son responsable (appel, SMS, message dans l'application). */
+function TeamsStatus({ eventId, t, canEdit, act }: {
+  eventId: number; t: Tableau; canEdit: boolean; act: (fn: () => Promise<unknown>, ok: string) => Promise<boolean>;
+}) {
+  const [writing, setWriting] = useState<number | null>(null);
+  const [body, setBody] = useState('');
+  const teams = t.teams.filter((x) => !x.disabled);
+  if (!teams.length) return null;
+  return (
+    <div className="card" data-testid="etat-equipes">
+      <h3>Équipes</h3>
+      <ul className="plain team-status">
+        {teams.map((team) => {
+          const sum = teamSummary(team);
+          return (
+            <li key={team.id} data-testid={'etat-equipe-' + team.id}>
+              <p className="row">
+                <span className="dot" style={{ background: team.color }} />
+                <b className="grow">{team.name}</b>
+                <span className={'status-badge s-' + sum.status}>{sum.label}</span>
+              </p>
+              <p className="row small">
+                <span className="muted grow">
+                  {team.leaders.length ? 'Resp. ' + team.leaders.map((l) => l.displayName).join(', ') : 'Pas de responsable'}
+                  {' · '}{team.active}/{team.members} actif(s)
+                </span>
+                {team.leaders.filter((l) => l.phone).slice(0, 1).map((l) => (
+                  <span key={l.id} className="row">
+                    <a className="button" href={'tel:' + l.phone} aria-label={'Appeler ' + l.displayName} title={formatPhone(l.phone!)}>📞</a>
+                    <a className="button" href={'sms:' + l.phone} aria-label={'SMS à ' + l.displayName}>💬</a>
+                  </span>
+                ))}
+                {canEdit && (
+                  <button onClick={() => { setWriting(writing === team.id ? null : team.id); setBody(''); }} aria-label={'Message à l’équipe ' + team.name}
+                    aria-expanded={writing === team.id}>✉</button>
+                )}
+              </p>
+              {writing === team.id && (
+                <form className="row" onSubmit={async (e: FormEvent) => {
+                  e.preventDefault();
+                  if (await act(() => api.post('/api/events/' + eventId + '/messages', { body, teamId: team.id, urgent: false }), 'Message envoyé à ' + team.name + '.')) setWriting(null);
+                }}>
+                  <input className="grow" value={body} onChange={(e) => setBody(e.target.value)} required maxLength={2000} placeholder={'Message à ' + team.name} aria-label={'Message à ' + team.name} autoFocus />
+                  <button className="primary">Envoyer</button>
+                </form>
+              )}
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

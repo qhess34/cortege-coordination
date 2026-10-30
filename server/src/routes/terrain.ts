@@ -451,7 +451,22 @@ export async function terrainRoutes(app: FastifyInstance) {
     const pres = new Map(presence.rows.map((p) => [p.team_id, p]));
     // Numéros des membres (renseignés dans les profils), pour l'organisation seulement.
     const phones = new Map<number, { id: number; displayName: string; phone: string; role: string }[]>();
-    if ((await eventRole(app.db, u, eventId)) === 'organisateur') {
+    const organizer = (await eventRole(app.db, u, eventId)) === 'organisateur';
+    // Responsables de chaque équipe (responsable désigné et membres « responsable ») ; numéro pour l'organisation seulement.
+    const leaders = new Map<number, { id: number; displayName: string; phone: string | null }[]>();
+    for (const x of (await app.db.query(
+      `SELECT t.id AS team_id, u.id, u.display_name, u.phone FROM teams t JOIN users u ON u.id = t.leader_user_id WHERE t.event_id = $1
+       UNION
+       SELECT tm.team_id, u.id, u.display_name, u.phone FROM team_memberships tm JOIN teams t ON t.id = tm.team_id JOIN users u ON u.id = tm.user_id
+        WHERE t.event_id = $1 AND tm.role = 'responsable'
+       ORDER BY 3`,
+      [eventId],
+    )).rows) {
+      const list = leaders.get(x.team_id) ?? [];
+      list.push({ id: x.id, displayName: x.display_name, phone: organizer ? x.phone : null });
+      leaders.set(x.team_id, list);
+    }
+    if (organizer) {
       const r = await app.db.query(
         `SELECT tm.team_id, u.id, u.display_name, u.phone, tm.role FROM team_memberships tm JOIN teams t ON t.id = tm.team_id JOIN users u ON u.id = tm.user_id
           WHERE t.event_id = $1 AND u.phone IS NOT NULL ORDER BY tm.role DESC, u.display_name`,
@@ -472,6 +487,7 @@ export async function terrainRoutes(app: FastifyInstance) {
         id: t.id, name: t.name, color: t.color, disabled: !!t.disabled_at, kind: t.kind,
         members: Number(pres.get(t.id)?.members ?? 0), active: Number(pres.get(t.id)?.active ?? 0), sharing: shared.get(t.id) ?? 0,
         contacts: phones.get(t.id) ?? [],
+        leaders: leaders.get(t.id) ?? [],
         missions: missions.rows.filter((m) => m.team_id === t.id).map((m) => ({
           id: m.id, version: m.version, order: m.position, status: m.status, statusChangedAt: m.status_changed_at, changedBy: m.changed_by,
           pointName: m.name, distance: m.distance_m, position: [m.lon, m.lat], passedByTail: passed(tail, m.distance_m),

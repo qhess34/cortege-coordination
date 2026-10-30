@@ -162,12 +162,15 @@ describe('téléphone', () => {
     expect((await orga.get('/api/teams/' + teamA + '/members')).json().find((x: { id: number }) => x.id === id).phone).toBe('+33611223344');
     const t = (await orga.get('/api/events/' + eventId + '/tableau')).json();
     expect(t.teams.find((x: { id: number }) => x.id === teamA).contacts).toEqual([{ id, displayName: 'Tel Membre', phone: '+33611223344', role: 'responsable' }]);
+    expect(t.teams.find((x: { id: number }) => x.id === teamA).leaders).toEqual([{ id, displayName: 'Tel Membre', phone: '+33611223344' }]);
     // Un compte d'organisation en simple lecture ne voit pas les numéros.
     const lecteur = await createUser(ctx.db, 'lecteur.tel', 'organisateur');
     await orga.put('/api/events/' + eventId + '/members', { userId: lecteur, role: 'membre' });
     const la = new Agent(ctx.app);
     await la.login('lecteur.tel');
-    expect((await la.get('/api/events/' + eventId + '/tableau')).json().teams.find((x: { id: number }) => x.id === teamA).contacts).toEqual([]);
+    const lt = (await la.get('/api/events/' + eventId + '/tableau')).json().teams.find((x: { id: number }) => x.id === teamA);
+    expect(lt.contacts).toEqual([]);
+    expect(lt.leaders).toEqual([{ id, displayName: 'Tel Membre', phone: null }]);
 
     expect((await m.patch('/api/moi/profil', { firstName: 'Tel', lastName: 'Membre', email: null, phone: '' })).json().phone).toBeNull();
     expect((await admin.patch('/api/admin/users/' + id, { phone: '07 00 00 00 00' })).json().phone).toBe('0700000000');

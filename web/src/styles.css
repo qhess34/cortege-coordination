@@ -287,6 +287,11 @@ button.big { font-size: 1.1rem; padding: .7rem 1.2rem; width: 100%; }
 .incident p { margin: .15rem 0; }
 .coord-team { border-top: 1px solid var(--border); padding: .35rem 0; }
 .coord-team p { margin: .2rem 0; }
+.team-status > li { border-top: 1px solid var(--border); padding: .35rem 0; }
+.team-status > li:first-child { border-top: 0; }
+.team-status p { margin: .2rem 0; }
+.team-status a.button, .team-status button { padding: .3rem .6rem; }
+.next-dist { min-width: 4.2rem; text-align: right; font-variant-numeric: tabular-nums; }
 .stat b.alert { color: var(--danger); }
 .event-title .sync { margin-left: .5rem; }
 a.button.big { display: flex; align-items: center; justify-content: center; flex: 1; min-height: 3.2rem; font-weight: 600; text-decoration: none; }
