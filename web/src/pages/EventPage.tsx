@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { toMapIncidents, type MapIncident } from '../components/incidentMarkers';
-import { INCIDENT_CATEGORY, type FieldIncident } from '../components/FieldView';
+import { toMapSos, type MapSos } from '../components/sosMarkers';
+import { type FieldSos } from '../components/FieldView';
 import { Route } from '../../../server/src/geo/route';
 import { ApiError, api } from '../api';
 import { MapView, type MemberPosition, type PointEdit, type Selection } from '../components/MapView';
@@ -20,6 +20,7 @@ import { PointsPanel } from './event/PointsPanel';
 import { SuggestionsPanel } from './event/SuggestionsPanel';
 import { SummaryPanel } from './event/SummaryPanel';
 import { TeamsPanel } from './event/TeamsPanel';
+import { SosTypesPanel } from './event/SosTypesPanel';
 import { TrackPanel } from './event/TrackPanel';
 
 export interface EventData {
@@ -173,12 +174,12 @@ export function EventPage({ eventId }: { eventId: number }) {
     const t = setInterval(loadMembers, 30_000);
     return () => clearInterval(t);
   }, [loadMembers]);
-  // Incidents en cours (SOS compris) : affichés sur la carte, rechargés à chaque signal du direct.
-  const [incidents, setIncidents] = useState<MapIncident[]>([]);
-  const loadIncidents = useCallback(() => {
-    api.get<FieldIncident[]>(base + '/incidents').then((l) => setIncidents(toMapIncidents(l, INCIDENT_CATEGORY)), () => undefined);
+  // SOS en cours : affichés sur la carte, rechargés à chaque signal du direct.
+  const [sos, setSos] = useState<MapSos[]>([]);
+  const loadSos = useCallback(() => {
+    api.get<FieldSos[]>(base + '/sos').then((l) => setSos(toMapSos(l)), () => undefined);
   }, [base]);
-  useEffect(() => { loadIncidents(); }, [loadIncidents, liveTick]);
+  useEffect(() => { loadSos(); }, [loadSos, liveTick]);
   const live = useLive(eventId, refreshLive, 30_000, loadMembers);
 
   const run = useCallback(async (fn: () => Promise<unknown>, success?: string) => {
@@ -354,7 +355,7 @@ export function EventPage({ eventId }: { eventId: number }) {
       <section className="map-pane">
         <MapView
           members={members}
-          incidents={incidents}
+          sos={sos}
           track={data.track}
           suggestions={visibleSuggestions}
           points={visiblePoints(data.points, hiddenTeams).concat(
@@ -432,7 +433,7 @@ export function EventPage({ eventId }: { eventId: number }) {
           {tab === 'parcours' && <TrackPanel {...props} />}
           {tab === 'suggestions' && <SuggestionsPanel {...props} />}
           {tab === 'points' && <PointsPanel {...props} />}
-          {tab === 'equipes' && <TeamsPanel {...props} />}
+          {tab === 'equipes' && <><TeamsPanel {...props} /><SosTypesPanel {...props} /></>}
           {tab === 'historique' && <HistoryPanel {...props} />}
           {tab === 'coordination' && <CoordinationPanel event={data.event} canEdit={canEdit} liveTick={liveTick} members={showMembers ? members : null} />}
           {tab === 'mon_equipe' && myTeams && (

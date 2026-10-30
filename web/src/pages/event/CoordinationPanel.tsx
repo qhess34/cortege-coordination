@@ -1,7 +1,7 @@
-// Tableau de bord partagé du jour J : progression du cortège, incidents, état des équipes, messages.
+// Tableau de bord partagé du jour J : progression du cortège, SOS, état des équipes, messages.
 import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../../api';
-import { INCIDENT_CATEGORY, INCIDENT_STATUS, type FieldIncident, type Progress } from '../../components/FieldView';
+import { SOS_STATUS, type FieldSos, type Progress } from '../../components/FieldView';
 import { MISSION_STATUS, TEAM_KIND, TEAM_KIND_SHORT, km } from '../../labels';
 import type { Position } from '../../types';
 import { ago } from '../../useLive';
@@ -21,7 +21,7 @@ export interface Tableau {
       distance: number | null; position: Position; passedByTail: boolean;
     }[];
   }[];
-  incidents: (FieldIncident & { teamName: string | null; position: Position | null })[];
+  sos: (FieldSos & { teamName: string | null; position: Position | null })[];
   progress: Progress | null;
   tail: Progress | null;
   live: number;
@@ -29,17 +29,17 @@ export interface Tableau {
 interface OrgMessage { id: number; teamId: number | null; teamName: string | null; body: string; urgent: boolean; createdAt: string; authorName: string; fromOrganisation: boolean; reads: number; recipients: number }
 
 /** Ordre d'affichage des statuts (du plus urgent au plus calme). */
-const STATUS_ORDER = ['incident', 'releve_necessaire', 'en_deplacement', 'affectee', 'a_preparer', 'en_position', 'terminee'];
+const STATUS_ORDER = ['releve_necessaire', 'en_deplacement', 'affectee', 'a_preparer', 'en_position', 'terminee'];
 
 /** Sections du tableau de bord : toutes sur ordinateur, une par onglet sur la vue mobile. */
-export type CoordSection = 'synthese' | 'incidents' | 'equipes' | 'messages';
-const ALL: CoordSection[] = ['synthese', 'incidents', 'equipes', 'messages'];
+export type CoordSection = 'synthese' | 'sos' | 'equipes' | 'messages';
+const ALL: CoordSection[] = ['synthese', 'sos', 'equipes', 'messages'];
 
 export function CoordinationPanel({ event, canEdit, liveTick, members, sections = ALL, onCounts }: {
   event: { id: number; locationSharing: boolean }; canEdit: boolean;
   liveTick: number; members: MemberPosition[] | null; sections?: CoordSection[];
   /** Compteurs pour les badges d'onglets de la vue mobile. */
-  onCounts?: (c: { incidents: number; messages: number }) => void;
+  onCounts?: (c: { sos: number; messages: number }) => void;
 }) {
   const show = (s: CoordSection) => sections.includes(s);
   // Partage de position : compté sur les positions reçues en direct (plus à jour que le tableau).
@@ -59,7 +59,7 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
       ]);
       setT(tab);
       setMessages(msgs);
-      onCounts?.({ incidents: tab.incidents.length, messages: msgs.filter((m) => !m.fromOrganisation && Date.now() - new Date(m.createdAt).getTime() < 3600_000).length });
+      onCounts?.({ sos: tab.sos.length, messages: msgs.filter((m) => !m.fromOrganisation && Date.now() - new Date(m.createdAt).getTime() < 3600_000).length });
       setError(null);
     } catch (e) {
       setError(e instanceof ApiError ? e.message : 'Chargement impossible.');
@@ -93,7 +93,7 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
 
       {show('synthese') && <>
       <div className="grid-stats">
-        <div className="stat"><b className={t.incidents.length ? 'alert' : ''}>{t.incidents.length}</b><span>Incidents ouverts</span></div>
+        <div className="stat"><b className={t.sos.length ? 'alert' : ''}>{t.sos.length}</b><span>SOS ouverts</span></div>
         <div className="stat"><b>{t.progress ? km(t.progress.distance) : '—'}</b><span>Tête du cortège</span></div>
         <div className="stat"><b>{t.tail ? km(t.tail.distance) : '—'}</b><span>Queue du cortège</span></div>
         <div className="stat"><b className={toRelease ? 'alert' : ''}>{toRelease}</b><span>Points à lever</span></div>
@@ -103,22 +103,21 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
       <TeamsStatus eventId={eventId} t={t} canEdit={canEdit} act={act} />
       </>}
 
-      {show('incidents') && <div className="card">
-        <h3>Incidents ouverts ({t.incidents.length})</h3>
-        {t.incidents.length === 0 ? <p className="muted">Aucun incident en cours.</p> : (
+      {show('sos') && <div className="card">
+        <h3>SOS ouverts ({t.sos.length})</h3>
+        {t.sos.length === 0 ? <p className="muted">Aucun SOS en cours.</p> : (
           <ul className="plain">
-            {t.incidents.map((i) => (
-              <li key={i.id} className={'incident p-' + i.priority + ' st-' + i.status}>
+            {t.sos.map((s) => (
+              <li key={s.id} className={'incident st-' + s.status}>
                 <p>
-                  <b>{INCIDENT_CATEGORY[i.category] ?? i.category}</b>{i.priority === 'haute' ? ' · PRIORITAIRE' : ''} — {INCIDENT_STATUS[i.status]}
-                  {i.handledByName && i.status === 'pris_en_charge' ? ' par ' + i.handledByName : ''}
+                  <b>🆘 {s.type}</b> — {SOS_STATUS[s.status] ?? s.status}
+                  {s.handledByName && s.status === 'resolu' ? ' par ' + s.handledByName : ''}
                 </p>
-                <p className="small">{i.teamName ?? '—'}{i.pointName ? ' · ' + i.pointName : ''} · {i.reporterName ?? ''} · {ago(i.createdAt)}</p>
-                {i.description && <p className="pre small">{i.description}</p>}
+                <p className="small">{s.teamName ?? '—'}{s.pointName ? ' · ' + s.pointName : ''} · {s.reporterName ?? ''} · {ago(s.createdAt)}</p>
+                {s.message && <p className="pre small">{s.message}</p>}
                 <div className="row small">
-                  {i.position && <a href={'https://www.openstreetmap.org/?mlat=' + i.position[1] + '&mlon=' + i.position[0] + '#map=18/' + i.position[1] + '/' + i.position[0]} target="_blank" rel="noreferrer">{i.positionSource === 'point' ? 'Lieu (point concerné)' : 'Position signalée'}</a>}
-                  {canEdit && i.status === 'ouvert' && <button onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'pris_en_charge', version: i.version }), 'Incident pris en charge.')}>Je m’en occupe</button>}
-                  {canEdit && <button onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version }), 'Incident résolu.')}>Résolu</button>}
+                  {s.position && <a href={'https://www.openstreetmap.org/?mlat=' + s.position[1] + '&mlon=' + s.position[0] + '#map=18/' + s.position[1] + '/' + s.position[0]} target="_blank" rel="noreferrer">{s.positionSource === 'point' ? 'Lieu (point concerné)' : 'Position signalée'}</a>}
+                  {canEdit && s.status !== 'resolu' && <button onClick={() => act(() => api.patch('/api/sos/' + s.id, { resolved: true, version: s.version }), 'SOS résolu.')}>Résolu</button>}
                 </div>
               </li>
             ))}
@@ -240,11 +239,10 @@ function MessagesCard({ eventId, teams, messages, canEdit, act }: {
   );
 }
 
-/** État d'un point vu de la coordination : le plus grave l'emporte (aide, incident), puis la présence d'une équipe. */
-type PointState = 'aide' | 'incident' | 'releve' | 'en_position' | 'en_route' | 'personne' | 'termine';
+/** État d'un point vu de la coordination : le plus grave l'emporte (SOS), puis la présence d'une équipe. */
+type PointState = 'sos' | 'releve' | 'en_position' | 'en_route' | 'personne' | 'termine';
 const POINT_STATE: Record<PointState, { label: string; css: string }> = {
-  aide: { label: '🆘 Besoin d’aide', css: 's-incident' },
-  incident: { label: '⚠ Incident', css: 's-incident' },
+  sos: { label: '🆘 SOS', css: 's-incident' },
   releve: { label: 'Relève nécessaire', css: 's-releve_necessaire' },
   en_position: { label: '✓ Équipe en position', css: 's-en_position' },
   en_route: { label: 'Personne · équipe en route', css: 's-en_deplacement' },
@@ -261,7 +259,7 @@ export interface PlaceGroup {
 
 /** Regroupe les missions des équipes actives par lieu (les accès d'un même carrefour ensemble). */
 export function placeGroups(t: Tableau): PlaceGroup[] {
-  const open = t.incidents.filter((i) => i.status !== 'resolu');
+  const open = t.sos.filter((s) => s.status !== 'resolu');
   const groups = new Map<string, TeamMission[]>();
   for (const team of t.teams.filter((x) => !x.disabled)) {
     for (const m of team.missions) {
@@ -273,10 +271,9 @@ export function placeGroups(t: Tableau): PlaceGroup[] {
     const points = new Map(ms.map((m) => [m.pointId, m]));
     const grouped = points.size > 1 && !!ms[0]!.place;
     const ids = new Set(ms.map((m) => m.id));
-    const inc = open.filter((i) => i.missionId !== null && ids.has(i.missionId));
+    const inc = open.filter((s) => s.missionId !== null && ids.has(s.missionId));
     const has = (s: string) => ms.some((m) => m.status === s);
-    const state: PointState = inc.some((i) => i.category === 'aide') ? 'aide'
-      : inc.length || has('incident') ? 'incident'
+    const state: PointState = inc.length ? 'sos'
       : has('releve_necessaire') ? 'releve'
       : has('en_position') ? 'en_position'
       : ms.every((m) => m.status === 'terminee') ? 'termine'
@@ -325,7 +322,7 @@ function NextPoints({ t }: { t: Tableau }) {
 function teamSummary(team: Tableau['teams'][number]): { status: string; label: string } {
   const ms = team.missions;
   if (!ms.length) return { status: 'affectee', label: team.kind === 'points' ? 'Aucune mission' : TEAM_KIND_SHORT[team.kind] ?? team.kind };
-  for (const s of ['incident', 'releve_necessaire']) if (ms.some((m) => m.status === s)) return { status: s, label: MISSION_STATUS[s]! };
+  for (const s of ['releve_necessaire']) if (ms.some((m) => m.status === s)) return { status: s, label: MISSION_STATUS[s]! };
   const n = (s: string) => ms.filter((m) => m.status === s).length;
   if (n('terminee') === ms.length) return { status: 'terminee', label: 'Terminée' };
   if (n('en_position') + n('terminee') === ms.length) return { status: 'en_position', label: 'En position ' + n('en_position') + '/' + ms.length };
