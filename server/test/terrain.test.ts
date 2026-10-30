@@ -71,6 +71,14 @@ describe('incidents', () => {
     const r = await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', description: 'Voiture qui force le passage', missionId: missionA, position: at(200, 5) });
     expect(r.statusCode).toBe(201);
     expect(r.json()).toMatchObject({ priority: 'haute', status: 'ouvert', pointName: 'Angle', reporterName: 'Alice', teamName: 'Équipe A' });
+    expect(r.json().positionSource).toBe('signalee');
+    expect(r.json().position[1]).toBeCloseTo(at(200, 5)[1], 6);
+    // Sans position jointe : le lieu est celui du point de la mission (pour que l'équipe volante puisse s'y rendre).
+    const sans = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', description: 'SOS', missionId: missionA })).json();
+    expect(sans.positionSource).toBe('point');
+    expect(sans.position).not.toBeNull();
+    const hors = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'autre', description: 'Sans lieu' })).json();
+    expect(hors).toMatchObject({ position: null, positionSource: null });
     incidentId = r.json().id;
     expect((await mission(alice)).status).toBe('incident');
     expect((await bob.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'autre' })).statusCode).toBe(404);

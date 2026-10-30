@@ -69,9 +69,10 @@ coupée et les informations datent de ce moment-là.
 
 ## 5. Selon votre type d'équipe
 
-- **Équipe volante** : vous n'avez pas de point fixe. Les incidents de toute la manifestation s'affichent dans
-  *Incidents*. Touchez **J'y vais** pour indiquer que vous intervenez, **🧭 GPS** pour vous y rendre, et **Résolu** une
-  fois réglé.
+- **Équipe volante** : vous n'avez pas de point fixe. Les **demandes d'aide (🆘)** en cours s'affichent en rouge en
+  haut de l'écran *Mission*, avec **🧭 Rejoindre le lieu**, qui ouvre votre application GPS vers la position envoyée
+  ou, à défaut, vers le point de l'équipe qui a demandé de l'aide. Tous les incidents de la manifestation sont dans
+  *Incidents* : touchez **J'y vais** pour indiquer que vous intervenez, et **Résolu** une fois réglé.
 - **Ouverture** : vous marchez en tête. Si vous partagez votre position, la tête du cortège avance **toute seule**.
   Sinon, touchez régulièrement **📍 La tête est ici**, ou indiquez les km parcourus.
 - **Fermeture** : vous fermez la marche. Même principe : votre position partagée fait avancer la queue, sinon touchez

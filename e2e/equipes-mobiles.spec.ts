@@ -15,7 +15,7 @@ async function phoneFor(browser: Browser, path: string, position: [number, numbe
   return { ctx, field: p.getByTestId('vue-terrain') };
 }
 
-test('fermeture : « la queue est ici » ; volante : prend en charge l’incident d’une autre équipe', async ({ page, browser }) => {
+test('fermeture : « la queue est ici » ; volante : lien vers le lieu du SOS, prend en charge l’incident d’une autre équipe', async ({ page, browser }) => {
   await page.addInitScript(() => { localStorage.setItem('cortege.fond', 'osm'); localStorage.setItem('cortege.panoramax', 'non'); });
   await page.request.post('/api/auth/login', { data: { login: 'admin', password: 'admin-e2e-motdepasse' }, headers: H });
   const ev = await (await page.request.post('/api/events', { data: { name: 'Équipes mobiles' }, headers: H })).json();
@@ -53,9 +53,17 @@ test('fermeture : « la queue est ici » ; volante : prend en charge l’inciden
   // Volante : voit l'incident de l'équipe Poste et s'en charge.
   const vol = await phoneFor(browser, await inviteMember(volante.id, 'Victor'), at(100, 0));
   await expect(vol.field.getByTestId('role-equipe')).toContainText('1 incident(s) en cours');
+  // SOS : lien direct vers le lieu (sans position jointe, le point de la mission concernée).
+  const sos = vol.field.getByTestId('role-equipe').locator('.sos-alert');
+  await expect(sos).toContainText('Besoin d’aide · Carrefour Poste (Équipe Poste)');
+  const join = sos.getByRole('link', { name: /Rejoindre le lieu/ });
+  await expect(join).toContainText('point « Carrefour Poste »');
+  const [plon, plat] = at(200, 0);
+  expect(await join.getAttribute('href')).toContain(plat.toFixed(6) + ',' + plon.toFixed(6));
   await vol.field.getByTestId('role-equipe').getByRole('button', { name: /incident/ }).click();
   const incidents = vol.field.getByTestId('incidents');
   await expect(incidents).toContainText('Équipe Poste');
+  await expect(incidents.getByRole('link', { name: /Rejoindre le lieu/ })).toBeVisible();
   await incidents.getByRole('button', { name: 'J’y vais' }).click();
   await expect(incidents).toContainText('Pris en charge par Victor');
   await expect(coord).toContainText('Pris en charge par Victor');

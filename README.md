@@ -137,8 +137,10 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   réponses du terrain, accusés de lecture (« lu 3/5 »).
 - **Types d'équipe** :
   - *Points fixes* : tiennent les points de leur liste ;
-  - *Volante* : sans point fixe, elle voit les incidents de toute la manifestation, s'y rend (*J'y vais*, bouton GPS
-    vers la position signalée) et peut les clore ; sa carte montre tous les points tenus ;
+  - *Volante* : sans point fixe, elle voit les incidents de toute la manifestation ; les demandes d'aide (🆘) en
+    cours sont en tête de son écran avec **🧭 Rejoindre le lieu** (application GPS vers la position signalée, sinon
+    le point de l'équipe qui demande de l'aide). Elle les prend en charge (*J'y vais*) et peut les clore ; sa carte
+    montre tous les points tenus ;
   - *Ouverture* : porte la **tête** du cortège ;
   - *Fermeture* : porte la **queue** ; un point dépassé par la queue est signalé à son équipe (« vous pourrez le
     lever sur instruction ») et apparaît « à lever » dans la coordination.

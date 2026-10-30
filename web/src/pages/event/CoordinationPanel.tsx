@@ -120,7 +120,7 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
                 <p className="small">{i.teamName ?? '—'}{i.pointName ? ' · ' + i.pointName : ''} · {i.reporterName ?? ''} · {ago(i.createdAt)}</p>
                 {i.description && <p className="pre small">{i.description}</p>}
                 <div className="row small">
-                  {i.position && <a href={'https://www.openstreetmap.org/?mlat=' + i.position[1] + '&mlon=' + i.position[0] + '#map=18/' + i.position[1] + '/' + i.position[0]} target="_blank" rel="noreferrer">Position signalée</a>}
+                  {i.position && <a href={'https://www.openstreetmap.org/?mlat=' + i.position[1] + '&mlon=' + i.position[0] + '#map=18/' + i.position[1] + '/' + i.position[0]} target="_blank" rel="noreferrer">{i.positionSource === 'point' ? 'Lieu (point concerné)' : 'Position signalée'}</a>}
                   {canEdit && i.status === 'ouvert' && <button onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'pris_en_charge', version: i.version }), 'Incident pris en charge.')}>Je m’en occupe</button>}
                   {canEdit && <button onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version }), 'Incident résolu.')}>Résolu</button>}
                 </div>

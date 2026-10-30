@@ -189,7 +189,7 @@ coupure, l'écran se recharge toutes les 30 secondes.
   l'ouverture (tête) ou la fermeture (queue). Chaque membre voit à quelle distance la tête se trouve de son point.
   C'est une indication, à confirmer sur le terrain.
 - **Incidents** : les prioritaires (aide, santé, sécurité) en premier. *Je m'en occupe* indique à l'équipe que c'est
-  pris en charge, *Résolu* clôt l'incident. L'équipe volante peut aussi les prendre en charge.
+  pris en charge, *Résolu* clôt l'incident. L'équipe volante peut aussi les prendre en charge ; elle a un lien **🧭 Rejoindre le lieu** vers chaque demande d'aide.
 - **Équipes** : statut de chaque point (qui l'a changé, quand), nombre de membres actifs, badge **à lever** quand la
   queue a dépassé un point encore tenu.
 - **Messages** : à toutes les équipes ou à une seule, éventuellement **urgents** (bandeau rouge sur les téléphones).

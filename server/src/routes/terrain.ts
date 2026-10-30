@@ -92,11 +92,14 @@ const publicIncident = (r: Record<string, unknown>) => ({
   id: r.id, teamId: r.team_id, teamName: r.team_name ?? null, missionId: r.mission_id, pointName: r.point_name ?? null,
   category: r.category, priority: r.priority, status: r.status, description: r.description,
   position: r.lon === null || r.lon === undefined ? null : [r.lon, r.lat],
+  /** Lieu de l'incident : position jointe au signalement, sinon celle du point de la mission concernée. */
+  positionSource: r.lon === null || r.lon === undefined ? null : r.has_geom ? 'signalee' : 'point',
   reporterName: r.reporter_name ?? null, handledByName: r.handler_name ?? null,
   createdAt: r.created_at, updatedAt: r.updated_at, resolvedAt: r.resolved_at, version: r.version,
 });
 const INCIDENT_SELECT = `
-  SELECT i.*, ST_X(i.geom) AS lon, ST_Y(i.geom) AS lat, t.name AS team_name, p.name AS point_name,
+  SELECT i.*, ST_X(coalesce(i.geom, p.geom)) AS lon, ST_Y(coalesce(i.geom, p.geom)) AS lat, i.geom IS NOT NULL AS has_geom,
+         t.name AS team_name, p.name AS point_name,
          rep.display_name AS reporter_name, h.display_name AS handler_name
     FROM incidents i LEFT JOIN teams t ON t.id = i.team_id
     LEFT JOIN missions m ON m.id = i.mission_id LEFT JOIN mission_points p ON p.id = m.mission_point_id

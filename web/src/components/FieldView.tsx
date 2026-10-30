@@ -22,7 +22,7 @@ export interface FieldMessage { id: number; teamId: number | null; body: string;
 export interface FieldIncident {
   id: number; teamId: number | null; missionId: number | null; pointName: string | null; category: string; priority: string; status: string;
   description: string; reporterName: string | null; handledByName: string | null; createdAt: string; updatedAt: string; version: number;
-  teamName?: string | null; position?: Position | null;
+  teamName?: string | null; position?: Position | null; positionSource?: 'signalee' | 'point' | null;
 }
 export interface Progress { distance: number; note: string; at: string; authorName: string | null }
 export interface Terrain {
@@ -82,11 +82,15 @@ export function gpsLink(to: Position, label: string, ua = navigator.userAgent): 
   return { href: 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lon + '&travelmode=walking', external: true };
 }
 
-function GpsButton({ to, label, big }: { to: Position; label: string; big?: boolean }) {
-  const l = gpsLink(to, label);
+/** Lien qui ouvre l'application GPS vers le lieu d'un incident (position signalée, sinon le point concerné). */
+function JoinButton({ incident: i }: { incident: FieldIncident }) {
+  const label = (INCIDENT_CATEGORY[i.category] ?? 'Incident') + (i.pointName ? ' · ' + i.pointName : '');
+  const l = gpsLink(i.position!, label);
   return (
-    <a className={'button' + (big ? ' big' : '')} href={l.href} {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
-      aria-label={'Ouvrir l’application GPS vers ' + label}>🧭 GPS</a>
+    <a className="button big primary" href={l.href} {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
+      aria-label={'Rejoindre le lieu : ' + label}>
+      🧭 Rejoindre le lieu{i.positionSource === 'point' ? ' (point « ' + i.pointName + ' »)' : ' signalé'}
+    </a>
   );
 }
 
@@ -398,13 +402,21 @@ function RoleCard({ data, openIncidents }: { data: Terrain; openIncidents: () =>
       {data.team.kind === 'volante' && (
         <>
           <p>Pas de point fixe : vous intervenez là où l’organisation ou les équipes en ont besoin. Les incidents de toute la manifestation s’affichent ici.</p>
+          {/* Demandes d'aide en cours : lien direct vers le lieu, sans passer par l'onglet Incidents. */}
+          {open.filter((i) => i.category === 'aide' && i.position).map((i) => (
+            <div key={i.id} className="sos-alert" data-testid={'sos-' + i.id}>
+              <p><b>🆘 Besoin d’aide</b>{i.pointName ? ' · ' + i.pointName : ''}{i.teamName ? ' (' + i.teamName + ')' : ''} · {ago(i.createdAt)}
+                {i.handledByName && i.status === 'pris_en_charge' ? <span className="muted"> · pris en charge par {i.handledByName}</span> : null}</p>
+              <JoinButton incident={i} />
+            </div>
+          ))}
           <button className="big primary" onClick={openIncidents}>{open.length ? open.length + ' incident(s) en cours' : 'Aucun incident en cours'}</button>
         </>
       )}
-      {data.team.kind === 'ouverture' && <p>Vous ouvrez le cortège : déclarez régulièrement la position de la tête (bouton ci-dessus). Les équipes voient à quelle distance elle se trouve de leur point.</p>}
+      {data.team.kind === 'ouverture' && <p>Vous ouvrez le cortège : votre position partagée fait avancer la tête ; sinon déclarez-la régulièrement (bouton ci-dessous). Les équipes voient à quelle distance elle se trouve de leur point.</p>}
       {data.team.kind === 'fermeture' && (
         <>
-          <p>Vous fermez le cortège : déclarez régulièrement la position de la queue. Les points dépassés pourront être levés sur instruction de l’organisation.</p>
+          <p>Vous fermez le cortège : votre position partagée fait avancer la queue ; sinon déclarez-la régulièrement. Les points dépassés pourront être levés sur instruction de l’organisation.</p>
           {data.tail && <p className="small">{behindTail.length ? behindTail.length + ' point(s) dépassé(s), encore tenu(s) : ' + behindTail.map((p) => p.name).join(', ') : 'Aucun point dépassé encore tenu.'}</p>}
         </>
       )}
@@ -480,7 +492,7 @@ function Incidents({ data, teamId, current, me, locate, act, busy }: {
             <p className="muted small">{i.teamName && i.teamId !== teamId ? i.teamName + ' · ' : ''}{i.pointName ? i.pointName + ' · ' : ''}{i.reporterName ?? ''} · {ago(i.createdAt)}</p>
             {data.canHandleIncidents && i.status !== 'resolu' && (
               <div className="row">
-                {i.position && <GpsButton to={i.position} label={INCIDENT_CATEGORY[i.category] ?? 'Incident'} />}
+                {i.position && <JoinButton incident={i} />}
                 {i.status === 'ouvert' && <button className="primary" disabled={busy} onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'pris_en_charge', version: i.version }), 'Vous prenez l’incident en charge.')}>J’y vais</button>}
                 <button disabled={busy} onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version }), 'Incident résolu.')}>Résolu</button>
               </div>
