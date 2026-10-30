@@ -15,7 +15,7 @@ export interface Tableau {
     /** Responsables de l'équipe ; numéro visible de l'organisation seulement. */
     leaders: { id: number; displayName: string; phone: string | null }[];
     missions: {
-      id: number; version: number; order: number; status: string; statusChangedAt: string | null; changedBy: string | null; pointName: string;
+      id: number; version: number; order: number; status: string; statusChangedAt: string | null; changedBy: string | null; pointId: number; pointName: string;
       distance: number | null; position: Position; passedByTail: boolean;
     }[];
   }[];
@@ -284,26 +284,61 @@ function MessagesCard({ eventId, teams, messages, canEdit, act }: {
   );
 }
 
-/** Prochains points devant la tête du cortège (ou depuis le départ si la tête n'est pas connue), avec leur statut. */
+/** État d'un point vu de la coordination : le plus grave l'emporte (aide, incident), puis la présence d'une équipe. */
+type PointState = 'aide' | 'incident' | 'releve' | 'en_position' | 'en_route' | 'personne' | 'termine';
+const POINT_STATE: Record<PointState, { label: string; css: string }> = {
+  aide: { label: '🆘 Besoin d’aide', css: 's-incident' },
+  incident: { label: '⚠ Incident', css: 's-incident' },
+  releve: { label: 'Relève nécessaire', css: 's-releve_necessaire' },
+  en_position: { label: '✓ Équipe en position', css: 's-en_position' },
+  en_route: { label: 'Personne · équipe en route', css: 's-en_deplacement' },
+  personne: { label: 'Personne', css: 's-a_preparer' },
+  termine: { label: 'Levé', css: 's-terminee' },
+};
+
+/** Prochains points devant la tête du cortège (ou depuis le départ si la tête n'est pas connue), avec leur état. */
 function NextPoints({ t }: { t: Tableau }) {
   const head = t.progress?.distance ?? 0;
-  const next = t.teams.filter((x) => !x.disabled)
-    .flatMap((x) => x.missions.map((m) => ({ ...m, team: x })))
-    .filter((m) => m.distance !== null && m.distance >= head)
-    .sort((a, b) => a.distance! - b.distance! || a.team.name.localeCompare(b.team.name))
-    .slice(0, 6);
+  const open = t.incidents.filter((i) => i.status !== 'resolu');
+  const byPoint = new Map<number, { id: number; name: string; distance: number; missions: (Tableau['teams'][number]['missions'][number] & { team: Tableau['teams'][number] })[] }>();
+  for (const team of t.teams.filter((x) => !x.disabled)) {
+    for (const m of team.missions) {
+      if (m.distance === null || m.distance < head) continue;
+      const p = byPoint.get(m.pointId) ?? { id: m.pointId, name: m.pointName, distance: m.distance, missions: [] };
+      p.missions.push({ ...m, team });
+      byPoint.set(m.pointId, p);
+    }
+  }
+  const next = [...byPoint.values()].sort((a, b) => a.distance - b.distance).slice(0, 6);
+  const state = (p: (typeof next)[number]): PointState => {
+    const ids = new Set(p.missions.map((m) => m.id));
+    const inc = open.filter((i) => i.missionId !== null && ids.has(i.missionId));
+    const has = (s: string) => p.missions.some((m) => m.status === s);
+    if (inc.some((i) => i.category === 'aide')) return 'aide';
+    if (inc.length || has('incident')) return 'incident';
+    if (has('releve_necessaire')) return 'releve';
+    if (has('en_position')) return 'en_position';
+    if (p.missions.every((m) => m.status === 'terminee')) return 'termine';
+    if (has('en_deplacement')) return 'en_route';
+    return 'personne';
+  };
   return (
     <div className="card" data-testid="prochains-points">
       <h3>Prochains points {t.progress ? 'devant la tête' : 'depuis le départ'}</h3>
       {next.length === 0 ? <p className="muted small">{t.progress ? 'Aucun point devant la tête du cortège.' : 'Aucun point situé sur le parcours.'}</p> : (
         <ul className="plain small">
-          {next.map((m) => (
-            <li key={m.id} className="row">
-              <span className="muted next-dist">{t.progress ? (m.distance! - head < 1000 ? Math.round(m.distance! - head) + ' m' : km(m.distance! - head)) : km(m.distance!)}</span>
-              <span className="grow"><b>{m.pointName}</b> <span className="muted">· <span className="dot" style={{ background: m.team.color }} /> {m.team.name}</span></span>
-              <span className={'status-badge s-' + m.status}>{MISSION_STATUS[m.status] ?? m.status}</span>
-            </li>
-          ))}
+          {next.map((p) => {
+            const st = POINT_STATE[state(p)];
+            return (
+              <li key={p.id} className="row" data-testid={'prochain-point-' + p.id}>
+                <span className="muted next-dist">{t.progress ? (p.distance - head < 1000 ? Math.round(p.distance - head) + ' m' : km(p.distance - head)) : km(p.distance)}</span>
+                <span className="grow"><b>{p.name}</b> <span className="muted">· {p.missions.map((m) => (
+                  <span key={m.id}><span className="dot" style={{ background: m.team.color }} /> {m.team.name} </span>
+                ))}</span></span>
+                <span className={'status-badge ' + st.css}>{st.label}</span>
+              </li>
+            );
+          })}
         </ul>
       )}
     </div>
