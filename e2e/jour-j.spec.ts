@@ -50,8 +50,14 @@ test('jour J : statut, aide, message urgent et progression circulent en direct',
   await field.getByRole('button', { name: /Aide/ }).click();
   await expect(phone.getByText('Demande d’aide envoyée à l’organisation.')).toBeVisible();
   await expect(coord).toContainText('Besoin d’aide · PRIORITAIRE');
+  // Le SOS apparaît aussitôt sur la carte de l'organisation, au point concerné, clignotant tant que personne ne le prend.
+  const sosMarker = page.locator('.incident-marker.sos');
+  await expect(sosMarker).toHaveCount(1);
+  await expect(sosMarker).toContainText('SOS · Carrefour de la Poste');
+  await expect(sosMarker).toHaveClass(/ouvert/);
   await expect(field.getByTestId('ma-mission')).toContainText('Incident signalé');
   await coord.getByRole('button', { name: 'Je m’en occupe' }).click();
+  await expect(sosMarker).not.toHaveClass(/ouvert/);
   await field.getByRole('tab', { name: /Incidents/ }).click();
   await expect(field.getByTestId('incidents')).toContainText('Pris en charge');
 

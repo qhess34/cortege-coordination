@@ -9,6 +9,7 @@ import { MISSION_STATUS } from '../labels';
 import type { Position } from '../types';
 import type { MemberPosition } from './MapView';
 import { loadVectorBasemap } from './vectorBasemap';
+import { syncIncidentMarkers, type MapIncident } from './incidentMarkers';
 
 maplibregl.setWorkerUrl(workerUrl);
 
@@ -19,16 +20,16 @@ export const STATUS_COLOR: Record<string, string> = {
 };
 
 export interface LivePoint { position: Position; label: string; status: string; passedByTail: boolean }
-export interface LiveIncident { position: Position; label: string; priority: string }
 
 type Feature = { type: 'Feature'; properties: Record<string, unknown>; geometry: { type: 'Point' | 'LineString'; coordinates: unknown } };
 const fc = (features: Feature[]) => ({ type: 'FeatureCollection' as const, features }) as never;
 
-export function LiveMap({ track, points, incidents, members }: { track: Position[][]; points: LivePoint[]; incidents: LiveIncident[]; members: MemberPosition[] }) {
+export function LiveMap({ track, points, incidents, members }: { track: Position[][]; points: LivePoint[]; incidents: MapIncident[]; members: MemberPosition[] }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const ready = useRef(false);
   const markers = useRef(new Map<number, maplibregl.Marker>());
+  const incidentMarkers = useRef(new Map<number, maplibregl.Marker>());
   const latest = useRef({ track, points, incidents, members });
   latest.current = { track, points, incidents, members };
   const fitted = useRef(false);
@@ -42,9 +43,7 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
     (m.getSource('points') as GeoJSONSource).setData(fc(d.points.map((p) => ({
       type: 'Feature', properties: { color: STATUS_COLOR[p.status] ?? '#8d99ae', lever: p.passedByTail && p.status !== 'terminee' }, geometry: { type: 'Point', coordinates: p.position },
     }))));
-    (m.getSource('incidents') as GeoJSONSource).setData(fc(d.incidents.map((i) => ({
-      type: 'Feature', properties: { haute: i.priority === 'haute' }, geometry: { type: 'Point', coordinates: i.position },
-    }))));
+    syncIncidentMarkers(m, incidentMarkers.current, d.incidents);
     const seen = new Set<number>();
     for (const p of d.members) {
       seen.add(p.userId);
@@ -93,15 +92,11 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
     m.on('error', (e) => { if ((e as { sourceId?: string }).sourceId || /tile|Failed to fetch/i.test(String(e.error?.message))) setBasemapError(true); });
     m.on('data', (e) => { if ((e as { dataType?: string; tile?: unknown }).dataType === 'source' && (e as { tile?: unknown }).tile) setBasemapError(false); });
     m.on('load', () => {
-      for (const id of ['parcours', 'points', 'incidents']) m.addSource(id, { type: 'geojson', data: fc([]) });
+      for (const id of ['parcours', 'points']) m.addSource(id, { type: 'geojson', data: fc([]) });
       m.addLayer({ id: 'parcours', type: 'line', source: 'parcours', paint: { 'line-color': '#1d3557', 'line-width': 5, 'line-opacity': 0.55 } });
       m.addLayer({
         id: 'points', type: 'circle', source: 'points',
         paint: { 'circle-radius': 8, 'circle-color': ['get', 'color'], 'circle-stroke-color': ['case', ['get', 'lever'], '#f4a261', '#fff'], 'circle-stroke-width': ['case', ['get', 'lever'], 4, 2] },
-      });
-      m.addLayer({
-        id: 'incidents', type: 'circle', source: 'incidents',
-        paint: { 'circle-radius': ['case', ['get', 'haute'], 12, 9], 'circle-color': 'rgba(214,40,40,.25)', 'circle-stroke-color': '#d62828', 'circle-stroke-width': 3 },
       });
       ready.current = true;
       sync();
@@ -110,7 +105,7 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
       if (vector?.style) loadVectorBasemap(m, vector.style, 'parcours').catch(fallback);
       else fallback();
     });
-    return () => { ro.disconnect(); ready.current = false; for (const mk of markers.current.values()) mk.remove(); markers.current.clear(); m.remove(); map.current = null; };
+    return () => { ro.disconnect(); ready.current = false; for (const mk of markers.current.values()) mk.remove(); markers.current.clear(); for (const mk of incidentMarkers.current.values()) mk.remove(); incidentMarkers.current.clear(); m.remove(); map.current = null; };
     // La carte est créée une fois ; les données suivent par sync().
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -125,7 +120,8 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
           <span key={s}><span className="dot" style={{ background: STATUS_COLOR[s] }} /> {MISSION_STATUS[s]}</span>
         ))}
         <span><span className="dot ring" /> à lever</span>
-        <span><span className="dot inc" /> lieu d’un incident</span>
+        <span>🆘 demande d’aide</span>
+        <span>⚠ incident (clignote tant que personne ne l’a pris en charge)</span>
       </p>
     </div>
   );

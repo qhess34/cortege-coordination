@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { toMapIncidents, type MapIncident } from '../components/incidentMarkers';
+import { INCIDENT_CATEGORY, type FieldIncident } from '../components/FieldView';
 import { Route } from '../../../server/src/geo/route';
 import { ApiError, api } from '../api';
 import { MapView, type MemberPosition, type PointEdit, type Selection } from '../components/MapView';
@@ -171,6 +173,12 @@ export function EventPage({ eventId }: { eventId: number }) {
     const t = setInterval(loadMembers, 30_000);
     return () => clearInterval(t);
   }, [loadMembers]);
+  // Incidents en cours (SOS compris) : affichés sur la carte, rechargés à chaque signal du direct.
+  const [incidents, setIncidents] = useState<MapIncident[]>([]);
+  const loadIncidents = useCallback(() => {
+    api.get<FieldIncident[]>(base + '/incidents').then((l) => setIncidents(toMapIncidents(l, INCIDENT_CATEGORY)), () => undefined);
+  }, [base]);
+  useEffect(() => { loadIncidents(); }, [loadIncidents, liveTick]);
   const live = useLive(eventId, refreshLive, 30_000, loadMembers);
 
   const run = useCallback(async (fn: () => Promise<unknown>, success?: string) => {
@@ -345,6 +353,7 @@ export function EventPage({ eventId }: { eventId: number }) {
       <section className="map-pane">
         <MapView
           members={members}
+          incidents={incidents}
           track={data.track}
           suggestions={visibleSuggestions}
           points={visiblePoints(data.points, hiddenTeams).concat(

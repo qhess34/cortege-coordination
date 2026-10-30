@@ -406,3 +406,12 @@ a.button.big.next-point { gap: .3rem; font-weight: 500; }
 .sos-alert { border: 2px solid #d62828; background: #fdecea; border-radius: 8px; padding: .5rem .6rem; display: flex; flex-direction: column; gap: .4rem; }
 .sos-alert p { margin: 0; }
 .sos-alert.releve { border-color: #f4a261; background: #fff4e8; }
+/* Incidents sur les cartes de l'organisation. */
+.incident-marker { display: flex; flex-direction: column; align-items: center; pointer-events: auto; cursor: default; }
+.incident-icon { font-size: 22px; line-height: 1; background: #fff; border: 3px solid #d62828; border-radius: 50%; width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px rgba(0,0,0,.4); }
+.incident-label { font-size: 11px; font-weight: 700; color: #fff; background: #d62828; border-radius: 3px; padding: 0 4px; margin-top: 2px; white-space: nowrap; }
+.incident-marker:not(.sos) .incident-icon { border-color: #f4a261; }
+.incident-marker:not(.sos) .incident-label { background: #b85c00; }
+.incident-marker.ouvert .incident-icon { animation: incident-pulse 1.2s ease-in-out infinite; }
+@keyframes incident-pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(214,40,40,.6); } 50% { box-shadow: 0 0 0 10px rgba(214,40,40,0); } }
+@media (prefers-reduced-motion: reduce) { .incident-marker.ouvert .incident-icon { animation: none; } }

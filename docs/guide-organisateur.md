@@ -188,6 +188,9 @@ coupure, l'écran se recharge toutes les 30 secondes.
   imprécises ignorées). Sinon, l'ouverture (tête) et la fermeture (queue) la déclarent depuis leur vue terrain, en km
   parcourus ou « 📍 ici ». Les compteurs *Tête* et *Queue* de l'écran *Direct* la reprennent ; chaque membre voit à
   quelle distance la tête se trouve de son point. C'est une indication, à confirmer sur le terrain.
+- **Sur la carte** (écran *Planifier* et onglet *Carte* de la coordination en direct) : chaque incident en cours est
+  marqué au lieu signalé, ou au point concerné : **🆘 SOS** pour une demande d'aide, **⚠** pour les autres. Le marqueur
+  **clignote tant que personne ne l'a pris en charge** et disparaît une fois l'incident résolu.
 - **Incidents** : les prioritaires (aide, santé, sécurité) en premier. *Je m'en occupe* indique à l'équipe que c'est
   pris en charge, *Résolu* clôt l'incident. L'équipe volante peut aussi les prendre en charge ; elle a un lien **🧭 Rejoindre le lieu** vers chaque demande d'aide.
 - **Équipes** : statut de chaque point (qui l'a changé, quand), nombre de membres actifs, badge **à lever** quand la

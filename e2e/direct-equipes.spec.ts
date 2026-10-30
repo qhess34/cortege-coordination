@@ -66,4 +66,8 @@ test('direct : statut des équipes, appel / SMS / message au responsable, procha
   await expect(rows.nth(3)).toContainText('Rue D');
   await expect(rows.nth(3)).toContainText('Besoin d’aide');
   await expect(next).not.toContainText('Rue A');
+
+  // Carte : le SOS du point D est affiché.
+  await page.getByRole('tab', { name: /Carte/ }).click();
+  await expect(page.getByTestId('carte-direct').locator('.incident-marker.sos')).toContainText('SOS · Rue D');
 });

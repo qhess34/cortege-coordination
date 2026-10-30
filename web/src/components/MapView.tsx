@@ -7,6 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Route } from '../../../server/src/geo/route';
 import { BASEMAPS, DEFAULT_BASEMAP, FALLBACK_BASEMAP } from '../basemaps';
 import { loadVectorBasemap } from './vectorBasemap';
+import { syncIncidentMarkers, type MapIncident } from './incidentMarkers';
 import type { MissionPoint, Position, Suggestion, Track } from '../types';
 
 maplibregl.setWorkerUrl(workerUrl);
@@ -58,6 +59,8 @@ interface Props {
   basemap?: string;
   /** Positions partagées par les membres (organisation seulement). */
   members?: MemberPosition[];
+  /** Incidents en cours (organisation) : SOS et autres signalements. */
+  incidents?: MapIncident[];
   /** Affiche la couverture Panoramax et les repères d'inspection. */
   panoramax?: {
     enabled: boolean; tilesUrl: string; clicked: Position | null; photo: Position | null;
@@ -112,6 +115,7 @@ export function MapView(props: Props) {
   const [ready, setReady] = useState(false);
   const kmMarkers = useRef<maplibregl.Marker[]>([]);
   const memberMarkers = useRef(new Map<number, maplibregl.Marker>());
+  const incidentMarkers = useRef(new Map<number, maplibregl.Marker>());
   // Les gestionnaires d'événements MapLibre lisent toujours les dernières props.
   const latest = useRef(props);
   latest.current = props;
@@ -562,6 +566,10 @@ export function MapView(props: Props) {
     }
     for (const [id, mk] of memberMarkers.current) if (!seen.has(id)) { mk.remove(); memberMarkers.current.delete(id); }
   }, [props.members, ready]);
+
+  useEffect(() => {
+    if (map.current && ready) syncIncidentMarkers(map.current, incidentMarkers.current, props.incidents ?? []);
+  }, [props.incidents, ready]);
 
   return (
     <>

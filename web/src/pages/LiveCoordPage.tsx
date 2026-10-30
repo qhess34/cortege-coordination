@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
 import { InstallCard } from '../components/InstallCard';
-import { LiveMap, type LiveIncident, type LivePoint } from '../components/LiveMap';
+import { LiveMap, type LivePoint } from '../components/LiveMap';
+import { toMapIncidents } from '../components/incidentMarkers';
+import { INCIDENT_CATEGORY } from '../components/FieldView';
 import type { MemberPosition } from '../components/MapView';
 import type { EventInfo, Position, Track } from '../types';
 import { ago, useLive } from '../useLive';
@@ -54,7 +56,7 @@ export function LiveCoordPage({ eventId }: { eventId: number }) {
   const points: LivePoint[] = (tableau?.teams ?? []).filter((t) => !t.disabled).flatMap((t) => t.missions.map((m) => ({
     position: m.position, label: m.pointName + ' (' + t.name + ')', status: m.status, passedByTail: m.passedByTail,
   })));
-  const incidents: LiveIncident[] = (tableau?.incidents ?? []).filter((i) => i.position).map((i) => ({ position: i.position!, label: i.category, priority: i.priority }));
+  const incidents = toMapIncidents(tableau?.incidents ?? [], INCIDENT_CATEGORY);
 
   return (
     <div className="live-coord" data-testid="coordination-mobile">

@@ -160,6 +160,8 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   **statut résumé de chaque équipe** avec raccourcis vers son responsable (appel, SMS, message dans l'application),
   incidents ouverts, état de chaque mission par équipe, membres actifs, messages — tout se met à jour
   **en direct**.
+- **Incidents sur les cartes de l'organisation** (planification et coordination en direct) : 🆘 pour un SOS, ⚠ pour
+  les autres, au lieu signalé ou au point concerné ; clignotant tant que personne ne l'a pris en charge.
 - **Direct** : WebSocket `/api/direct?event=<id>` qui envoie un simple signal « mise à jour » après chaque modification
   validée ; l'écran recharge ce que ses droits lui permettent de voir (le signal ne contient aucune donnée). En cas de
   coupure : reconnexion automatique et rechargement toutes les 30 s.
