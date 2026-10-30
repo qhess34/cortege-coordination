@@ -37,6 +37,12 @@ test('position partagée visible au bureau ; arrivée au point détectée ; arr�
   await expect(card).toContainText('facultatif');
   await card.getByRole('button', { name: 'Partager ma position' }).click();
   await expect(card).toContainText('Position partagée avec l’organisation');
+  // Position connue : un simple bouton « la tête est ici » (sans saisie en km).
+  const prog = field.getByTestId('progression-tete');
+  await expect(prog).toContainText('non déclarée');
+  await expect(prog.getByRole('textbox')).toHaveCount(0);
+  await prog.getByRole('button', { name: '📍 La tête est ici' }).click();
+  await expect(prog).toContainText('Tête du cortège au');
 
   // Au bureau : le membre apparaît sur la carte, sans rechargement.
   const marker = page.locator('.member-marker', { hasText: 'Sam' });

@@ -67,6 +67,11 @@ const ACTIONS: Record<string, { to: string; label: string; primary?: boolean }[]
 };
 
 type Tab = 'mission' | 'messages' | 'incidents' | 'aide';
+/** Message de confirmation d'une action, fixe ou selon la réponse du serveur. */
+type Ok = string | ((response: unknown) => string);
+/** Signalement : nouveau, ou rattaché à un incident déjà ouvert au même endroit (pas de double saisie). */
+const reported = (text: string): Ok => (r) =>
+  (r as { duplicate?: boolean } | null)?.duplicate ? 'Déjà signalé à cet endroit : l’incident en cours est complété, l’organisation est prévenue.' : text;
 
 const meters = (m: number) => (m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km');
 /**
@@ -178,11 +183,11 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
     void Promise.all(ids.map((id) => api.post('/api/messages/' + id + '/lu').catch(() => undefined))).then(() => load().catch(() => undefined));
   }, [tab, data, load]);
 
-  const act = async (fn: () => Promise<unknown>, ok: string) => {
+  const act = async (fn: () => Promise<unknown>, ok: Ok) => {
     setBusy(true);
     try {
-      await fn();
-      setToast({ kind: 'ok', text: ok });
+      const r = await fn();
+      setToast({ kind: 'ok', text: typeof ok === 'function' ? ok(r) : ok });
       await load().catch(() => undefined);
       return true;
     } catch (e) {
@@ -278,7 +283,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
               <div className="row">
                 <button className="big danger" disabled={busy} onClick={() => act(() => api.post('/api/terrain/equipes/' + teamId + '/incidents', {
                   category: 'aide', description: 'Demande d’aide depuis « ' + current.point.name + ' »', missionId: current.id, position: me,
-                }), 'Demande d’aide envoyée à l’organisation.')}>🆘 Aide</button>
+                }), reported('Demande d’aide envoyée à l’organisation.'))}>🆘 Aide</button>
                 <button className="big" onClick={() => setTab('incidents')}>Signaler un incident</button>
               </div>
               {next && (
@@ -287,7 +292,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
             </div>
           )}
 
-          <Progression data={data} reload={load} setToast={setToast} locate={locate} />
+          <Progression data={data} reload={load} setToast={setToast} locate={locate} me={me} />
           {(current || data.team.kind !== 'points') && (
             <div className="card">
               <FieldMap
@@ -372,8 +377,9 @@ const PART: Record<'tete' | 'queue', { title: string; here: string }> = {
   queue: { title: 'Queue du cortège', here: '📍 La queue est ici' },
 };
 
-function Progression({ data, reload, setToast, locate }: {
+function Progression({ data, reload, setToast, locate, me }: {
   data: Terrain; reload: () => Promise<void>; setToast: (t: { kind: 'ok' | 'error'; text: string }) => void; locate: () => Promise<Position | null>;
+  me: Position | null;
 }) {
   const [value, setValue] = useState<Record<string, string>>({});
   const send = async (part: 'tete' | 'queue', body: Record<string, unknown>) => {
@@ -386,7 +392,12 @@ function Progression({ data, reload, setToast, locate }: {
       setToast({ kind: 'error', text: err instanceof ApiError ? err.message : 'Déclaration impossible.' });
     }
   };
-  const parts = (['tete', 'queue'] as const).filter((p) => (p === 'tete' ? data.progress : data.tail) || data.canDeclare[p]);
+  // Déclaration complète (position ou km) : équipe d'ouverture pour la tête, de fermeture pour la queue, organisation.
+  const full = (part: 'tete' | 'queue') => data.canDeclare[part] && (data.me.organizer || data.team.kind === (part === 'tete' ? 'ouverture' : 'fermeture'));
+  // Autres membres et responsables : un simple bouton « la tête est ici », si la position du téléphone est connue.
+  // (Pas pour la fermeture, qui marche en queue.)
+  const quick = (part: 'tete' | 'queue') => part === 'tete' && !full(part) && data.team.kind !== 'fermeture' && data.me.member && me !== null;
+  const parts = (['tete', 'queue'] as const).filter((p) => (p === 'tete' ? data.progress : data.tail) || full(p) || quick(p));
   if (!parts.length) return null;
   return (
     <div className="card small" data-testid="progression">
@@ -397,7 +408,10 @@ function Progression({ data, reload, setToast, locate }: {
             {p
               ? <p>{PART[part].title} au <b>{km(p.distance)}</b> <span className="muted">— {ago(p.at)}{p.note ? ' · ' + p.note : ''}</span></p>
               : <p className="muted">{PART[part].title} : non déclarée.</p>}
-            {data.canDeclare[part] && (
+            {quick(part) && (
+              <button type="button" onClick={() => void send(part, { position: me })}>{PART[part].here}</button>
+            )}
+            {full(part) && (
               <form className="row" onSubmit={(e: FormEvent) => { e.preventDefault(); void send(part, { distance: Math.round(Number((value[part] ?? '').replace(',', '.')) * 1000) }); }}>
                 <button type="button" className={data.team.kind === (part === 'tete' ? 'ouverture' : 'fermeture') ? 'big primary' : ''}
                   onClick={async () => { const pos = await locate(); if (pos) void send(part, { position: pos }); else setToast({ kind: 'error', text: 'Position indisponible : indiquez les km.' }); }}>
@@ -454,7 +468,7 @@ function RoleCard({ data, openIncidents }: { data: Terrain; openIncidents: () =>
   );
 }
 
-function Messages({ data, teamId, act, busy }: { data: Terrain; teamId: number; act: (fn: () => Promise<unknown>, ok: string) => Promise<boolean>; busy: boolean }) {
+function Messages({ data, teamId, act, busy }: { data: Terrain; teamId: number; act: (fn: () => Promise<unknown>, ok: Ok) => Promise<boolean>; busy: boolean }) {
   const [body, setBody] = useState('');
   const send = async (e: FormEvent) => {
     e.preventDefault();
@@ -484,7 +498,7 @@ function Messages({ data, teamId, act, busy }: { data: Terrain; teamId: number; 
 
 function Incidents({ data, teamId, current, me, locate, act, busy }: {
   data: Terrain; teamId: number; current: FieldMission | null; me: Position | null; locate: () => Promise<Position | null>;
-  act: (fn: () => Promise<unknown>, ok: string) => Promise<boolean>; busy: boolean;
+  act: (fn: () => Promise<unknown>, ok: Ok) => Promise<boolean>; busy: boolean;
 }) {
   const [category, setCategory] = useState('securite');
   const [description, setDescription] = useState('');
@@ -495,7 +509,7 @@ function Incidents({ data, teamId, current, me, locate, act, busy }: {
     const position = withPosition ? me ?? (await locate()) : null;
     const ok = await act(() => api.post('/api/terrain/equipes/' + teamId + '/incidents', {
       category, description, missionId: onMission && current ? current.id : null, position,
-    }), 'Incident signalé à l’organisation.');
+    }), reported('Incident signalé à l’organisation.'));
     if (ok) setDescription('');
   };
   return (

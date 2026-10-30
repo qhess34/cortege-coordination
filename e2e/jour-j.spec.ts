@@ -49,6 +49,10 @@ test('jour J : statut, aide, message urgent et progression circulent en direct',
   // 2. Aide → incident prioritaire chez l'organisation, pris en charge → visible sur le téléphone.
   await field.getByRole('button', { name: /Aide/ }).click();
   await expect(phone.getByText('Demande d’aide envoyée à l’organisation.')).toBeVisible();
+  // Deuxième appui : pas de doublon, l'incident en cours est complété.
+  await field.getByRole('button', { name: /Aide/ }).click();
+  await expect(phone.getByText(/Déjà signalé à cet endroit/)).toBeVisible();
+  expect((await (await page.request.get('/api/events/' + ev.id + '/incidents')).json()).filter((i: { category: string }) => i.category === 'aide')).toHaveLength(1);
   await expect(coord).toContainText('Besoin d’aide · PRIORITAIRE');
   // Le SOS apparaît aussitôt sur la carte de l'organisation, au point concerné, clignotant tant que personne ne le prend.
   const sosMarker = page.locator('.incident-marker.sos');

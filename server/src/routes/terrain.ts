@@ -244,6 +244,8 @@ export async function terrainRoutes(app: FastifyInstance) {
   });
 
   // --- Incidents -------------------------------------------------------------------------------------------------
+  /** Distance (m) en deçà de laquelle un signalement de même nature rejoint l'incident ouvert existant. */
+  const DUPLICATE_RADIUS = 30;
   const NewIncident = z.object({
     category: z.enum(INCIDENT_CATEGORIES),
     priority: z.enum(['normale', 'haute']).optional(),
@@ -264,6 +266,31 @@ export async function terrainRoutes(app: FastifyInstance) {
         if (!mission) throw badRequest('Mission inconnue pour cette équipe.');
       }
       const priority = b.priority ?? (b.category === 'aide' || b.category === 'sante' || b.category === 'securite' ? 'haute' : 'normale');
+      // Double saisie : un incident de même nature, encore ouvert, au même lieu (même mission, ou à moins de
+      // DUPLICATE_RADIUS m de la position signalée ou du point) est complété au lieu d'être recréé.
+      await c.query('SELECT pg_advisory_xact_lock($1, 3)', [eventId]);
+      const dup = (await c.query(
+        `SELECT i.id, i.description FROM incidents i
+           LEFT JOIN missions m ON m.id = i.mission_id LEFT JOIN mission_points p ON p.id = m.mission_point_id
+          WHERE i.event_id = $1 AND i.status <> 'resolu' AND i.category = $2
+            AND (($3::bigint IS NOT NULL AND i.mission_id = $3)
+                 OR ST_DistanceSphere(coalesce(i.geom, p.geom),
+                      coalesce(CASE WHEN $4::float8 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($4, $5), 4326) END,
+                               (SELECT mp.geom FROM missions mm JOIN mission_points mp ON mp.id = mm.mission_point_id WHERE mm.id = $3))) <= $6)
+          ORDER BY i.created_at DESC LIMIT 1`,
+        [eventId, b.category, b.missionId ?? null, b.position?.[0] ?? null, b.position?.[1] ?? null, DUPLICATE_RADIUS],
+      )).rows[0];
+      if (dup) {
+        // Le nouveau texte est ajouté à l'incident existant (rien n'est perdu) ; l'organisation est prévenue en direct.
+        if (b.description && !String(dup.description).includes(b.description)) {
+          await c.query(
+            "UPDATE incidents SET description = left(description || CASE WHEN description = '' THEN '' ELSE E'\n' END || $2, 2000), version = version + 1, updated_at = now() WHERE id = $1",
+            [dup.id, u.displayName + ' : ' + b.description],
+          );
+        }
+        await audit(c, { actorId: u.id, eventId, entity: 'incident', entityId: dup.id, action: 'signalement_double', details: { teamId, category: b.category } });
+        return { ...publicIncident((await c.query(INCIDENT_SELECT + ' WHERE i.id = $1', [dup.id])).rows[0]), duplicate: true };
+      }
       const r = await c.query(
         `INSERT INTO incidents(event_id, team_id, mission_id, reporter_id, category, priority, description, geom)
          VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::float8 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($8, $9), 4326) END)
@@ -279,7 +306,7 @@ export async function terrainRoutes(app: FastifyInstance) {
       }
       await audit(c, { actorId: u.id, eventId, entity: 'incident', entityId: r.rows[0].id, action: 'signalement', details: { teamId, category: b.category, priority } });
       reply.status(201);
-      return publicIncident((await c.query(INCIDENT_SELECT + ' WHERE i.id = $1', [r.rows[0].id])).rows[0]);
+      return { ...publicIncident((await c.query(INCIDENT_SELECT + ' WHERE i.id = $1', [r.rows[0].id])).rows[0]), duplicate: false };
     });
   });
 
@@ -398,7 +425,9 @@ export async function terrainRoutes(app: FastifyInstance) {
     }).refine((x) => (x.distance === undefined) !== (x.position === undefined), 'Indiquez une distance ou une position.').parse(req.body);
     return tx(app.db, async (c) => {
       const rights = await canDeclare(c, u, eventId);
-      if (!rights[b.part]) {
+      // Tout membre d'une équipe peut signaler « la tête est ici » avec la position de son téléphone.
+      const byPosition = b.part === 'tete' && !!b.position && (await inEventTeam(c, u.id, eventId));
+      if (!rights[b.part] && !byPosition) {
         if ((await eventRole(c, u, eventId)) === null && !(await inEventTeam(c, u.id, eventId))) throw notFound('Événement');
         throw forbidden();
       }

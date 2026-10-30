@@ -132,7 +132,8 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   une décision de l'organisation) ; qui a changé le statut, et quand, est affiché.
 - **Incidents** (aide, sécurité, santé, circulation, matériel…) liés à la mission et, si la personne le choisit, à sa
   position du moment ; suivis par l'organisation, le responsable d'équipe ou l'équipe volante (*Je m'en occupe*,
-  *Résolu*). Rappel affiché : un signalement ne prévient pas les secours (15, 17, 18, 112).
+  *Résolu*). Pas de double saisie : un signalement de même nature, au même point ou à moins de 30 m d'un incident
+  encore ouvert, complète celui-ci. Rappel affiché : un signalement ne prévient pas les secours (15, 17, 18, 112).
 - **Messages** : annonces à toutes les équipes ou à une équipe, éventuellement urgentes (bandeau sur les téléphones),
   réponses du terrain, accusés de lecture (« lu 3/5 »).
 - **Types d'équipe** :
@@ -154,6 +155,7 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
     est enregistrée sans auteur ni coordonnées.
   - **Déclarée** sinon, depuis la vue terrain : par l'ouverture ou les responsables (tête), la fermeture (queue), en
     km parcourus ou « 📍 ici » (position du téléphone ramenée sur le parcours).
+    Tout autre membre dont la position est connue a un simple bouton *📍 La tête est ici*.
   - C'est une indication, à confirmer sur le terrain.
 - **Onglet « Coordination »** de l'organisation : compteurs (incidents, tête, queue, points à lever), **prochains points devant la tête** et leur état (équipe en position,
   personne, besoin d'aide, incident),

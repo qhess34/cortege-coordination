@@ -74,9 +74,25 @@ describe('incidents', () => {
     expect(r.json().positionSource).toBe('signalee');
     expect(r.json().position[1]).toBeCloseTo(at(200, 5)[1], 6);
     // Sans position jointe : le lieu est celui du point de la mission (pour que l'équipe volante puisse s'y rendre).
-    const sans = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', description: 'SOS', missionId: missionA })).json();
-    expect(sans.positionSource).toBe('point');
+    const sans = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'sante', description: 'Malaise', missionId: missionA })).json();
+    expect(sans).toMatchObject({ positionSource: 'point', duplicate: false });
     expect(sans.position).not.toBeNull();
+    // Double saisie : même nature, même mission ou à moins de 30 m, incident encore ouvert → l'incident existant est complété.
+    const count = async () => (await ctx.db.query('SELECT count(*)::int AS n FROM incidents')).rows[0].n;
+    const before = await count();
+    const again = await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', description: 'Toujours là', missionId: missionA });
+    expect(again.statusCode).toBe(200);
+    expect(again.json()).toMatchObject({ id: r.json().id, duplicate: true });
+    expect(again.json().description).toContain('Voiture qui force le passage');
+    expect(again.json().description).toContain('Alice : Toujours là');
+    const near = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', position: at(210, 5) })).json();
+    expect(near).toMatchObject({ id: r.json().id, duplicate: true });
+    expect(await count()).toBe(before);
+    // Plus loin, ou d'une autre nature : nouvel incident.
+    const far = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', position: at(300, 5) })).json();
+    expect(far.duplicate).toBe(false);
+    expect((await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'materiel', position: at(200, 5) })).json().duplicate).toBe(false);
+    expect(await count()).toBe(before + 2);
     const hors = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'autre', description: 'Sans lieu' })).json();
     expect(hors).toMatchObject({ position: null, positionSource: null });
     incidentId = r.json().id;
@@ -125,8 +141,13 @@ describe('messages', () => {
 });
 
 describe('progression déclarée', () => {
-  it('déclarée par l’organisation (ou un responsable), jamais par un simple membre', async () => {
+  it('déclarée par l’organisation (ou un responsable) ; un simple membre seulement « la tête est ici » par sa position', async () => {
     expect((await alice.post('/api/events/' + eventId + '/progression', { distance: 100 })).statusCode).toBe(403);
+    expect((await alice.post('/api/events/' + eventId + '/progression', { part: 'queue', position: at(100, 5) })).statusCode).toBe(403);
+    const here = await alice.post('/api/events/' + eventId + '/progression', { part: 'tete', position: at(100, 5) });
+    expect(here.statusCode).toBe(201);
+    expect(here.json().distance).toBe(100);
+    expect((await new Agent(ctx.app).post('/api/events/' + eventId + '/progression', { part: 'tete', position: at(100, 5) })).statusCode).toBe(401);
     expect((await orga.post('/api/events/' + eventId + '/progression', { distance: 5000 })).statusCode).toBe(400);
     const r = await orga.post('/api/events/' + eventId + '/progression', { distance: 150, note: 'Tête place de la mairie' });
     expect(r.statusCode).toBe(201);
