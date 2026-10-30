@@ -5,4 +5,6 @@ node_modules
 .git
 test-results
 playwright-report
-docs
+# Les guides (docs/*.md) sont compilés dans l'interface (page Aide) ; le reste de docs/ est inutile à l'image.
+docs/*
+!docs/guide-*.md

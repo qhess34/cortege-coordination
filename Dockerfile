@@ -7,6 +7,8 @@ COPY web/package.json web/
 RUN npm ci
 COPY server server
 COPY web web
+# Guides affichés dans l'application (importés par la page Aide).
+COPY docs/guide-*.md docs/
 ARG VITE_TILE_URL
 ARG VITE_PANORAMAX_URL
 ARG VITE_SATELLITE_URL
