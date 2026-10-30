@@ -242,6 +242,25 @@ export async function teamRoutes(app: FastifyInstance) {
     });
   });
 
+  // Remettre toutes les missions (de la manifestation, ou d'une équipe) à « Affectée » : après une répétition, ou pour
+  // repartir de zéro. Les affectations, l'ordre, les incidents et les messages sont conservés.
+  app.post('/api/events/:id/missions/reinitialiser', async (req) => {
+    const u = requireUser(req);
+    const eventId = idParam(req);
+    const b = z.object({ teamId: z.number().int().positive().optional() }).parse(req.body ?? {});
+    return tx(app.db, async (c) => {
+      await requireEventRole(c, u, eventId, 'organisation');
+      if (b.teamId && !(await c.query('SELECT 1 FROM teams WHERE id = $1 AND event_id = $2', [b.teamId, eventId])).rowCount) throw notFound('Équipe');
+      const r = await c.query(
+        `UPDATE missions SET status = 'affectee', version = version + 1, updated_at = now(), status_changed_at = now(), status_changed_by = $3
+          WHERE event_id = $1 AND cancelled_at IS NULL AND status <> 'affectee' AND ($2::bigint IS NULL OR team_id = $2)`,
+        [eventId, b.teamId ?? null, u.id],
+      );
+      await audit(c, { actorId: u.id, eventId, entity: 'mission', entityId: null, action: 'reinitialisation', details: { teamId: b.teamId ?? null, missions: r.rowCount } });
+      return { updated: r.rowCount };
+    });
+  });
+
   // Retirer un point de la liste d'une équipe (la mission est annulée et conservée dans l'historique).
   app.delete('/api/missions/:id', async (req) => {
     const u = requireUser(req);

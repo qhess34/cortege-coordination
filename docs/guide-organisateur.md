@@ -161,6 +161,9 @@ Dans la section **Membres** d'une équipe :
   l'ordre des missions, avec le parcours. À ouvrir dans OsmAnd, Organic Maps, un GPS… Les membres le téléchargent
   aussi depuis leur vue terrain (*Toutes les missions*).
 - **GPX de tous les points** (bas de l'onglet *Équipes*), à charger dans une application de navigation.
+- **↺ Remettre toutes les missions à « Affectée »** (bas de l'onglet *Équipes*, ou réglages d'une équipe pour elle
+  seule) : après une répétition, ou pour repartir de zéro. Les affectations et l'ordre sont conservés ; les incidents,
+  les messages et la progression ne sont pas effacés.
 
 ## Le jour J : onglet Coordination
 

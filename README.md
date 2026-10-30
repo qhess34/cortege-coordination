@@ -97,7 +97,8 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
 - **Équipes et missions** : création, type (points fixes, volante, ouverture, fermeture), couleur, responsable,
   consignes, désactivation ; affectation ordonnée,
   réordonnancement, réaffectation, statuts de mission avec transitions contrôlées (la fin d'une mission ne libère
-  pas le point).
+  pas le point). Toutes les missions (de la manifestation ou d'une équipe) peuvent être **remises à « Affectée »** en
+  une fois, par exemple après une répétition : affectations et ordre conservés.
 - **Fonds de carte** au choix (mémorisé dans le navigateur) : plan OSM vectoriel (par défaut, net à tout zoom),
   plan OSM en images, plan IGN, photo aérienne IGN (France), satellite Esri (monde).
 - **Clic sur la carte** : menu avec la position (et la distance sur le parcours), « Voir les photos ici »,

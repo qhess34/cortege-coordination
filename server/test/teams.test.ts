@@ -171,3 +171,34 @@ describe('suppression d’une manifestation', () => {
     expect((await ctx.db.query('SELECT count(*)::int AS n FROM gpx_tracks WHERE event_id = $1', [id])).rows[0].n).toBe(0);
   });
 });
+
+describe('remise à « Affectée »', () => {
+  it('toutes les missions, ou celles d’une équipe ; réservé à l’organisation', async () => {
+    const ev = (await orga.post('/api/events', { name: 'Répétition' })).json().id;
+    const t1 = (await orga.post('/api/events/' + ev + '/teams', { name: 'Un', color: '#1d3557' })).json().id;
+    const t2 = (await orga.post('/api/events/' + ev + '/teams', { name: 'Deux', color: '#e76f51' })).json().id;
+    for (const [t, x] of [[t1, 100], [t1, 200], [t2, 300]] as const) {
+      const p = (await orga.post('/api/events/' + ev + '/points', { name: 'R' + x, position: at(x, 0) })).json().id;
+      await orga.post('/api/teams/' + t + '/missions', { pointId: p });
+    }
+    const all = async () => ((await orga.get('/api/events/' + ev + '/teams')).json() as Team[]).flatMap((t) => t.missions.map((m) => ({ ...m, team: t.id })));
+    for (const m of await all()) {
+      const r = await orga.post('/api/missions/' + m.id + '/status', { status: 'en_position', version: m.version });
+      await orga.post('/api/missions/' + m.id + '/status', { status: 'terminee', version: r.json().version });
+    }
+    // Une équipe seulement.
+    expect((await orga.post('/api/events/' + ev + '/missions/reinitialiser', { teamId: t2 })).json()).toEqual({ updated: 1 });
+    expect((await all()).map((m) => m.status).sort()).toEqual(['affectee', 'terminee', 'terminee']);
+    // Toute la manifestation ; l'ordre et les affectations sont conservés.
+    expect((await orga.post('/api/events/' + ev + '/missions/reinitialiser', {})).json()).toEqual({ updated: 2 });
+    const after = await all();
+    expect(after.every((m) => m.status === 'affectee')).toBe(true);
+    expect(after.filter((m) => m.team === t1).map((m) => m.position)).toEqual([1, 2]);
+    // Équipe d'une autre manifestation, compte sans accès.
+    expect((await orga.post('/api/events/' + ev + '/missions/reinitialiser', { teamId: 999999 })).statusCode).toBe(404);
+    await createUser(ctx.db, 'sans.droit', 'organisateur');
+    const other = new Agent(ctx.app);
+    await other.login('sans.droit');
+    expect((await other.post('/api/events/' + ev + '/missions/reinitialiser', {})).statusCode).toBe(404);
+  });
+});

@@ -80,6 +80,12 @@ export function TeamsPanel(props: PanelProps) {
         <span className="muted">Exports :</span>
         <a href={'#/evenements/' + data.event.id + '/roadbook'}>📄 Roadbook complet</a>
         <a href={'/api/events/' + data.event.id + '/roadbook.gpx'} download>GPX de tous les points</a>
+        {canEdit && teams.some((t) => t.missions.some((m) => m.status !== 'affectee')) && (
+          <button className="small" onClick={() => window.confirm('Remettre toutes les missions de la manifestation à « Affectée » ? Les affectations et l’ordre sont conservés ; les statuts actuels (en position, terminée…) sont perdus.')
+            && run(() => api.post('/api/events/' + data.event.id + '/missions/reinitialiser', {}), 'Toutes les missions sont à « Affectée ».')}>
+            ↺ Remettre toutes les missions à « Affectée »
+          </button>
+        )}
       </div>
     </div>
   );
@@ -251,7 +257,7 @@ function MissionMenu({ mission: m, team: t, data, run, onClose }: Pick<PanelProp
   );
 }
 
-function TeamSettings({ team: t, members, run }: PanelProps & { team: Team; members: Member[] }) {
+function TeamSettings({ team: t, members, run, data }: PanelProps & { team: Team; members: Member[] }) {
   const initial = () => ({
     name: t.name, color: t.color, description: t.description, instructions: t.instructions, leaderUserId: t.leaderUserId, leaderCanManage: t.leaderCanManage, kind: t.kind,
   });
@@ -286,6 +292,12 @@ function TeamSettings({ team: t, members, run }: PanelProps & { team: Team; memb
       <div className="row">
         <button className="primary">Enregistrer</button>
         <span className="grow" />
+        {t.missions.some((m) => m.status !== 'affectee') && (
+          <button type="button" onClick={() => window.confirm('Remettre toutes les missions de « ' + t.name + ' » à « Affectée » ?')
+            && run(() => api.post('/api/events/' + data.event.id + '/missions/reinitialiser', { teamId: t.id }), 'Missions de l’équipe remises à « Affectée ».')}>
+            ↺ Missions à « Affectée »
+          </button>
+        )}
         <button type="button" className={t.disabled ? '' : 'danger'}
           onClick={() => (t.disabled || window.confirm('Désactiver l’équipe « ' + t.name + ' » ? Ses membres ne pourront plus agir sur ses missions.'))
             && run(() => api.post('/api/teams/' + t.id + '/disable', { disabled: !t.disabled }), t.disabled ? 'Équipe réactivée.' : 'Équipe désactivée.')}>
