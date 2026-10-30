@@ -30,8 +30,14 @@ test('compte membre : création, activation, équipe, profil, lien de connexion,
   await page.getByRole('tab', { name: /Équipes/ }).click();
   const card = await openTeam(page, 'Équipe Nord', 'Membres');
   await card.getByLabel('Rechercher un compte à ajouter').fill('Camille');
-  await card.locator('li', { hasText: 'Camille Martin' }).getByRole('button', { name: 'Ajouter' }).click();
+  await card.locator('li', { hasText: 'Camille Martin' }).getByRole('button', { name: 'Ajouter', exact: true }).click();
   await expect(page.getByText('Camille Martin a rejoint l’équipe.')).toBeVisible();
+  // Nommée responsable, puis redevenue simple membre.
+  const row = card.locator('li', { hasText: 'Camille Martin' });
+  await row.getByRole('button', { name: 'Nommer responsable' }).click();
+  await expect(row).toContainText('(responsable)');
+  await row.getByRole('button', { name: 'Retirer « responsable »' }).click();
+  await expect(row).not.toContainText('(responsable)');
 
   // 3. Le membre active son compte sur son téléphone : sa vue terrain s'ouvre directement.
   const phoneCtx = await browser.newContext(PHONE);
@@ -86,7 +92,7 @@ test('un organisateur membre d’une équipe a aussi l’onglet « Mon équipe �
   await page.getByRole('tab', { name: /Équipes/ }).click();
   const card = await openTeam(page, 'Équipe Est', 'Membres');
   await card.getByLabel('Rechercher un compte à ajouter').fill('Admin');
-  await card.locator('li', { hasText: 'Admin E2E' }).getByRole('button', { name: 'Ajouter' }).click();
+  await card.locator('li', { hasText: 'Admin E2E' }).getByRole('button', { name: 'Ajouter', exact: true }).click();
   await expect(page.getByText('Admin E2E a rejoint l’équipe.')).toBeVisible();
   await page.getByRole('tab', { name: 'Mon équipe' }).click();
   await expect(page.getByTestId('mon-equipe')).toContainText('Équipe Est');

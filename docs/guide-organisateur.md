@@ -142,9 +142,12 @@ Chaque manifestation de la liste propose deux boutons :
 
 Dans la section **Membres** d'une équipe :
 
-- **Ajouter un membre** : cherchez la personne par son nom ou son e-mail, puis *Ajouter*. Vous pouvez ajouter les
-  comptes « membre d'équipe » et les comptes d'organisation qui ont accès à la manifestation. Seule l'organisation
-  désigne les **responsables**.
+- **Ajouter un membre** : cherchez la personne par son nom ou son e-mail, puis *Ajouter* ou **Ajouter comme
+  responsable**. Vous pouvez ajouter les comptes « membre d'équipe » et les comptes d'organisation qui ont accès à la
+  manifestation.
+- **Nommer responsable** / **Retirer « responsable »** : change le rôle d'un membre déjà dans l'équipe. Seule
+  l'organisation désigne les responsables ; ils suivent les incidents de l'équipe, et leur téléphone est affiché aux
+  membres.
 - **Lien de connexion** : pour un membre qui a perdu son accès ou changé de téléphone. Le lien vaut 72 h et ne sert
   qu'une fois ; il n'est **affiché qu'une fois**, copiez-le aussitôt et transmettez-le-lui.
 - **Retirer** : le membre perd aussitôt l'accès aux missions de l'équipe. Sa position partagée est effacée.

@@ -100,6 +100,16 @@ describe('gestion des membres par l’organisation et les responsables', () => {
     await orga.patch('/api/teams/' + teamB, { leaderCanManage: true, version: team.version });
     expect((await chef.post('/api/teams/' + teamB + '/members', { userId: nouveau })).statusCode).toBe(200);
     expect((await chef.post('/api/teams/' + teamB + '/members', { userId: nouveau, role: 'responsable' })).statusCode).toBe(403);
+    // Rôle : changé par l'organisation seulement ; un responsable ne rétrograde pas un autre responsable.
+    expect((await chef.patch('/api/teams/' + teamB + '/members/' + nouveau, { role: 'responsable' })).statusCode).toBe(403);
+    expect((await orga.patch('/api/teams/' + teamB + '/members/' + nouveau, { role: 'responsable' })).statusCode).toBe(200);
+    const roleOf = async (id: number) => (await orga.get('/api/teams/' + teamB + '/members')).json().find((x: { id: number }) => x.id === id).role;
+    expect(await roleOf(nouveau)).toBe('responsable');
+    await chef.post('/api/teams/' + teamB + '/members', { userId: nouveau, role: 'membre' });
+    expect(await roleOf(nouveau)).toBe('responsable');
+    expect((await orga.patch('/api/teams/' + teamB + '/members/' + nouveau, { role: 'membre' })).statusCode).toBe(200);
+    expect(await roleOf(nouveau)).toBe('membre');
+    expect((await orga.patch('/api/teams/' + teamB + '/members/999999', { role: 'membre' })).statusCode).toBe(404);
     // Lien de connexion pour un membre de l'équipe (téléphone perdu).
     const l = await chef.post('/api/teams/' + teamB + '/members/' + nouveau + '/lien');
     expect(l.statusCode).toBe(201);

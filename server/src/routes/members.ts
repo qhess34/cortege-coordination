@@ -157,11 +157,29 @@ export async function memberRoutes(app: FastifyInstance) {
       )).rows[0];
       if (!target) throw notFound('Compte');
       if (target.global_role !== 'membre' && !target.has_access) throw badRequest("Ce compte n'a pas accès à la manifestation.");
+      // Déjà membre : seule l'organisation change le rôle (un responsable ne rétrograde pas un autre responsable).
       await c.query(
-        'INSERT INTO team_memberships(team_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (team_id, user_id) DO UPDATE SET role = EXCLUDED.role',
+        'INSERT INTO team_memberships(team_id, user_id, role) VALUES ($1, $2, $3) ON CONFLICT (team_id, user_id) DO ' +
+          (asOrganizer ? 'UPDATE SET role = EXCLUDED.role' : 'NOTHING'),
         [teamId, b.userId, b.role],
       );
       await audit(c, { actorId: u.id, eventId, entity: 'team_membership', entityId: b.userId, action: 'ajout', details: { teamId, role: b.role } });
+      return { ok: true };
+    });
+  });
+
+  // Rôle d'un membre dans l'équipe (membre ou responsable) : organisation seulement.
+  app.patch('/api/teams/:id/members/:userId', async (req) => {
+    const u = requireUser(req);
+    const teamId = idParam(req);
+    const userId = idParam(req, 'userId');
+    const b = z.object({ role: z.enum(['membre', 'responsable']) }).parse(req.body);
+    return tx(app.db, async (c) => {
+      const { eventId, asOrganizer } = await requireTeamManager(c, u, teamId);
+      if (!asOrganizer) throw forbidden();
+      const r = await c.query('UPDATE team_memberships SET role = $3 WHERE team_id = $1 AND user_id = $2', [teamId, userId, b.role]);
+      if (!r.rowCount) throw notFound('Membre');
+      await audit(c, { actorId: u.id, eventId, entity: 'team_membership', entityId: userId, action: 'role', details: { teamId, role: b.role } });
       return { ok: true };
     });
   });

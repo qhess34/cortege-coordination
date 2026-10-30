@@ -18,7 +18,6 @@ export function TeamAccess({ teamId, organizer, onChanged }: {
   const [link, setLink] = useState<{ name: string; url: string; expiresAt: string } | null>(null);
   const [q, setQ] = useState('');
   const [found, setFound] = useState<Candidate[]>([]);
-  const [role, setRole] = useState<'membre' | 'responsable'>('membre');
   const base = '/api/teams/' + teamId;
 
   const load = useCallback(async () => setMembers(await api.get<TeamMember[]>(base + '/members')), [base]);
@@ -70,6 +69,13 @@ export function TeamAccess({ teamId, organizer, onChanged }: {
                   </span>
                   {m.phone && <> <PhoneLink phone={m.phone} name={m.displayName} /></>}
                 </span>
+                {organizer && (
+                  <button title={m.role === 'responsable' ? 'Redevient simple membre de l’équipe' : 'Peut suivre les incidents de l’équipe ; son téléphone est affiché aux membres'}
+                    onClick={() => act(() => api.patch(base + '/members/' + m.id, { role: m.role === 'responsable' ? 'membre' : 'responsable' }),
+                      m.role === 'responsable' ? m.displayName + ' n’est plus responsable.' : m.displayName + ' est responsable de l’équipe.')}>
+                    {m.role === 'responsable' ? 'Retirer « responsable »' : 'Nommer responsable'}
+                  </button>
+                )}
                 {m.globalRole === 'membre' && (
                   <button title="Lien de connexion à usage unique (nouveau téléphone, accès perdu)" onClick={async () => {
                     try {
@@ -95,12 +101,6 @@ export function TeamAccess({ teamId, organizer, onChanged }: {
         <h4>Ajouter un membre</h4>
         <div className="row small">
           <input className="grow" placeholder="Rechercher un compte (nom, e-mail)" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Rechercher un compte à ajouter" />
-          {organizer && (
-            <select value={role} onChange={(e) => setRole(e.target.value as 'membre' | 'responsable')} aria-label="Rôle dans l’équipe">
-              <option value="membre">Membre</option>
-              <option value="responsable">Responsable</option>
-            </select>
-          )}
         </div>
         {found.length > 0 ? (
           <ul className="plain small">
@@ -109,7 +109,12 @@ export function TeamAccess({ teamId, organizer, onChanged }: {
                 <span className="grow">{c.displayName}
                   <span className="muted">{c.globalRole === 'membre' ? '' : ' · compte d’organisation'}{c.otherTeams ? ' · déjà dans : ' + c.otherTeams : ''}</span>
                 </span>
-                <button onClick={() => act(() => api.post(base + '/members', { userId: c.id, role }), c.displayName + ' a rejoint l’équipe.')}>Ajouter</button>
+                <button onClick={() => act(() => api.post(base + '/members', { userId: c.id, role: 'membre' }), c.displayName + ' a rejoint l’équipe.')}>Ajouter</button>
+                {organizer && (
+                  <button onClick={() => act(() => api.post(base + '/members', { userId: c.id, role: 'responsable' }), c.displayName + ' a rejoint l’équipe comme responsable.')}>
+                    Ajouter comme responsable
+                  </button>
+                )}
               </li>
             ))}
           </ul>
