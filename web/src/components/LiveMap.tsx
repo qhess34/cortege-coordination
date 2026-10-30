@@ -3,7 +3,7 @@ import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MlMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import workerUrl from 'maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { BASEMAPS } from '../basemaps';
 import { MISSION_STATUS } from '../labels';
 import type { Position } from '../types';
@@ -32,6 +32,7 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
   const latest = useRef({ track, points, incidents, members });
   latest.current = { track, points, incidents, members };
   const fitted = useRef(false);
+  const [basemapError, setBasemapError] = useState(false);
 
   const sync = () => {
     const m = map.current;
@@ -61,10 +62,12 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
       mk.setLngLat(p.position);
     }
     for (const [id, mk] of markers.current) if (!seen.has(id)) { mk.remove(); markers.current.delete(id); }
-    if (!fitted.current && d.track.length) {
+    // Cadrage initial sur le parcours, ou à défaut sur les points.
+    const extent = d.track.length ? d.track.flat() : d.points.map((p) => p.position);
+    if (!fitted.current && extent.length) {
       const b = new maplibregl.LngLatBounds();
-      for (const s of d.track) for (const p of s) b.extend(p);
-      m.fitBounds(b, { padding: 30, duration: 0 });
+      for (const p of extent) b.extend(p);
+      m.fitBounds(b, { padding: 30, duration: 0, maxZoom: 17 });
       fitted.current = true;
     }
   };
@@ -83,6 +86,12 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
     });
     map.current = m;
     m.touchZoomRotate.disableRotation();
+    // Le conteneur peut changer de taille (rotation, barre d'adresse, onglet affiché) : la carte suit.
+    const ro = new ResizeObserver(() => m.resize());
+    ro.observe(el.current);
+    // Tuiles de fond qui ne se chargent pas (réseau, fournisseur) : signalé sous la carte.
+    m.on('error', (e) => { if ((e as { sourceId?: string }).sourceId || /tile|Failed to fetch/i.test(String(e.error?.message))) setBasemapError(true); });
+    m.on('data', (e) => { if ((e as { dataType?: string; tile?: unknown }).dataType === 'source' && (e as { tile?: unknown }).tile) setBasemapError(false); });
     m.on('load', () => {
       for (const id of ['parcours', 'points', 'incidents']) m.addSource(id, { type: 'geojson', data: fc([]) });
       m.addLayer({ id: 'parcours', type: 'line', source: 'parcours', paint: { 'line-color': '#1d3557', 'line-width': 5, 'line-opacity': 0.55 } });
@@ -101,7 +110,7 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
       if (vector?.style) loadVectorBasemap(m, vector.style, 'parcours').catch(fallback);
       else fallback();
     });
-    return () => { ready.current = false; for (const mk of markers.current.values()) mk.remove(); markers.current.clear(); m.remove(); map.current = null; };
+    return () => { ro.disconnect(); ready.current = false; for (const mk of markers.current.values()) mk.remove(); markers.current.clear(); m.remove(); map.current = null; };
     // La carte est créée une fois ; les données suivent par sync().
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -110,6 +119,7 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
   return (
     <div className="stack">
       <div ref={el} className="live-map" data-testid="carte-direct" />
+      {basemapError && <p className="warning small" role="status">Le fond de carte ne se charge pas (connexion ou fournisseur de tuiles) : le parcours et les points restent affichés.</p>}
       <p className="legend small">
         {['en_deplacement', 'en_position', 'releve_necessaire', 'incident', 'affectee'].map((s) => (
           <span key={s}><span className="dot" style={{ background: STATUS_COLOR[s] }} /> {MISSION_STATUS[s]}</span>
