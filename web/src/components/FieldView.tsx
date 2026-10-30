@@ -44,7 +44,7 @@ export interface Terrain {
   /** Peut ajouter ou retirer des membres depuis la vue terrain (responsable autorisé, organisation). */
   canManageMembers: boolean;
   /** Points tenus par toutes les équipes (équipes sans point fixe). */
-  eventPoints: { name: string; position: Position; distance: number | null; status: string; teamName: string; color: string }[];
+  eventPoints: { missionId: number; statusChangedAt: string | null; name: string; position: Position; distance: number | null; status: string; teamName: string; color: string }[];
   /** Partage de position autorisé par l'organisation ; `sharing` : ce compte partage actuellement. */
   locationSharing: boolean;
   sharing: boolean;
@@ -82,15 +82,22 @@ export function gpsLink(to: Position, label: string, ua = navigator.userAgent): 
   return { href: 'https://www.google.com/maps/dir/?api=1&destination=' + lat + ',' + lon + '&travelmode=walking', external: true };
 }
 
-/** Lien qui ouvre l'application GPS vers le lieu d'un incident (position signalée, sinon le point concerné). */
-function JoinButton({ incident: i }: { incident: FieldIncident }) {
-  const label = (INCIDENT_CATEGORY[i.category] ?? 'Incident') + (i.pointName ? ' · ' + i.pointName : '');
-  const l = gpsLink(i.position!, label);
+/** Grand lien qui ouvre l'application GPS du téléphone vers une position. */
+function GpsLink({ to, label, children }: { to: Position; label: string; children: ReactNode }) {
+  const l = gpsLink(to, label);
   return (
     <a className="button big primary" href={l.href} {...(l.external ? { target: '_blank', rel: 'noreferrer' } : {})}
-      aria-label={'Rejoindre le lieu : ' + label}>
+      aria-label={'Rejoindre le lieu : ' + label}>{children}</a>
+  );
+}
+
+/** Lien GPS vers le lieu d'un incident (position signalée, sinon le point concerné). */
+function JoinButton({ incident: i }: { incident: FieldIncident }) {
+  const label = (INCIDENT_CATEGORY[i.category] ?? 'Incident') + (i.pointName ? ' · ' + i.pointName : '');
+  return (
+    <GpsLink to={i.position!} label={label}>
       🧭 Rejoindre le lieu{i.positionSource === 'point' ? ' (point « ' + i.pointName + ' »)' : ' signalé'}
-    </a>
+    </GpsLink>
   );
 }
 
@@ -146,6 +153,22 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
   const next = data && current ? data.missions.find((m) => m.order > current.order && m.status !== 'terminee') ?? null : null;
   const unread = data?.messages.filter((m) => m.read === false).length ?? 0;
   const openIncidents = data?.incidents.filter((i) => i.status !== 'resolu').length ?? 0;
+
+  // Équipe volante : une nouvelle demande d'aide ou de relève fait vibrer le téléphone et s'annonce (pas au chargement).
+  const alerts = useRef<Set<string> | null>(null);
+  useEffect(() => {
+    if (!data || data.team.kind !== 'volante') return;
+    const now = [
+      ...data.incidents.filter((i) => i.category === 'aide' && i.status !== 'resolu').map((i) => ({ key: 'aide-' + i.id, text: '🆘 Besoin d’aide' + (i.pointName ? ' · ' + i.pointName : '') })),
+      ...data.eventPoints.filter((p) => p.status === 'releve_necessaire').map((p) => ({ key: 'releve-' + p.missionId, text: '🔄 Relève nécessaire · ' + p.name })),
+    ];
+    const fresh = alerts.current ? now.filter((a) => !alerts.current!.has(a.key)) : [];
+    alerts.current = new Set(now.map((a) => a.key));
+    if (fresh.length) {
+      setToast({ kind: 'error', text: fresh.map((a) => a.text).join(' — ') });
+      try { navigator.vibrate?.([300, 150, 300]); } catch { /* vibration indisponible */ }
+    }
+  }, [data]);
 
   // Messages lus quand l'onglet est affiché.
   useEffect(() => {
@@ -408,6 +431,13 @@ function RoleCard({ data, openIncidents }: { data: Terrain; openIncidents: () =>
               <p><b>🆘 Besoin d’aide</b>{i.pointName ? ' · ' + i.pointName : ''}{i.teamName ? ' (' + i.teamName + ')' : ''} · {ago(i.createdAt)}
                 {i.handledByName && i.status === 'pris_en_charge' ? <span className="muted"> · pris en charge par {i.handledByName}</span> : null}</p>
               <JoinButton incident={i} />
+            </div>
+          ))}
+          {/* Relèves demandées : l'équipe volante peut aller relever le point. */}
+          {data.eventPoints.filter((p) => p.status === 'releve_necessaire').map((p) => (
+            <div key={p.missionId} className="sos-alert releve" data-testid={'releve-' + p.missionId}>
+              <p><b>🔄 Relève nécessaire</b> · {p.name} ({p.teamName}){p.statusChangedAt ? ' · ' + ago(p.statusChangedAt) : ''}</p>
+              <GpsLink to={p.position} label={'Relève · ' + p.name}>🧭 Rejoindre le point « {p.name} »</GpsLink>
             </div>
           ))}
           <button className="big primary" onClick={openIncidents}>{open.length ? open.length + ' incident(s) en cours' : 'Aucun incident en cours'}</button>

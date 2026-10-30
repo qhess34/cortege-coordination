@@ -71,7 +71,8 @@ coupée et les informations datent de ce moment-là.
 
 - **Équipe volante** : vous n'avez pas de point fixe. Les **demandes d'aide (🆘)** en cours s'affichent en rouge en
   haut de l'écran *Mission*, avec **🧭 Rejoindre le lieu**, qui ouvre votre application GPS vers la position envoyée
-  ou, à défaut, vers le point de l'équipe qui a demandé de l'aide. Tous les incidents de la manifestation sont dans
+  ou, à défaut, vers le point de l'équipe qui a demandé de l'aide. Les **relèves nécessaires** s'y affichent aussi
+  (en orange), avec **🧭 Rejoindre le point**. Une nouvelle demande fait vibrer le téléphone. Tous les incidents de la manifestation sont dans
   *Incidents* : touchez **J'y vais** pour indiquer que vous intervenez, et **Résolu** une fois réglé.
 - **Ouverture** : vous marchez en tête. Si vous partagez votre position, la tête du cortège avance **toute seule**.
   Sinon, touchez régulièrement **📍 La tête est ici**, ou indiquez les km parcourus.

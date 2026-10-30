@@ -12,10 +12,10 @@ async function phoneFor(browser: Browser, path: string, position: [number, numbe
   });
   const p = await ctx.newPage();
   await signIn(p, path);
-  return { ctx, field: p.getByTestId('vue-terrain') };
+  return { ctx, page: p, field: p.getByTestId('vue-terrain') };
 }
 
-test('fermeture : « la queue est ici » ; volante : lien vers le lieu du SOS, prend en charge l’incident d’une autre équipe', async ({ page, browser }) => {
+test('fermeture : « la queue est ici » ; volante : lien vers le lieu du SOS et de la relève, prend en charge l’incident d’une autre équipe', async ({ page, browser }) => {
   await page.addInitScript(() => { localStorage.setItem('cortege.fond', 'osm'); localStorage.setItem('cortege.panoramax', 'non'); });
   await page.request.post('/api/auth/login', { data: { login: 'admin', password: 'admin-e2e-motdepasse' }, headers: H });
   const ev = await (await page.request.post('/api/events', { data: { name: 'Équipes mobiles' }, headers: H })).json();
@@ -70,5 +70,21 @@ test('fermeture : « la queue est ici » ; volante : lien vers le lieu du SOS, p
   // L'équipe Poste voit qui vient.
   await poste.field.getByRole('tab', { name: /Incidents/ }).click();
   await expect(poste.field.getByTestId('incidents')).toContainText('Pris en charge par Victor');
+  // Relève demandée au point de l'équipe Poste : l'équipe volante est prévenue, avec le lien GPS vers le point.
+  await vol.field.getByRole('tab', { name: 'Mission' }).click();
+  const teamsNow = await (await page.request.get('/api/events/' + ev.id + '/teams')).json();
+  const m = teamsNow.find((x: { id: number }) => x.id === fixe.id).missions[0];
+  let version = m.version;
+  if (m.status !== 'en_position' && m.status !== 'incident') {
+    version = (await (await page.request.post('/api/missions/' + m.id + '/status', { data: { status: 'en_position', version }, headers: H })).json()).version;
+  }
+  const r = await page.request.post('/api/missions/' + m.id + '/status', { data: { status: 'releve_necessaire', version }, headers: H });
+  expect(r.ok(), await r.text()).toBe(true);
+  await expect(vol.page.getByRole('status').filter({ hasText: 'Relève nécessaire · Carrefour Poste' })).toBeVisible();
+  const releve = vol.field.getByTestId('releve-' + m.id);
+  await expect(releve).toContainText('Relève nécessaire · Carrefour Poste (Équipe Poste)');
+  const toPoint = releve.getByRole('link', { name: /Rejoindre le lieu/ });
+  await expect(toPoint).toContainText('Rejoindre le point « Carrefour Poste »');
+  expect(await toPoint.getAttribute('href')).toContain(plat.toFixed(6) + ',' + plon.toFixed(6));
   for (const c of [balai, poste, vol]) await c.ctx.close();
 });

@@ -167,7 +167,7 @@ export async function terrainRoutes(app: FastifyInstance) {
       latestProgress(app.db, eventId, 'queue'),
       // Équipes sans point fixe (volante, ouverture, fermeture) : tous les points tenus, pour s'orienter.
       access.kind === 'points' ? Promise.resolve(null) : app.db.query(
-        `SELECT p.name, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat, p.distance_m, m.status, t.name AS team_name, t.color
+        `SELECT m.id, m.status_changed_at, p.name, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat, p.distance_m, m.status, t.name AS team_name, t.color
            FROM missions m JOIN mission_points p ON p.id = m.mission_point_id JOIN teams t ON t.id = m.team_id
           WHERE m.event_id = $1 AND m.cancelled_at IS NULL AND t.disabled_at IS NULL ORDER BY p.distance_m NULLS LAST`,
         [eventId],
@@ -194,6 +194,7 @@ export async function terrainRoutes(app: FastifyInstance) {
         passedByTail: passed(tail, m.distance_m),
       })),
       eventPoints: eventPoints ? eventPoints.rows.map((p) => ({
+        missionId: p.id, statusChangedAt: p.status_changed_at,
         name: p.name, position: [p.lon, p.lat], distance: p.distance_m, status: p.status, teamName: p.team_name, color: p.color,
       })) : [],
       messages: messages.rows.map(publicMessage),

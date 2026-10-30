@@ -405,3 +405,4 @@ button.icon { padding: .1rem .4rem; min-width: 1.8rem; }
 a.button.big.next-point { gap: .3rem; font-weight: 500; }
 .sos-alert { border: 2px solid #d62828; background: #fdecea; border-radius: 8px; padding: .5rem .6rem; display: flex; flex-direction: column; gap: .4rem; }
 .sos-alert p { margin: 0; }
+.sos-alert.releve { border-color: #f4a261; background: #fff4e8; }
