@@ -1,5 +1,5 @@
 // Tableau de bord partagé du jour J : progression du cortège, incidents, état des équipes, messages.
-import { Fragment, useCallback, useEffect, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useState, type FormEvent } from 'react';
 import { ApiError, api } from '../../api';
 import { INCIDENT_CATEGORY, INCIDENT_STATUS, type FieldIncident, type Progress } from '../../components/FieldView';
 import { MISSION_STATUS, TEAM_KIND, TEAM_KIND_SHORT, km } from '../../labels';
@@ -22,8 +22,6 @@ export interface Tableau {
   incidents: (FieldIncident & { teamName: string | null; position: Position | null })[];
   progress: Progress | null;
   tail: Progress | null;
-  progressHistory: (Progress & { part: 'tete' | 'queue' })[];
-  canDeclare: { tete: boolean; queue: boolean };
   live: number;
 }
 interface OrgMessage { id: number; teamId: number | null; teamName: string | null; body: string; urgent: boolean; createdAt: string; authorName: string; fromOrganisation: boolean; reads: number; recipients: number }
@@ -84,7 +82,6 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
 
   if (!t) return <p className="muted">{error ?? 'Chargement…'}</p>;
   const all = t.teams.flatMap((x) => x.missions);
-  const count = (s: string) => all.filter((m) => m.status === s).length;
   // Points dépassés par la queue du cortège mais encore tenus.
   const toRelease = all.filter((m) => m.passedByTail && m.status !== 'terminee').length;
 
@@ -94,8 +91,6 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
 
       {show('synthese') && <>
       <div className="grid-stats">
-        <div className="stat"><b>{count('en_position')}/{all.length}</b><span>En position</span></div>
-        <div className="stat"><b>{count('en_deplacement')}</b><span>En route</span></div>
         <div className="stat"><b className={t.incidents.length ? 'alert' : ''}>{t.incidents.length}</b><span>Incidents ouverts</span></div>
         <div className="stat"><b>{t.progress ? km(t.progress.distance) : '—'}</b><span>Tête du cortège</span></div>
         <div className="stat"><b>{t.tail ? km(t.tail.distance) : '—'}</b><span>Queue du cortège</span></div>
@@ -104,7 +99,6 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
 
       <NextPoints t={t} />
       <TeamsStatus eventId={eventId} t={t} canEdit={canEdit} act={act} />
-      <ProgressCard eventId={eventId} t={t} act={act} />
       </>}
 
       {show('incidents') && <div className="card">
@@ -167,46 +161,6 @@ export function CoordinationPanel({ event, canEdit, liveTick, members, sections 
 
       {show('messages') && <MessagesCard eventId={eventId} teams={t.teams} messages={messages} canEdit={canEdit} act={act} />}
       {show('synthese') && <p className="muted small">{t.live} écran(s) connecté(s) en direct à cette manifestation.</p>}
-    </div>
-  );
-}
-
-function ProgressCard({ eventId, t, act }: { eventId: number; t: Tableau; act: (fn: () => Promise<unknown>, ok: string) => Promise<boolean> }) {
-  const [part, setPart] = useState<'tete' | 'queue'>('tete');
-  const [value, setValue] = useState('');
-  const [note, setNote] = useState('');
-  const submit = async (e: FormEvent) => {
-    e.preventDefault();
-    const ok = await act(() => api.post('/api/events/' + eventId + '/progression', { part, distance: Math.round(Number(value.replace(',', '.')) * 1000), note }),
-      (part === 'tete' ? 'Tête' : 'Queue') + ' du cortège déclarée.');
-    if (ok) { setValue(''); setNote(''); }
-  };
-  const line = (label: string, p: Progress | null) => (
-    p ? <p>{label} au <b>{km(p.distance)}</b> — {ago(p.at)}{p.authorName ? ' par ' + p.authorName : ''}{p.note ? ' · ' + p.note : ''}</p>
-      : <p className="muted">{label} : non déclarée.</p>
-  );
-  return (
-    <div className="card">
-      <h3>Progression du cortège</h3>
-      <p className="muted small">Calculée automatiquement à partir des positions partagées des équipes d’ouverture (tête) et de fermeture (queue), ou déclarée à la main. Indicative : à confirmer sur le terrain.</p>
-      {line('Tête', t.progress)}
-      {line('Queue', t.tail)}
-      {(t.canDeclare.tete || t.canDeclare.queue) && (
-        <form className="row" onSubmit={submit}>
-          <select value={part} onChange={(e) => setPart(e.target.value as 'tete' | 'queue')} aria-label="Partie du cortège">
-            {t.canDeclare.tete && <option value="tete">Tête</option>}
-            {t.canDeclare.queue && <option value="queue">Queue</option>}
-          </select>
-          <input inputMode="decimal" placeholder="km (ex. 2,4)" value={value} onChange={(e) => setValue(e.target.value)} required pattern="\d+([.,]\d+)?" aria-label="Distance parcourue en km" />
-          <input className="grow" placeholder="Repère (facultatif)" value={note} onChange={(e) => setNote(e.target.value)} maxLength={300} />
-          <button>Déclarer</button>
-        </form>
-      )}
-      {t.progressHistory.length > 1 && (
-        <details><summary className="small">Historique</summary>
-          <dl className="kv small">{t.progressHistory.map((p, i) => <Fragment key={i}><dt>{ago(p.at)}</dt><dd>{p.part === 'queue' ? 'Queue' : 'Tête'} · {km(p.distance)}{p.note ? ' · ' + p.note : ''}</dd></Fragment>)}</dl>
-        </details>
-      )}
     </div>
   );
 }

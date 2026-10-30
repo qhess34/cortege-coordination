@@ -36,7 +36,7 @@ Chaque manifestation de la liste propose deux boutons :
   parcours, suggestions, points, équipes, membres, roadbooks.
 - **📱 Coordination en direct** : l'interface du jour J, pensée pour le **téléphone**. Une barre d'onglets en bas
   d'écran donne accès à :
-  - *Direct* : compteurs et progression du cortège ;
+  - *Direct* : compteurs, prochains points et état des équipes ;
   - *Incidents*, avec un badge du nombre d'incidents ouverts ;
   - *Équipes* : statut de chaque point ;
   - *Messages* ;
@@ -174,7 +174,7 @@ Sur téléphone, préférez **📱 Coordination en direct** : mêmes information
 tout s'y met à jour **en direct**. L'indicateur **● direct** à côté du nom de la manifestation le confirme ; en cas de
 coupure, l'écran se recharge toutes les 30 secondes.
 
-- **Compteurs** : points en position, en route, incidents ouverts, tête et queue du cortège, **points à lever**.
+- **Compteurs** : incidents ouverts, tête et queue du cortège, **points à lever**.
 - **Prochains points devant la tête** : les six points suivants sur le parcours, avec la distance depuis la tête, leurs
   équipes et leur état, le plus grave d'abord : **🆘 Besoin d'aide** (demande d'aide en cours), **⚠ Incident**,
   *Relève nécessaire*, **✓ Équipe en position**, *Personne · équipe en route*, **Personne** (aucune équipe sur place),
@@ -185,9 +185,9 @@ coupure, l'écran se recharge toutes les 30 secondes.
 - **Progression du cortège** : si le partage de position est autorisé, la tête et la queue avancent **automatiquement**
   avec les positions des membres de l'**ouverture** (le plus avancé) et de la **fermeture** (le plus en arrière),
   ramenées sur le parcours (au plus une mise à jour par minute ; positions à plus de 150 m du parcours ou trop
-  imprécises ignorées). Sinon, ou pour corriger, elles se déclarent à la main en km parcourus, par l'organisation,
-  l'ouverture (tête) ou la fermeture (queue). Chaque membre voit à quelle distance la tête se trouve de son point.
-  C'est une indication, à confirmer sur le terrain.
+  imprécises ignorées). Sinon, l'ouverture (tête) et la fermeture (queue) la déclarent depuis leur vue terrain, en km
+  parcourus ou « 📍 ici ». Les compteurs *Tête* et *Queue* de l'écran *Direct* la reprennent ; chaque membre voit à
+  quelle distance la tête se trouve de son point. C'est une indication, à confirmer sur le terrain.
 - **Incidents** : les prioritaires (aide, santé, sécurité) en premier. *Je m'en occupe* indique à l'équipe que c'est
   pris en charge, *Résolu* clôt l'incident. L'équipe volante peut aussi les prendre en charge ; elle a un lien **🧭 Rejoindre le lieu** vers chaque demande d'aide.
 - **Équipes** : statut de chaque point (qui l'a changé, quand), nombre de membres actifs, badge **à lever** quand la

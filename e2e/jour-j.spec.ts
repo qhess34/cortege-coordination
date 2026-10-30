@@ -70,9 +70,8 @@ test('jour J : statut, aide, message urgent et progression circulent en direct',
   await field.getByRole('button', { name: 'Envoyer' }).click();
   await expect(orgaMsgs).toContainText('Bien reçu, on est en place');
 
-  // 4. Progression déclarée par l'organisation → distance au point sur le téléphone.
-  await coord.getByLabel('Distance parcourue en km').fill('0,1');
-  await coord.getByRole('button', { name: 'Déclarer' }).click();
+  // 4. Progression (déclarée ici par l'API, sinon calculée par les positions) → distance au point sur le téléphone.
+  await page.request.post('/api/events/' + ev.id + '/progression', { data: { part: 'tete', distance: 100 }, headers: H });
   await field.getByRole('tab', { name: 'Mission' }).click();
   await expect(field.getByTestId('progression')).toContainText('0,10 km');
   await expect(field.getByTestId('ma-mission')).toContainText('Tête du cortège à 100 m de ce point.');

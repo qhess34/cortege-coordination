@@ -151,13 +151,13 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
     (≤ 100 m) et à moins de 150 m du parcours comptent ; sur une boucle, le passage le plus proche de la progression
     précédente est retenu. Une mise à jour par minute au plus, et seulement si elle a bougé d'au moins 20 m ; elle
     est enregistrée sans auteur ni coordonnées.
-  - **Déclarée** sinon, ou pour corriger : par l'organisation (tête et queue), l'ouverture ou les responsables
-    (tête), la fermeture (queue), en km parcourus ou « 📍 ici » (position du téléphone ramenée sur le parcours).
+  - **Déclarée** sinon, depuis la vue terrain : par l'ouverture ou les responsables (tête), la fermeture (queue), en
+    km parcourus ou « 📍 ici » (position du téléphone ramenée sur le parcours).
   - C'est une indication, à confirmer sur le terrain.
-- **Onglet « Coordination »** de l'organisation : compteurs, **prochains points devant la tête** et leur état (équipe en position,
+- **Onglet « Coordination »** de l'organisation : compteurs (incidents, tête, queue, points à lever), **prochains points devant la tête** et leur état (équipe en position,
   personne, besoin d'aide, incident),
   **statut résumé de chaque équipe** avec raccourcis vers son responsable (appel, SMS, message dans l'application),
-  incidents ouverts, état de chaque mission par équipe, membres actifs, messages, progression — tout se met à jour
+  incidents ouverts, état de chaque mission par équipe, membres actifs, messages — tout se met à jour
   **en direct**.
 - **Direct** : WebSocket `/api/direct?event=<id>` qui envoie un simple signal « mise à jour » après chaque modification
   validée ; l'écran recharge ce que ses droits lui permettent de voir (le signal ne contient aucune donnée). En cas de

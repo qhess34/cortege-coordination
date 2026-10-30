@@ -422,7 +422,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     const u = requireUser(req);
     const eventId = idParam(req);
     await requireEventRole(app.db, u, eventId, 'lecture');
-    const [teams, missions, presence, incidents, progress, tail, history] = await Promise.all([
+    const [teams, missions, presence, incidents, progress, tail] = await Promise.all([
       app.db.query('SELECT id, name, color, disabled_at, kind FROM teams WHERE event_id = $1 ORDER BY name', [eventId]),
       app.db.query(
         `SELECT m.id, m.team_id, m.version, m.position, m.status, m.status_changed_at, m.mission_point_id, p.name, p.distance_m, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat,
@@ -443,11 +443,6 @@ export async function terrainRoutes(app: FastifyInstance) {
       app.db.query(INCIDENT_SELECT + " WHERE i.event_id = $1 AND i.status <> 'resolu' ORDER BY (i.priority = 'haute') DESC, i.created_at", [eventId]),
       latestProgress(app.db, eventId, 'tete'),
       latestProgress(app.db, eventId, 'queue'),
-      app.db.query(
-        `SELECT g.distance_m, g.note, g.created_at, g.part, u.display_name FROM event_progress g LEFT JOIN users u ON u.id = g.author_id
-          WHERE g.event_id = $1 ORDER BY g.created_at DESC, g.id DESC LIMIT 20`,
-        [eventId],
-      ),
     ]);
     const pres = new Map(presence.rows.map((p) => [p.team_id, p]));
     // Numéros des membres (renseignés dans les profils), pour l'organisation seulement.
@@ -497,8 +492,6 @@ export async function terrainRoutes(app: FastifyInstance) {
       incidents: incidents.rows.map(publicIncident),
       progress,
       tail,
-      progressHistory: history.rows.map((g) => ({ part: g.part, distance: g.distance_m, note: g.note, at: g.created_at, authorName: g.display_name })),
-      canDeclare: await canDeclare(app.db, u, eventId),
       live: app.live.count(eventId),
     };
   });

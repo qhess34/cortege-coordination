@@ -134,7 +134,6 @@ describe('progression déclarée', () => {
     expect((await alice.get('/api/terrain/equipes/' + teamA)).json().progress.distance).toBe(150);
     const t = (await orga.get('/api/events/' + eventId + '/tableau')).json();
     expect(t.progress.distance).toBe(150);
-    expect(t.progressHistory).toHaveLength(1);
     expect(t.teams.find((x: { id: number }) => x.id === teamA)).toMatchObject({ members: 1 });
   });
 });

@@ -59,7 +59,8 @@ test('connecter son téléphone par QR code, puis coordonner en direct depuis le
   await phone.getByTestId('manifestation-' + ev.id).getByRole('link', { name: '📱 Coordination en direct' }).click();
   const live = phone.getByTestId('coordination-mobile');
   await expect(live.locator('.sync')).toHaveText('● direct');
-  await expect(live).toContainText('En position');
+  await expect(live).toContainText('Incidents ouverts');
+  await expect(live).not.toContainText('Progression du cortège');
   await live.getByRole('tab', { name: /Équipes/ }).click();
   await expect(live.getByTestId('coord-equipe-' + team.id)).toContainText('Quai');
 
