@@ -21,13 +21,13 @@ test('direct : statut des équipes, appel / SMS / message au responsable, procha
   // Responsable de Nord avec un téléphone.
   const chef = await (await page.request.post('/api/admin/users', { data: { globalRole: 'membre', firstName: 'Alex', lastName: 'Chef', phone: '06 12 34 56 78' }, headers: H })).json();
   await page.request.post('/api/teams/' + nord.id + '/members', { data: { userId: chef.id, role: 'responsable' }, headers: H });
-  // Statuts : Nord en route, Sud avec un incident ; tête du cortège à 300 m.
+  // Statuts : Nord en route, Sud en position ; tête du cortège à 300 m.
   await page.request.post('/api/missions/' + missions['Rue B']!.id + '/status', { data: { status: 'en_deplacement', version: missions['Rue B']!.version }, headers: H });
-  const c = await (await page.request.post('/api/missions/' + missions['Rue C']!.id + '/status', { data: { status: 'en_position', version: missions['Rue C']!.version }, headers: H })).json();
-  await page.request.post('/api/missions/' + missions['Rue C']!.id + '/status', { data: { status: 'incident', version: c.version }, headers: H });
+  await page.request.post('/api/missions/' + missions['Rue C']!.id + '/status', { data: { status: 'en_position', version: missions['Rue C']!.version }, headers: H });
   await page.request.post('/api/missions/' + missions['Rue E']!.id + '/status', { data: { status: 'en_position', version: missions['Rue E']!.version }, headers: H });
-  // Demande d'aide au point D (l'organisation agit comme responsable de l'équipe).
-  await page.request.post('/api/terrain/equipes/' + sud.id + '/incidents', { data: { category: 'aide', description: 'Aide', missionId: missions['Rue D']!.id }, headers: H });
+  // SOS au point D (l'organisation agit comme responsable de l'équipe).
+  const sosTypes = await (await page.request.get('/api/events/' + ev.id + '/sos-types', { headers: H })).json();
+  await page.request.post('/api/terrain/equipes/' + sud.id + '/sos', { data: { typeId: sosTypes[0].id, message: 'Renforts', missionId: missions['Rue D']!.id }, headers: H });
   await page.request.post('/api/events/' + ev.id + '/progression', { data: { part: 'tete', distance: 300 }, headers: H });
 
   await page.setViewportSize({ width: 390, height: 844 });
@@ -41,7 +41,7 @@ test('direct : statut des équipes, appel / SMS / message au responsable, procha
   await expect(n.getByRole('link', { name: 'Appeler Alex Chef' })).toHaveAttribute('href', 'tel:0612345678');
   await expect(n.getByRole('link', { name: 'SMS à Alex Chef' })).toHaveAttribute('href', 'sms:0612345678');
   const s = etat.getByTestId('etat-equipe-' + sud.id);
-  await expect(s).toContainText('Incident signalé');
+  await expect(s).toContainText('1/2 en position'); // l'état d'équipe suit les missions ; le SOS est à part
   await expect(s).toContainText('Pas de responsable');
 
   // Message à l'équipe depuis l'application.
@@ -60,14 +60,14 @@ test('direct : statut des équipes, appel / SMS / message au responsable, procha
   await expect(rows.nth(0)).toContainText('Rue B');
   await expect(rows.nth(0)).toContainText('Personne · équipe en route');
   await expect(rows.nth(1)).toContainText('Rue C');
-  await expect(rows.nth(1)).toContainText('Incident');
+  await expect(rows.nth(1)).toContainText('Équipe en position');
   await expect(rows.nth(2)).toContainText('Rue E');
   await expect(rows.nth(2)).toContainText('Équipe en position');
   await expect(rows.nth(3)).toContainText('Rue D');
-  await expect(rows.nth(3)).toContainText('Besoin d’aide');
+  await expect(rows.nth(3)).toContainText('SOS'); // SOS ouvert sur le point D
   await expect(next).not.toContainText('Rue A');
 
   // Carte : le SOS du point D est affiché.
   await page.getByRole('tab', { name: /Carte/ }).click();
-  await expect(page.getByTestId('carte-direct').locator('.incident-marker.sos')).toContainText('SOS · Rue D');
+  await expect(page.getByTestId('carte-direct').locator('.incident-marker.sos')).toContainText('Besoin de renforts · Rue D');
 });

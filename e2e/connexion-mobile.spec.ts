@@ -59,24 +59,25 @@ test('connecter son téléphone par QR code, puis coordonner en direct depuis le
   await phone.getByTestId('manifestation-' + ev.id).getByRole('link', { name: '📱 Coordination en direct' }).click();
   const live = phone.getByTestId('coordination-mobile');
   await expect(live.locator('.sync')).toHaveText('● direct');
-  await expect(live).toContainText('Incidents ouverts');
+  await expect(live).toContainText('SOS ouverts');
   await expect(live).not.toContainText('Progression du cortège');
   await live.getByRole('tab', { name: /Équipes/ }).click();
   await expect(live.getByTestId('coord-equipe-' + team.id)).toContainText('Quai');
 
-  // Un membre signale un besoin d'aide : badge et incident sur le téléphone de l'organisation, sans recharger.
+  // Un membre déclenche un SOS : badge et SOS sur le téléphone de l'organisation, sans recharger.
   const memberCtx = await browser.newContext(PHONE);
   const member = await memberCtx.newPage();
   await signIn(member, inv.path);
-  await member.getByTestId('vue-terrain').getByRole('button', { name: /Aide/ }).click();
-  const incidentsTab = live.getByRole('tab', { name: /Incidents/ });
-  await expect(incidentsTab.locator('.count')).toHaveText('1');
-  await incidentsTab.click();
-  await expect(live).toContainText('Besoin d’aide · PRIORITAIRE');
-  await live.getByRole('button', { name: 'Je m’en occupe' }).click();
+  await member.getByTestId('vue-terrain').getByRole('button', { name: /🆘 SOS/ }).click();
+  await member.getByTestId('vue-terrain').getByRole('button', { name: /Envoyer le SOS/ }).click();
+  const sosTab = live.getByRole('tab', { name: /SOS/ });
+  await expect(sosTab.locator('.count')).toHaveText('1');
+  await sosTab.click();
+  await expect(live).toContainText('Besoin de renforts');
+  await live.getByRole('button', { name: 'Résolu' }).click();
   const field = member.getByTestId('vue-terrain');
-  await field.getByRole('tab', { name: /Incidents/ }).click();
-  await expect(field.getByTestId('incidents')).toContainText('Pris en charge par Admin E2E');
+  await field.getByRole('tab', { name: /SOS/ }).click();
+  await expect(field.getByTestId('sos')).toContainText('Résolu');
 
   // Carte et retour à la planification.
   await live.getByRole('tab', { name: /Carte/ }).click();

@@ -82,11 +82,12 @@ distinctes**. Valider une suggestion crée un point opérationnel qui la référ
 | `map_suggestions` | Suggestions OSM | `stable_key` unique par événement ; statut ∈ `a_examiner`, `validee`, `ecartee` ; motif, attributs, incertitudes ; `last_seen_analysis_id` |
 | `mission_points` | Points opérationnels | Origine ∈ `suggestion`, `manuel`, `import` ; `distance_m` ; `place_id` (carrefour) ; `deleted_at` (suppression logique tant que l'historique en dépend) |
 | `places` | Carrefours : accès regroupés | Nom, centre, nœud OSM d'origine (regroupement automatique) ou regroupement manuel ; sert au GPX et au suivi |
-| `missions` | Affectation point ↔ équipe, ordonnée | `position` ; statut ∈ `a_preparer`, `affectee`, `en_deplacement`, `en_position`, `terminee`, `releve_necessaire`, `incident` ; `version` (verrou optimiste) |
+| `missions` | Affectation point ↔ équipe, ordonnée | `position` ; statut ∈ `a_preparer`, `affectee`, `en_deplacement`, `en_position`, `terminee`, `releve_necessaire` ; `version` (verrou optimiste) |
 | `sessions` | Sessions | Hash du jeton, expiration (glissante ; plusieurs jours pour un membre), `revoked_at`, dernière activité |
 | `login_links` | Liens de connexion à usage unique | Seul le **hash** du jeton est stocké ; origine ∈ `appareil`, `admin`, `email`, `equipe` ; expiration ; `used_at` |
 | `messages`, `message_receipts` | Communication ciblée, accusés de réception | Fil d'équipe ou annonce à tous ; urgent |
-| `incidents` | Incidents | Catégorie, priorité, statut, responsable du suivi, position facultative, verrou optimiste |
+| `sos_types` | Types de SOS configurables par manifestation | Libellé, ordre, archivage (soft) ; 4 types par défaut |
+| `sos` | Signalements SOS | Type (libellé copié), texte facultatif, équipe/mission/auteur, position facultative, résolu/par qui, verrou optimiste |
 | `event_progress` | Progression du cortège | Tête ou queue, distance cumulée, horodatage ; déclarée (auteur) ou calculée à partir des positions partagées de l'ouverture et de la fermeture (sans auteur ni coordonnées) |
 | `member_locations` | Dernière position partagée volontairement | Une ligne par membre, sans historique ; source (navigateur, OwnTracks), batterie ; purge après 2 h |
 | `trackers` | Identifiants de suivi OwnTracks | Hash du secret, expiration, révocation, version des zones envoyées |
@@ -161,12 +162,12 @@ analyse signalées (jamais supprimées). Le rapport présente ces groupes sépar
 7. *Équipe* — informations, membres, missions ordonnées (monter / descendre / réaffecter).
 8. *Remplacement du GPX* — aperçu des points qui s'éloigneraient du nouveau tracé, confirmation.
 9. *Administration* — comptes (organisation et membres), rôles, expiration, sessions, liens de connexion.
-10. *Coordination en direct* (téléphone) — direct, incidents, équipes, messages, carte.
+10. *Coordination en direct* (téléphone) — direct, SOS, équipes, messages, carte.
 
 **Membre d'équipe (PWA mobile)**
 1. *Connexion par lien* — lien d'activation ou de connexion, confirmation *Se connecter* ; *Mes équipes* ; *Profil*.
 2. *Ma mission* — en haut : point à traiter, statut, consignes, grands boutons *En route*, *Arrivé*, *Terminé*,
-   *Aide*, *Signaler un incident*, *Aller au point suivant* (application GPS du téléphone) ; puis carte, partage de
+   *SOS*, *Aller au point suivant* (application GPS du téléphone) ; puis carte, partage de
    position et OwnTracks (une ligne chacun), points restants avec leur distance depuis le point en cours ;
    indicateur de synchronisation.
 3. *Messages* et *Incidents*.
@@ -232,7 +233,7 @@ aux missions de l'équipe et efface sa position partagée.
 expiration et suppression automatique des comptes, profil, membres des équipes, révocation.
 
 **Phase 3** ✔ — PWA, vue de mission, transitions de mission par les membres, routage piéton, WebSocket, tableau de bord
-partagé, messages, incidents, progression du cortège (automatique ou déclarée). Le temps réel est un simple signal d'invalidation (aucune donnée dans le
+partagé, messages, SOS, progression du cortège (automatique ou déclarée). Le temps réel est un simple signal d'invalidation (aucune donnée dans le
 WebSocket) émis après validation de la transaction, à partir des écritures du journal d'audit ; le routage piéton passe
 par un serveur compatible OSRM configurable, avec repli sur un lien vers la carte OpenStreetMap.
 

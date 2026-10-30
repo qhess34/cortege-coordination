@@ -20,7 +20,7 @@ onglet *?* de la vue terrain pour les membres) :
 - [Guide de l'organisation](docs/guide-organisateur.md) — préparer la manifestation, répartir les équipes, coordonner
   le jour J ;
 - [Guide des membres d'équipe](docs/guide-membre.md) — activer son compte, sa mission sur téléphone, messages,
-  incidents, partage de position.
+  SOS, partage de position.
 
 La conception (architecture, modèle de données, écrans, risques) est décrite dans [docs/CONCEPTION.md](docs/CONCEPTION.md).
 
@@ -52,7 +52,7 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
   déclenche pas. La désactivation du compte ou un nouveau mot de passe invalident les liens en cours.
 - **Application installable** (PWA) : bouton *Installer* quand le navigateur le permet, mode d'emploi pour iPhone.
 - **Deux interfaces pour l'organisation** : *🗺 Planifier* (ordinateur : parcours, suggestions, points, équipes) et
-  *📱 Coordination en direct* (`#/direct/<id>`, téléphone : direct, incidents, équipes, messages, carte, en onglets).
+  *📱 Coordination en direct* (`#/direct/<id>`, téléphone : direct, SOS, équipes, messages, carte, en onglets).
   Un compte d'organisation membre d'une équipe ouvre aussi sa vue terrain (onglet « Mon équipe »).
 
 ## Préparer la manifestation
@@ -129,25 +129,24 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
 ## Le jour J
 
 - **Vue terrain** (téléphone) pour chaque membre d'équipe : mission en cours, consignes, carte du point et du
-  parcours, grands boutons *En route*, *Arrivé*, *Terminé*, *Relève nécessaire*, *🆘 Aide* et *Signaler un
-  incident*, bouton *🧭 Aller au point suivant* (ouvre l'application GPS du téléphone), points restants avec leur
+  parcours, grands boutons *En route*, *Arrivé*, *Terminé*, *Relève nécessaire* et *🆘 SOS*,
+  bouton *🧭 Aller au point suivant* (ouvre l'application GPS du téléphone), points restants avec leur
   distance depuis le point en cours, indicateur « ● direct ». Le point à traiter est en haut de l'écran ; partage de
   position et OwnTracks sont réduits à une ligne en dessous. Les membres y arrivent directement après connexion.
 - **Statuts depuis le terrain** : un membre ne peut qu'avancer sa mission (revenir en arrière ou réaffecter reste
   une décision de l'organisation) ; qui a changé le statut, et quand, est affiché.
-- **Incidents** (aide, sécurité, santé, circulation, matériel…) liés à la mission et, si la personne le choisit, à sa
-  position du moment ; suivis par l'organisation, le responsable d'équipe ou l'équipe volante (*Je m'en occupe*,
-  *Résolu*). Pas de double saisie : un signalement de même nature, au même point ou à moins de 30 m d'un incident
-  encore ouvert, complète celui-ci. Rappel affiché : un signalement ne prévient pas les secours (15, 17, 18, 112).
+- **SOS** : un bouton ouvre une fenêtre avec un **type** (liste configurable par l'organisation, p. ex. besoin de
+  renforts, besoin de secours, agression…) et un **texte facultatif**, lié à la mission et, si la personne le choisit,
+  à sa position du moment ; résolu par l'organisation, le responsable d'équipe ou l'équipe volante (*Résolu*). Rappel
+  affiché : un SOS ne prévient pas les secours (15, 17, 18, 112).
 - **Messages** : annonces à toutes les équipes ou à une équipe, éventuellement urgentes (bandeau sur les téléphones),
   réponses du terrain, accusés de lecture (« lu 3/5 »).
 - **Types d'équipe** :
   - *Points fixes* : tiennent les points de leur liste ;
-  - *Volante* : sans point fixe, elle voit les incidents de toute la manifestation ; les demandes d'aide (🆘) en
-    cours sont en tête de son écran avec **🧭 Rejoindre le lieu** (application GPS vers la position signalée, sinon
-    le point de l'équipe qui demande de l'aide), de même que les **relèves nécessaires** (lien GPS vers le point) ;
-    une nouvelle demande fait vibrer le téléphone. Elle les prend en charge (*J'y vais*) et peut les clore ; sa carte
-    montre tous les points tenus ;
+  - *Volante* : sans point fixe, elle voit les SOS de toute la manifestation ; les SOS en cours sont en tête de son
+    écran avec **🧭 Rejoindre le lieu** (application GPS vers la position signalée, sinon le point de l'équipe qui a
+    déclenché le SOS), de même que les **relèves nécessaires** (lien GPS vers le point) ; un nouveau SOS fait vibrer
+    le téléphone. Elle peut les clore ; sa carte montre tous les points tenus ;
   - *Ouverture* : porte la **tête** du cortège ;
   - *Fermeture* : porte la **queue** ; un point dépassé par la queue est signalé à son équipe (« vous pourrez le
     lever sur instruction ») et apparaît « à lever » dans la coordination.
@@ -162,20 +161,20 @@ La conception (architecture, modèle de données, écrans, risques) est décrite
     km parcourus ou « 📍 ici » (position du téléphone ramenée sur le parcours).
     Tout autre membre dont la position est connue a un simple bouton *📍 La tête est ici*.
   - C'est une indication, à confirmer sur le terrain.
-- **Onglet « Coordination »** de l'organisation : compteurs (incidents, tête, queue, points à lever), **prochains points devant la tête** et leur état (équipe en position,
-  personne, besoin d'aide, incident),
+- **Onglet « Coordination »** de l'organisation : compteurs (SOS, tête, queue, points à lever), **prochains points devant la tête** et leur état (équipe en position,
+  personne, SOS),
   **statut résumé de chaque équipe** avec raccourcis vers son responsable (appel, SMS, message dans l'application),
-  incidents ouverts, état de chaque mission par équipe, membres actifs, messages — tout se met à jour
+  SOS ouverts, état de chaque mission par équipe, membres actifs, messages — tout se met à jour
   **en direct**.
-- **Incidents sur les cartes de l'organisation** (planification et coordination en direct) : 🆘 pour un SOS, ⚠ pour
-  les autres, au lieu signalé ou au point concerné ; clignotant tant que personne ne l'a pris en charge.
+- **SOS sur les cartes de l'organisation** (planification et coordination en direct) : 🆘 au lieu signalé ou au point
+  concerné ; clignotant tant que le SOS n'est pas résolu.
 - **Direct** : WebSocket `/api/direct?event=<id>` qui envoie un simple signal « mise à jour » après chaque modification
   validée ; l'écran recharge ce que ses droits lui permettent de voir (le signal ne contient aucune donnée). En cas de
   coupure : reconnexion automatique et rechargement toutes les 30 s.
 
 ## Partage de position (facultatif)
 
-Sans partage, la position du téléphone n'est demandée qu'à l'usage (*📍 ici*, incident avec position) et n'est
+Sans partage, la position du téléphone n'est demandée qu'à l'usage (*📍 ici*, SOS avec position) et n'est
 envoyée que pour ces actions.
 
 - **Double accord** : l'organisation l'autorise pour la manifestation (Synthèse → Modifier → *Autoriser le partage de
@@ -327,7 +326,7 @@ les services OSM : le réseau OSM des tests est construit dans `server/test/help
   (`LINK_RATE_LIMIT`).
 - Liens de connexion et secrets OwnTracks : seul le hash est stocké ; les URL `/connexion/*` sont masquées dans les
   journaux et servies avec `Referrer-Policy: no-referrer`.
-- Verrou optimiste (`version`) sur les événements, points, équipes, missions et incidents : pas d'écrasement silencieux.
+- Verrou optimiste (`version`) sur les événements, points, équipes, missions et SOS : pas d’écrasement silencieux.
 - Journal d'audit des modifications importantes, sans secret ni position.
 
 ## Structure du dépôt

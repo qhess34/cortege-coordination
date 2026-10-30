@@ -38,9 +38,7 @@ coupée et les informations datent de ce moment-là.
   - **Arrivé** une fois sur place ;
   - **Terminé** quand l'organisation vous libère ;
   - **Relève nécessaire** si vous devez être remplacé.
-- **🆘 Aide** : prévient immédiatement l'organisation que vous avez besoin d'aide à votre point. Un second appui ne
-  crée pas de doublon : la demande en cours est complétée.
-- **Signaler un incident** : ouvre l'onglet *Incidents*.
+- **🆘 SOS** : ouvre l'onglet *SOS* pour prévenir l'organisation (type + texte facultatif).
 - **🧭 Aller au point suivant** : ouvre votre application de navigation (Google Maps, Waze, Plans…) vers le point
   suivant de votre liste. Vérifiez sur place que le passage est possible et sûr.
 - **La carte** montre le parcours et vos points. Pour la déplacer, utilisez **deux doigts** ; un doigt fait défiler la
@@ -62,22 +60,21 @@ coupée et les informations datent de ce moment-là.
   lus quand vous ouvrez l'onglet, et l'organisation le voit.
 - Vous pouvez **répondre** : votre message est lu par votre équipe et par l'organisation.
 
-## 4. Incidents
+## 4. SOS
 
-- Onglet **Incidents** → choisissez la **nature** (sécurité, santé, circulation, matériel…), décrivez en quelques mots,
-  puis **Envoyer le signalement**.
-- Cochez **Joindre ma position actuelle** si l'incident n'est pas exactement à votre point.
-- Vous voyez ensuite son suivi : *Ouvert*, *Pris en charge par…*, *Résolu*.
-- Si un incident de même nature est **déjà ouvert au même endroit** (même point, ou à moins de 30 m), votre
-  signalement complète celui-ci au lieu d'en créer un second.
+- Onglet **SOS** → choisissez le **type** (configuré par l'organisation : besoin de renforts, besoin de secours,
+  agression…), ajoutez un **texte** si besoin, puis **Envoyer le SOS**.
+- Cochez **Joindre ma position actuelle** si le SOS n'est pas exactement à votre point.
+- Vous voyez ensuite son suivi : *Ouvert*, puis *Résolu*.
+- Rappel : un SOS ne prévient pas les secours. En cas d'urgence vitale, appelez le 15, le 17, le 18 ou le 112.
 
 ## 5. Selon votre type d'équipe
 
-- **Équipe volante** : vous n'avez pas de point fixe. Les **demandes d'aide (🆘)** en cours s'affichent en rouge en
-  haut de l'écran *Mission*, avec **🧭 Rejoindre le lieu**, qui ouvre votre application GPS vers la position envoyée
-  ou, à défaut, vers le point de l'équipe qui a demandé de l'aide. Les **relèves nécessaires** s'y affichent aussi
-  (en orange), avec **🧭 Rejoindre le point**. Une nouvelle demande fait vibrer le téléphone. Tous les incidents de la manifestation sont dans
-  *Incidents* : touchez **J'y vais** pour indiquer que vous intervenez, et **Résolu** une fois réglé.
+- **Équipe volante** : vous n'avez pas de point fixe. Les **SOS** en cours s'affichent en rouge en haut de l'écran
+  *Mission*, avec **🧭 Rejoindre le lieu**, qui ouvre votre application GPS vers la position envoyée ou, à défaut,
+  vers le point de l'équipe qui a déclenché le SOS. Les **relèves nécessaires** s'y affichent aussi (en orange), avec
+  **🧭 Rejoindre le point**. Un nouveau SOS fait vibrer le téléphone. Tous les SOS de la manifestation sont dans
+  *SOS* : touchez **Résolu** une fois réglé.
 - **Ouverture** : vous marchez en tête. Si vous partagez votre position, la tête du cortège avance **toute seule**.
   Sinon, touchez régulièrement **📍 La tête est ici**, ou indiquez les km parcourus.
 - **Fermeture** : vous fermez la marche. Même principe : votre position partagée fait avancer la queue, sinon touchez
@@ -124,7 +121,7 @@ Il s'arrête tout seul après la manifestation, et vous pourrez alors désinstal
 L'application conserve :
 
 - votre **prénom**, votre **nom**, votre **e-mail** et votre **téléphone** si vous les avez indiqués, et vos équipes ;
-- vos actions sur les missions (statuts, incidents, messages) ;
+- vos actions sur les missions (statuts, SOS, messages) ;
 - si vous la partagez, **votre dernière position seulement**.
 
 Si l'organisation a fixé une **date d'expiration** à votre compte (indiquée dans votre profil), il est **supprimé

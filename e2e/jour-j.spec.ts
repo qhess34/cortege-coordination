@@ -46,24 +46,20 @@ test('jour J : statut, aide, message urgent et progression circulent en direct',
   await field.getByRole('button', { name: 'Arrivé', exact: true }).click();
   await expect(coord.getByTestId('coord-equipe-' + team.id)).toContainText('En position');
 
-  // 2. Aide → incident prioritaire chez l'organisation, pris en charge → visible sur le téléphone.
-  await field.getByRole('button', { name: /Aide/ }).click();
-  await expect(phone.getByText('Demande d’aide envoyée à l’organisation.')).toBeVisible();
-  // Deuxième appui : pas de doublon, l'incident en cours est complété.
-  await field.getByRole('button', { name: /Aide/ }).click();
-  await expect(phone.getByText(/Déjà signalé à cet endroit/)).toBeVisible();
-  expect((await (await page.request.get('/api/events/' + ev.id + '/incidents')).json()).filter((i: { category: string }) => i.category === 'aide')).toHaveLength(1);
-  await expect(coord).toContainText('Besoin d’aide · PRIORITAIRE');
-  // Le SOS apparaît aussitôt sur la carte de l'organisation, au point concerné, clignotant tant que personne ne le prend.
+  // 2. SOS → visible chez l'organisation (carte + onglet), puis résolu.
+  await field.getByRole('button', { name: /🆘 SOS/ }).click(); // bouton de la vue mission → ouvre l'onglet SOS
+  await field.getByRole('button', { name: /Envoyer le SOS/ }).click(); // type par défaut (Besoin de renforts)
+  await expect(phone.getByText('SOS envoyé à l’organisation.')).toBeVisible();
+  expect(await (await page.request.get('/api/events/' + ev.id + '/sos')).json()).toHaveLength(1);
+  await expect(coord).toContainText('Besoin de renforts');
+  // Le SOS apparaît aussitôt sur la carte de l'organisation, au point concerné, clignotant tant qu'il n'est pas résolu.
   const sosMarker = page.locator('.incident-marker.sos');
   await expect(sosMarker).toHaveCount(1);
-  await expect(sosMarker).toContainText('SOS · Carrefour de la Poste');
+  await expect(sosMarker).toContainText('Besoin de renforts · Carrefour de la Poste');
   await expect(sosMarker).toHaveClass(/ouvert/);
-  await expect(field.getByTestId('ma-mission')).toContainText('Incident signalé');
-  await coord.getByRole('button', { name: 'Je m’en occupe' }).click();
-  await expect(sosMarker).not.toHaveClass(/ouvert/);
-  await field.getByRole('tab', { name: /Incidents/ }).click();
-  await expect(field.getByTestId('incidents')).toContainText('Pris en charge');
+  // L'organisation le résout : il disparaît de la carte.
+  await coord.getByRole('button', { name: 'Résolu' }).click();
+  await expect(sosMarker).toHaveCount(0);
 
   // 3. Message urgent à tous → bandeau sur le téléphone ; lu → compté au bureau.
   await field.getByRole('tab', { name: 'Mission' }).click();
