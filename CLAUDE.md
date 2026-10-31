@@ -51,7 +51,12 @@ les cartes** (planification et coordination en direct), clignotants tant que non
 des types de SOS de la manifestation.
 
 **Automatismes** : progression tête/queue calculée depuis les positions partagées de l'ouverture et de la fermeture ;
-arrivée automatique au point (30 m ou zone OwnTracks) ; un SOS sans position prend celle du point de la mission concernée.
+arrivée automatique au point le plus proche encore à tenir (30 m ou zone OwnTracks) — une équipe tient plusieurs points
+à la fois, le compteur « en position » progresse ; un SOS sans position prend celle du point de la mission concernée.
+
+**Déploiement (`docker-compose.yml`)** : hôte/port de l'app réglables par `APP_HOST` / `APP_PORT` (`.env`) ; service
+`backup` = `pg_dump` quotidien (`crond`) vers `BACKUP_PATH`, planning `BACKUP_CRON`, purge au-delà de
+`BACKUP_KEEP_DAYS` ; variables documentées dans `.env.example`.
 
 ## Pistes non faites
 
