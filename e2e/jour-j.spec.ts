@@ -89,8 +89,7 @@ test('jour J : statut, aide, message urgent et progression circulent en direct',
   await expect(field.getByRole('button', { name: 'Itinéraire à pied' })).toHaveCount(0);
   await expect(field.getByRole('button', { name: '📍 Ma position' })).toHaveCount(0);
 
-  // 6. Terminer la mission.
-  await field.getByRole('button', { name: 'Reprendre la position' }).click();
+  // 6. Terminer la mission (un SOS ne change pas son statut : elle est toujours « en position »).
   await field.getByRole('button', { name: 'Terminé', exact: true }).click();
   await expect(field).toContainText('Toutes les missions de l’équipe sont terminées.');
   await expect(coord.getByTestId('coord-equipe-' + team.id)).toContainText('Terminée');
