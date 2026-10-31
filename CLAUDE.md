@@ -14,15 +14,17 @@ Guides utilisateurs : [docs/guide-organisateur.md](docs/guide-organisateur.md), 
 - Chaque demande : implémenter, tester (typecheck, tests serveur et web, e2e après `npm run build -w web`), mettre à jour
   guides + README (+ CONCEPTION si le modèle change), commit en français, push sur la branche de travail. Pas de PR sans
   demande explicite.
-- La base de l'utilisateur est **existante** : toute évolution du schéma passe par une nouvelle migration
-  `server/migrations/NNN_*.sql` (jamais en modifiant une migration appliquée).
+- Dès que l'instance de l'utilisateur tourne, sa base est **existante** : toute évolution du schéma passe par une
+  nouvelle migration `server/migrations/002_*.sql`, `003_*.sql`… (jamais en modifiant une migration appliquée), sauf
+  s'il demande explicitement de repartir de zéro.
 - Le bac à sable n'a accès ni aux tuiles de carte ni à Overpass ni à Docker Hub : fond gris dans les captures, pas de
   `docker build` complet possible ici.
 
 ## État actuel (octobre 2026)
 
-Migrations : `001_initial.sql` (schéma complet), `002_telephone.sql` (téléphone des comptes), `003_lieux.sql`
-(carrefours), `004_sos.sql` (SOS à types configurables, remplace les incidents).
+Migrations : un seul fichier, `001_initial.sql` (schéma complet : comptes avec téléphone, carrefours, SOS à types
+configurables…). Les migrations 002 à 004 y ont été regroupées le 31/10/2026, l'utilisateur repartant d'une instance
+neuve ; plus aucune trace des anciens modèles (incidents, statut de mission « incident »).
 
 **Préparation** : GPX, analyse OSM non destructive (un point par accès ou par carrefour), points nommés d'après la rue
 ou le croisement, équipes (points fixes, volante, ouverture, fermeture), missions ordonnées, roadbook imprimable,

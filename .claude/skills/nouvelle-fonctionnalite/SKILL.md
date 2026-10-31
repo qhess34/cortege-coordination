@@ -10,7 +10,8 @@ description: Démarche et conventions pour ajouter ou modifier une fonctionnalit
 - **Ne jamais modifier une migration déjà appliquée** (`server/migrations/001_initial.sql`…) : elles ne sont jouées
   qu'une fois. Ajouter un fichier `NNN_sujet.sql` (numéro suivant). Une colonne ajoutée dans une ancienne migration
   provoque des erreurs 500 sur les bases existantes.
-- Prévoir la reprise des données existantes dans la même migration si besoin (ex. `003_lieux.sql`).
+- Prévoir la reprise des données existantes dans la même migration si besoin (ex. rattacher les lignes existantes à
+  une nouvelle table).
 - Contraintes `CHECK` explicites, géométries `geometry(Point, 4326)`, `[lon, lat]`.
 
 ## 2. Route serveur (`server/src/routes/<domaine>.ts`)

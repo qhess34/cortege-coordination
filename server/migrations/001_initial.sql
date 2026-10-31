@@ -1,5 +1,5 @@
 -- Schéma de la base : comptes, sessions et liens de connexion ; manifestations, parcours, analyses OSM, suggestions,
--- points, équipes, missions ; coordination du jour J (messages, incidents, progression, positions, OwnTracks) ;
+-- carrefours, points, équipes, missions ; coordination du jour J (messages, SOS, progression, positions, OwnTracks) ;
 -- journal d'audit.
 
 CREATE EXTENSION IF NOT EXISTS postgis;
@@ -14,6 +14,8 @@ CREATE TABLE users (
   first_name    text NOT NULL DEFAULT '' CHECK (length(first_name) <= 80),
   last_name     text NOT NULL DEFAULT '' CHECK (length(last_name) <= 80),
   email         text,
+  -- Téléphone (facultatif), pour joindre la personne le jour J ; chiffres et « + » initial seulement.
+  phone         text CONSTRAINT users_phone_check CHECK (phone ~ '^\+?[0-9]{6,20}$'),
   password_hash text,
   global_role   text NOT NULL DEFAULT 'membre' CHECK (global_role IN ('admin', 'organisateur', 'membre', 'aucun')),
   expires_at    timestamptz,
@@ -149,7 +151,7 @@ CREATE TABLE teams (
   leader_user_id bigint REFERENCES users(id) ON DELETE SET NULL,
   -- Les responsables peuvent ajouter et retirer des membres de leur équipe.
   leader_can_manage boolean NOT NULL DEFAULT false,
-  -- Points fixes, volante (incidents), ouverture (tête du cortège), fermeture (queue).
+  -- Points fixes, volante (SOS et relèves), ouverture (tête du cortège), fermeture (queue).
   kind         text NOT NULL DEFAULT 'points' CHECK (kind IN ('points', 'volante', 'ouverture', 'fermeture')),
   status       text NOT NULL DEFAULT 'non_confirmee' CHECK (status IN ('non_confirmee', 'prete', 'en_mission', 'indisponible')),
   disabled_at  timestamptz,
@@ -167,6 +169,21 @@ CREATE TABLE team_memberships (
   PRIMARY KEY (team_id, user_id)
 );
 CREATE INDEX team_memberships_user_idx ON team_memberships(user_id);
+
+-- Carrefours : regroupement des points d'un même carrefour (un point par accès) pour l'export GPX et le suivi.
+-- Chaque point reste un point de mission à part entière ; le carrefour ne sert qu'à les présenter ensemble.
+CREATE TABLE places (
+  id          bigserial PRIMARY KEY,
+  event_id    bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  name        text NOT NULL CHECK (length(name) BETWEEN 1 AND 200),
+  -- Carrefour OSM d'origine (regroupement automatique à la validation des suggestions), sinon NULL (regroupement manuel).
+  osm_node    bigint,
+  -- Centre : le carrefour, ou le barycentre des points regroupés à la main.
+  geom        geometry(Point, 4326) NOT NULL,
+  created_at  timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (event_id, osm_node)
+);
+CREATE INDEX places_event_idx ON places(event_id);
 
 -- Points opérationnels retenus par l'organisateur (distincts des suggestions).
 CREATE TABLE mission_points (
@@ -186,9 +203,12 @@ CREATE TABLE mission_points (
   created_by    bigint REFERENCES users(id) ON DELETE SET NULL,
   updated_at    timestamptz NOT NULL DEFAULT now(),
   deleted_at    timestamptz,
+  -- Carrefour regroupant ce point avec d'autres accès.
+  place_id      bigint REFERENCES places(id) ON DELETE SET NULL,
   CHECK ((origin = 'suggestion') = (suggestion_id IS NOT NULL))
 );
 CREATE INDEX mission_points_geom_idx ON mission_points USING gist(geom);
+CREATE INDEX mission_points_place_idx ON mission_points(place_id);
 CREATE INDEX mission_points_event_idx ON mission_points(event_id) WHERE deleted_at IS NULL;
 
 -- Affectation d'un point à une équipe, dans un ordre défini par l'organisateur.
@@ -200,7 +220,7 @@ CREATE TABLE missions (
   position         integer NOT NULL CHECK (position >= 1),
   status           text NOT NULL DEFAULT 'affectee'
                    CHECK (status IN ('a_preparer', 'affectee', 'en_deplacement', 'en_position', 'terminee',
-                                     'releve_necessaire', 'incident', 'annulee')),
+                                     'releve_necessaire', 'annulee')),
   instructions     text NOT NULL DEFAULT '',
   version          integer NOT NULL DEFAULT 1,
   created_at       timestamptz NOT NULL DEFAULT now(),
@@ -267,27 +287,39 @@ CREATE TABLE message_receipts (
   PRIMARY KEY (message_id, user_id)
 );
 
--- Incidents signalés depuis le terrain (ou par l'organisation).
-CREATE TABLE incidents (
+-- Types de SOS, propres à chaque manifestation et modifiables par l'organisation (4 types créés avec chaque
+-- manifestation, voir routes/events.ts).
+CREATE TABLE sos_types (
+  id          bigserial PRIMARY KEY,
+  event_id    bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+  label       text NOT NULL CHECK (length(label) BETWEEN 1 AND 60),
+  position    integer NOT NULL DEFAULT 1 CHECK (position >= 1),
+  archived_at timestamptz
+);
+CREATE INDEX sos_types_event_idx ON sos_types(event_id);
+
+-- SOS signalés depuis le terrain : un type et un texte facultatif ; ouvert, puis résolu. type_label est une copie du
+-- libellé au moment du signalement (lisible même si le type est renommé ou retiré). Lieu : geom si fourni, sinon le
+-- point de la mission.
+CREATE TABLE sos (
   id           bigserial PRIMARY KEY,
   event_id     bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   team_id      bigint REFERENCES teams(id) ON DELETE SET NULL,
   mission_id   bigint REFERENCES missions(id) ON DELETE SET NULL,
   reporter_id  bigint REFERENCES users(id) ON DELETE SET NULL,
-  category     text NOT NULL CHECK (category IN ('aide', 'securite', 'sante', 'circulation', 'materiel', 'autre')),
-  priority     text NOT NULL DEFAULT 'normale' CHECK (priority IN ('normale', 'haute')),
-  status       text NOT NULL DEFAULT 'ouvert' CHECK (status IN ('ouvert', 'pris_en_charge', 'resolu')),
-  description  text NOT NULL DEFAULT '',
+  type_id      bigint REFERENCES sos_types(id) ON DELETE SET NULL,
+  type_label   text NOT NULL CHECK (length(type_label) BETWEEN 1 AND 60),
+  message      text NOT NULL DEFAULT '' CHECK (length(message) <= 1000),
   geom         geometry(Point, 4326),
   handled_by   bigint REFERENCES users(id) ON DELETE SET NULL,
   created_at   timestamptz NOT NULL DEFAULT now(),
-  updated_at   timestamptz NOT NULL DEFAULT now(),
   resolved_at  timestamptz,
   version      integer NOT NULL DEFAULT 1
 );
-CREATE INDEX incidents_event_idx ON incidents(event_id, status);
+CREATE INDEX sos_event_idx ON sos(event_id, resolved_at);
 
--- Progression déclarée de la tête ou de la queue du cortège (distance sur le parcours). Jamais une position GPS.
+-- Progression de la tête ou de la queue du cortège (distance sur le parcours) : déclarée, ou calculée à partir des
+-- positions partagées de l'ouverture et de la fermeture (sans auteur ni coordonnées).
 CREATE TABLE event_progress (
   id          bigserial PRIMARY KEY,
   event_id    bigint NOT NULL REFERENCES events(id) ON DELETE CASCADE,
