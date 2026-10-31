@@ -1,4 +1,4 @@
-// Coordination le jour J. Vue de mission des membres, statuts posés depuis le terrain, incidents,
+// Coordination le jour J. Vue de mission des membres, statuts posés depuis le terrain, SOS,
 // messages, progression déclarée du cortège, tableau de bord, itinéraire piéton et signal temps réel.
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -17,17 +17,15 @@ type MissionStatus = keyof typeof TRANSITIONS;
 
 /**
  * Statuts qu'un membre peut poser lui-même depuis le terrain. Revenir en arrière (« à préparer », réaffecter
- * une mission terminée) reste une décision de l'organisation ; « incident » passe par un signalement.
+ * une mission terminée) reste une décision de l'organisation.
  */
 export const MEMBER_TRANSITIONS: Partial<Record<MissionStatus, MissionStatus[]>> = {
   affectee: ['en_deplacement', 'en_position'],
   en_deplacement: ['en_position'],
   en_position: ['terminee', 'releve_necessaire'],
   releve_necessaire: ['en_position', 'terminee'],
-  incident: ['en_deplacement', 'en_position', 'terminee'],
 };
 
-const INCIDENT_CATEGORIES = ['aide', 'securite', 'sante', 'circulation', 'materiel', 'autre'] as const;
 const Lon = z.number().min(-180).max(180);
 const Lat = z.number().min(-90).max(90);
 
@@ -78,7 +76,7 @@ async function inEventTeam(c: Client, userId: number, eventId: number): Promise<
   return !!r.rowCount;
 }
 
-/** Membre d'une équipe volante active de la manifestation : peut intervenir sur tous ses incidents. */
+/** Membre d'une équipe volante active de la manifestation : peut intervenir sur tous ses SOS. */
 async function inFlyingTeam(c: Client, user: SessionUser, eventId: number): Promise<boolean> {
   const r = await c.query(
     `SELECT 1 FROM teams t LEFT JOIN team_memberships m ON m.team_id = t.id AND m.user_id = $2
@@ -88,22 +86,22 @@ async function inFlyingTeam(c: Client, user: SessionUser, eventId: number): Prom
   return !!r.rowCount;
 }
 
-const publicIncident = (r: Record<string, unknown>) => ({
+const publicSos = (r: Record<string, unknown>) => ({
   id: r.id, teamId: r.team_id, teamName: r.team_name ?? null, missionId: r.mission_id, pointName: r.point_name ?? null,
-  category: r.category, priority: r.priority, status: r.status, description: r.description,
+  type: r.type_label, message: r.message, status: r.resolved_at ? 'resolu' : 'ouvert',
   position: r.lon === null || r.lon === undefined ? null : [r.lon, r.lat],
-  /** Lieu de l'incident : position jointe au signalement, sinon celle du point de la mission concernée. */
+  /** Lieu du SOS : position jointe au signalement, sinon celle du point de la mission concernée. */
   positionSource: r.lon === null || r.lon === undefined ? null : r.has_geom ? 'signalee' : 'point',
   reporterName: r.reporter_name ?? null, handledByName: r.handler_name ?? null,
-  createdAt: r.created_at, updatedAt: r.updated_at, resolvedAt: r.resolved_at, version: r.version,
+  createdAt: r.created_at, resolvedAt: r.resolved_at, version: r.version,
 });
-const INCIDENT_SELECT = `
-  SELECT i.*, ST_X(coalesce(i.geom, p.geom)) AS lon, ST_Y(coalesce(i.geom, p.geom)) AS lat, i.geom IS NOT NULL AS has_geom,
+const SOS_SELECT = `
+  SELECT s.*, ST_X(coalesce(s.geom, p.geom)) AS lon, ST_Y(coalesce(s.geom, p.geom)) AS lat, s.geom IS NOT NULL AS has_geom,
          t.name AS team_name, p.name AS point_name,
          rep.display_name AS reporter_name, h.display_name AS handler_name
-    FROM incidents i LEFT JOIN teams t ON t.id = i.team_id
-    LEFT JOIN missions m ON m.id = i.mission_id LEFT JOIN mission_points p ON p.id = m.mission_point_id
-    LEFT JOIN users rep ON rep.id = i.reporter_id LEFT JOIN users h ON h.id = i.handled_by`;
+    FROM sos s LEFT JOIN teams t ON t.id = s.team_id
+    LEFT JOIN missions m ON m.id = s.mission_id LEFT JOIN mission_points p ON p.id = m.mission_point_id
+    LEFT JOIN users rep ON rep.id = s.reporter_id LEFT JOIN users h ON h.id = s.handled_by`;
 
 const publicMessage = (r: Record<string, unknown>) => ({
   id: r.id, teamId: r.team_id, teamName: r.team_name ?? null, body: r.body, urgent: r.urgent, createdAt: r.created_at,
@@ -133,7 +131,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     const access = await requireTeamMember(app.db, u, teamId);
     const { eventId } = access;
     const flying = access.kind === 'volante';
-    const [ev, team, missions, messages, incidents, track, progress, tail, eventPoints] = await Promise.all([
+    const [ev, team, missions, messages, sos, track, progress, tail, eventPoints, sosTypes] = await Promise.all([
       app.db.query('SELECT id, name, starts_at, ends_at, instructions, status, location_sharing FROM events WHERE id = $1', [eventId]),
       app.db.query(
         `SELECT t.id, t.name, t.color, t.instructions, t.disabled_at, t.leader_can_manage, l.display_name AS leader_name
@@ -156,12 +154,12 @@ export async function terrainRoutes(app: FastifyInstance) {
           ORDER BY g.created_at DESC, g.id DESC LIMIT 50`,
         [teamId, eventId, u.id],
       ),
-      // Équipe volante : tous les incidents en cours de la manifestation ; sinon ceux de l'équipe.
+      // Équipe volante : tous les SOS en cours de la manifestation ; sinon ceux de l'équipe.
       flying
-        ? app.db.query(INCIDENT_SELECT + ` WHERE i.event_id = $1 AND (i.status <> 'resolu' OR i.resolved_at > now() - interval '2 hours')
-                                           ORDER BY (i.status = 'resolu'), (i.priority = 'haute') DESC, i.created_at DESC LIMIT 50`, [eventId])
-        : app.db.query(INCIDENT_SELECT + ` WHERE i.team_id = $1 AND (i.status <> 'resolu' OR i.resolved_at > now() - interval '2 hours')
-                                           ORDER BY i.created_at DESC LIMIT 30`, [teamId]),
+        ? app.db.query(SOS_SELECT + ` WHERE s.event_id = $1 AND (s.resolved_at IS NULL OR s.resolved_at > now() - interval '2 hours')
+                                      ORDER BY (s.resolved_at IS NOT NULL), s.created_at DESC LIMIT 50`, [eventId])
+        : app.db.query(SOS_SELECT + ` WHERE s.team_id = $1 AND (s.resolved_at IS NULL OR s.resolved_at > now() - interval '2 hours')
+                                      ORDER BY s.created_at DESC LIMIT 30`, [teamId]),
       currentTrack(app.db, eventId),
       latestProgress(app.db, eventId, 'tete'),
       latestProgress(app.db, eventId, 'queue'),
@@ -172,6 +170,7 @@ export async function terrainRoutes(app: FastifyInstance) {
           WHERE m.event_id = $1 AND m.cancelled_at IS NULL AND t.disabled_at IS NULL ORDER BY p.distance_m NULLS LAST`,
         [eventId],
       ),
+      app.db.query('SELECT id, label, position FROM sos_types WHERE event_id = $1 AND archived_at IS NULL ORDER BY position, id', [eventId]),
     ]);
     const e = ev.rows[0];
     const t = team.rows[0];
@@ -198,13 +197,14 @@ export async function terrainRoutes(app: FastifyInstance) {
         name: p.name, position: [p.lon, p.lat], distance: p.distance_m, status: p.status, teamName: p.team_name, color: p.color,
       })) : [],
       messages: messages.rows.map(publicMessage),
-      incidents: incidents.rows.map(publicIncident),
+      sos: sos.rows.map(publicSos),
+      sosTypes: sosTypes.rows.map((t) => ({ id: t.id, label: t.label, position: t.position })),
       // Parcours simplifié (affichage sur téléphone).
       track: track ? track.route.segments.map((s) => simplify(s, 8)) : [],
       progress,
       tail,
       canDeclare: await canDeclare(app.db, u, eventId),
-      canHandleIncidents: flying || access.asOrganizer || access.role === 'responsable',
+      canHandleSos: flying || access.asOrganizer || access.role === 'responsable',
       // Gestion des membres depuis la vue terrain : organisation, ou responsable si l'organisation le permet.
       canManageMembers: access.asOrganizer || (access.role === 'responsable' && !!t.leader_can_manage),
       locationSharing: !!e.location_sharing,
@@ -243,109 +243,74 @@ export async function terrainRoutes(app: FastifyInstance) {
     });
   });
 
-  // --- Incidents -------------------------------------------------------------------------------------------------
-  /** Distance (m) en deçà de laquelle un signalement de même nature rejoint l'incident ouvert existant. */
-  const DUPLICATE_RADIUS = 30;
-  const NewIncident = z.object({
-    category: z.enum(INCIDENT_CATEGORIES),
-    priority: z.enum(['normale', 'haute']).optional(),
-    description: z.string().trim().max(2000).default(''),
+  // --- SOS -------------------------------------------------------------------------------------------------------
+  const NewSos = z.object({
+    typeId: z.number().int().positive(),
+    message: z.string().trim().max(1000).default(''),
     missionId: z.number().int().positive().nullable().optional(),
     position: z.tuple([Lon, Lat]).nullable().optional(),
   });
 
-  app.post('/api/terrain/equipes/:id/incidents', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
+  // Déclencher un SOS depuis le terrain : un type (parmi ceux de la manifestation) et un texte facultatif.
+  app.post('/api/terrain/equipes/:id/sos', { config: { rateLimit: { max: 30, timeWindow: '1 minute' } } }, async (req, reply) => {
     const u = requireUser(req);
     const teamId = idParam(req);
-    const b = NewIncident.parse(req.body);
+    const b = NewSos.parse(req.body);
     return tx(app.db, async (c) => {
       const { eventId } = await requireTeamMember(c, u, teamId);
-      let mission: Record<string, unknown> | undefined;
       if (b.missionId) {
-        mission = (await c.query('SELECT * FROM missions WHERE id = $1 AND team_id = $2 AND cancelled_at IS NULL FOR UPDATE', [b.missionId, teamId])).rows[0];
+        const mission = (await c.query('SELECT 1 FROM missions WHERE id = $1 AND team_id = $2 AND cancelled_at IS NULL', [b.missionId, teamId])).rows[0];
         if (!mission) throw badRequest('Mission inconnue pour cette équipe.');
       }
-      const priority = b.priority ?? (b.category === 'aide' || b.category === 'sante' || b.category === 'securite' ? 'haute' : 'normale');
-      // Double saisie : un incident de même nature, encore ouvert, au même lieu (même mission, ou à moins de
-      // DUPLICATE_RADIUS m de la position signalée ou du point) est complété au lieu d'être recréé.
-      await c.query('SELECT pg_advisory_xact_lock($1, 3)', [eventId]);
-      const dup = (await c.query(
-        `SELECT i.id, i.description FROM incidents i
-           LEFT JOIN missions m ON m.id = i.mission_id LEFT JOIN mission_points p ON p.id = m.mission_point_id
-          WHERE i.event_id = $1 AND i.status <> 'resolu' AND i.category = $2
-            AND (($3::bigint IS NOT NULL AND i.mission_id = $3)
-                 OR ST_DistanceSphere(coalesce(i.geom, p.geom),
-                      coalesce(CASE WHEN $4::float8 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($4, $5), 4326) END,
-                               (SELECT mp.geom FROM missions mm JOIN mission_points mp ON mp.id = mm.mission_point_id WHERE mm.id = $3))) <= $6)
-          ORDER BY i.created_at DESC LIMIT 1`,
-        [eventId, b.category, b.missionId ?? null, b.position?.[0] ?? null, b.position?.[1] ?? null, DUPLICATE_RADIUS],
-      )).rows[0];
-      if (dup) {
-        // Le nouveau texte est ajouté à l'incident existant (rien n'est perdu) ; l'organisation est prévenue en direct.
-        if (b.description && !String(dup.description).includes(b.description)) {
-          await c.query(
-            "UPDATE incidents SET description = left(description || CASE WHEN description = '' THEN '' ELSE E'\n' END || $2, 2000), version = version + 1, updated_at = now() WHERE id = $1",
-            [dup.id, u.displayName + ' : ' + b.description],
-          );
-        }
-        await audit(c, { actorId: u.id, eventId, entity: 'incident', entityId: dup.id, action: 'signalement_double', details: { teamId, category: b.category } });
-        return { ...publicIncident((await c.query(INCIDENT_SELECT + ' WHERE i.id = $1', [dup.id])).rows[0]), duplicate: true };
-      }
+      const type = (await c.query('SELECT label FROM sos_types WHERE id = $1 AND event_id = $2 AND archived_at IS NULL', [b.typeId, eventId])).rows[0];
+      if (!type) throw badRequest('Type de SOS inconnu.');
       const r = await c.query(
-        `INSERT INTO incidents(event_id, team_id, mission_id, reporter_id, category, priority, description, geom)
+        `INSERT INTO sos(event_id, team_id, mission_id, reporter_id, type_id, type_label, message, geom)
          VALUES ($1, $2, $3, $4, $5, $6, $7, CASE WHEN $8::float8 IS NULL THEN NULL ELSE ST_SetSRID(ST_MakePoint($8, $9), 4326) END)
          RETURNING id`,
-        [eventId, teamId, b.missionId ?? null, u.id, b.category, priority, b.description, b.position?.[0] ?? null, b.position?.[1] ?? null],
+        [eventId, teamId, b.missionId ?? null, u.id, b.typeId, type.label, b.message, b.position?.[0] ?? null, b.position?.[1] ?? null],
       );
-      // La mission concernée passe en « incident » si son statut le permet.
-      if (mission && (TRANSITIONS[mission.status as MissionStatus] ?? []).includes('incident')) {
-        await c.query(
-          "UPDATE missions SET status = 'incident', version = version + 1, updated_at = now(), status_changed_at = now(), status_changed_by = $2 WHERE id = $1",
-          [mission.id, u.id],
-        );
-      }
-      await audit(c, { actorId: u.id, eventId, entity: 'incident', entityId: r.rows[0].id, action: 'signalement', details: { teamId, category: b.category, priority } });
+      await audit(c, { actorId: u.id, eventId, entity: 'sos', entityId: r.rows[0].id, action: 'signalement', details: { teamId, type: type.label } });
       reply.status(201);
-      return { ...publicIncident((await c.query(INCIDENT_SELECT + ' WHERE i.id = $1', [r.rows[0].id])).rows[0]), duplicate: false };
+      return publicSos((await c.query(SOS_SELECT + ' WHERE s.id = $1', [r.rows[0].id])).rows[0]);
     });
   });
 
-  app.get('/api/events/:id/incidents', async (req) => {
+  app.get('/api/events/:id/sos', async (req) => {
     const u = requireUser(req);
     const eventId = idParam(req);
     await requireEventRole(app.db, u, eventId, 'lecture');
-    const r = await app.db.query(INCIDENT_SELECT + " WHERE i.event_id = $1 ORDER BY (i.status = 'resolu'), (i.priority = 'haute') DESC, i.created_at DESC LIMIT 200", [eventId]);
-    return r.rows.map(publicIncident);
+    const r = await app.db.query(SOS_SELECT + " WHERE s.event_id = $1 ORDER BY (s.resolved_at IS NOT NULL), s.created_at DESC LIMIT 200", [eventId]);
+    return r.rows.map(publicSos);
   });
 
-  // Suivi d'un incident : organisation, ou responsable de l'équipe concernée.
-  app.patch('/api/incidents/:id', async (req) => {
+  // Marquer un SOS résolu (ou le rouvrir) : organisation, équipe volante, ou responsable de l'équipe concernée.
+  app.patch('/api/sos/:id', async (req) => {
     const u = requireUser(req);
     const id = idParam(req);
-    const b = z.object({ status: z.enum(['ouvert', 'pris_en_charge', 'resolu']), version: z.number().int() }).parse(req.body);
+    const b = z.object({ resolved: z.boolean(), version: z.number().int() }).parse(req.body);
     return tx(app.db, async (c) => {
-      const i = (await c.query('SELECT * FROM incidents WHERE id = $1 FOR UPDATE', [id])).rows[0];
-      if (!i) throw notFound('Incident');
-      const organizer = (await eventRole(c, u, i.event_id)) === 'organisateur';
-      // Équipe volante : intervient sur tous les incidents de la manifestation.
-      if (!organizer && !(await inFlyingTeam(c, u, i.event_id))) {
-        const access = i.team_id ? await requireTeamMember(c, u, i.team_id).catch(() => null) : null;
+      const s = (await c.query('SELECT * FROM sos WHERE id = $1 FOR UPDATE', [id])).rows[0];
+      if (!s) throw notFound('SOS');
+      const organizer = (await eventRole(c, u, s.event_id)) === 'organisateur';
+      if (!organizer && !(await inFlyingTeam(c, u, s.event_id))) {
+        const access = s.team_id ? await requireTeamMember(c, u, s.team_id).catch(() => null) : null;
         if (!access) {
-          if ((await eventRole(c, u, i.event_id)) === null) throw notFound('Incident');
+          if ((await eventRole(c, u, s.event_id)) === null) throw notFound('SOS');
           throw forbidden();
         }
         if (access.role !== 'responsable') throw forbidden();
       }
-      if (i.version !== b.version) throw conflict('L’incident a été modifié entre-temps.', { status: i.status, version: i.version });
+      if (s.version !== b.version) throw conflict('Le SOS a été modifié entre-temps.', { resolved: !!s.resolved_at, version: s.version });
       await c.query(
-        `UPDATE incidents SET status = $2, version = version + 1, updated_at = now(),
-                handled_by = CASE WHEN $2 = 'pris_en_charge' THEN $3 ELSE handled_by END,
-                resolved_at = CASE WHEN $2 = 'resolu' THEN now() ELSE NULL END
+        `UPDATE sos SET version = version + 1,
+                handled_by = CASE WHEN $2 THEN $3 ELSE handled_by END,
+                resolved_at = CASE WHEN $2 THEN now() ELSE NULL END
           WHERE id = $1`,
-        [id, b.status, u.id],
+        [id, b.resolved, u.id],
       );
-      await audit(c, { actorId: u.id, eventId: i.event_id, entity: 'incident', entityId: id, action: 'suivi', details: { from: i.status, to: b.status } });
-      return publicIncident((await c.query(INCIDENT_SELECT + ' WHERE i.id = $1', [id])).rows[0]);
+      await audit(c, { actorId: u.id, eventId: s.event_id, entity: 'sos', entityId: id, action: 'suivi', details: { resolved: b.resolved } });
+      return publicSos((await c.query(SOS_SELECT + ' WHERE s.id = $1', [id])).rows[0]);
     });
   });
 
@@ -452,7 +417,7 @@ export async function terrainRoutes(app: FastifyInstance) {
     const u = requireUser(req);
     const eventId = idParam(req);
     await requireEventRole(app.db, u, eventId, 'lecture');
-    const [teams, missions, presence, incidents, progress, tail] = await Promise.all([
+    const [teams, missions, presence, sos, progress, tail] = await Promise.all([
       app.db.query('SELECT id, name, color, disabled_at, kind FROM teams WHERE event_id = $1 ORDER BY name', [eventId]),
       app.db.query(
         `SELECT m.id, m.team_id, m.version, m.position, m.status, m.status_changed_at, m.mission_point_id, p.name, p.distance_m, ST_X(p.geom) AS lon, ST_Y(p.geom) AS lat,
@@ -471,7 +436,7 @@ export async function terrainRoutes(app: FastifyInstance) {
           WHERE t.event_id = $1 GROUP BY tm.team_id`,
         [eventId],
       ),
-      app.db.query(INCIDENT_SELECT + " WHERE i.event_id = $1 AND i.status <> 'resolu' ORDER BY (i.priority = 'haute') DESC, i.created_at", [eventId]),
+      app.db.query(SOS_SELECT + " WHERE s.event_id = $1 AND s.resolved_at IS NULL ORDER BY s.created_at", [eventId]),
       latestProgress(app.db, eventId, 'tete'),
       latestProgress(app.db, eventId, 'queue'),
     ]);
@@ -521,7 +486,7 @@ export async function terrainRoutes(app: FastifyInstance) {
           place: m.place_id ? { id: m.place_id, name: m.place_name, position: [m.place_lon, m.place_lat] } : null, distance: m.distance_m, position: [m.lon, m.lat], passedByTail: passed(tail, m.distance_m),
         })),
       })),
-      incidents: incidents.rows.map(publicIncident),
+      sos: sos.rows.map(publicSos),
       progress,
       tail,
       live: app.live.count(eventId),

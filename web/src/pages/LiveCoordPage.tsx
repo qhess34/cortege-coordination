@@ -1,11 +1,10 @@
-// Coordination en direct, pensée pour le téléphone : tableau de bord, incidents, équipes, messages et carte, en onglets
+// Coordination en direct, pensée pour le téléphone : tableau de bord, SOS, équipes, messages et carte, en onglets
 // avec une barre en bas d'écran. La planification (parcours, suggestions, répartition) reste sur l'interface bureau.
 import { useCallback, useEffect, useState } from 'react';
 import { ApiError, api } from '../api';
 import { InstallCard } from '../components/InstallCard';
 import { LiveMap, type LivePoint } from '../components/LiveMap';
-import { toMapIncidents } from '../components/incidentMarkers';
-import { INCIDENT_CATEGORY } from '../components/FieldView';
+import { toMapSos } from '../components/sosMarkers';
 import type { MemberPosition } from '../components/MapView';
 import type { EventInfo, Position, Track } from '../types';
 import { ago, useLive } from '../useLive';
@@ -13,12 +12,12 @@ import { CoordinationPanel, placeGroups, type CoordSection, type PlaceGroup, typ
 
 type Tab = CoordSection | 'carte';
 const TABS: [Tab, string, string][] = [
-  ['synthese', 'Direct', '📊'], ['incidents', 'Incidents', '⚠'], ['equipes', 'Équipes', '👥'], ['messages', 'Messages', '✉'], ['carte', 'Carte', '🗺'],
+  ['synthese', 'Direct', '📊'], ['sos', 'SOS', '🆘'], ['equipes', 'Équipes', '👥'], ['messages', 'Messages', '✉'], ['carte', 'Carte', '🗺'],
 ];
 const PREF = 'cortege.direct.onglet';
 /** Couleur d'un lieu sur la carte : celle du statut de mission correspondant à son état. */
 const STATE_STATUS: Record<PlaceGroup['state'], string> = {
-  aide: 'incident', incident: 'incident', releve: 'releve_necessaire', en_position: 'en_position', en_route: 'en_deplacement', personne: 'affectee', termine: 'terminee',
+  sos: 'sos', releve: 'releve_necessaire', en_position: 'en_position', en_route: 'en_deplacement', personne: 'affectee', termine: 'terminee',
 };
 
 export function LiveCoordPage({ eventId }: { eventId: number }) {
@@ -26,7 +25,7 @@ export function LiveCoordPage({ eventId }: { eventId: number }) {
   const [error, setError] = useState<string | null>(null);
   const [tab, setTab] = useState<Tab>(() => { try { return (sessionStorage.getItem(PREF) as Tab) || 'synthese'; } catch { return 'synthese'; } });
   const [tick, setTick] = useState(0);
-  const [counts, setCounts] = useState({ incidents: 0, messages: 0 });
+  const [counts, setCounts] = useState({ sos: 0, messages: 0 });
   const [members, setMembers] = useState<MemberPosition[]>([]);
   const [track, setTrack] = useState<Position[][]>([]);
   const [tableau, setTableau] = useState<Tableau | null>(null);
@@ -43,7 +42,7 @@ export function LiveCoordPage({ eventId }: { eventId: number }) {
   }, [base, showMembers]);
   useEffect(() => { loadMembers(); }, [loadMembers]);
   const live = useLive(eventId, async () => { setTick((n) => n + 1); }, 30_000, loadMembers);
-  // La carte a besoin des points et incidents : rechargés seulement quand elle est affichée.
+  // La carte a besoin des points et SOS : rechargés seulement quand elle est affichée.
   useEffect(() => {
     if (tab === 'carte') api.get<Tableau>(base + '/tableau').then(setTableau, () => undefined);
   }, [tab, tick, base]);
@@ -62,7 +61,7 @@ export function LiveCoordPage({ eventId }: { eventId: number }) {
     position: g.position, label: g.name + (g.accesses > 1 ? ' (' + g.held + '/' + g.accesses + ' accès tenus)' : ''),
     status: STATE_STATUS[g.state], passedByTail: g.passedByTail,
   })) : [];
-  const incidents = toMapIncidents(tableau?.incidents ?? [], INCIDENT_CATEGORY);
+  const sos = toMapSos(tableau?.sos ?? []);
 
   return (
     <div className="live-coord" data-testid="coordination-mobile">
@@ -81,7 +80,7 @@ export function LiveCoordPage({ eventId }: { eventId: number }) {
       <main className="live-body">
         <InstallCard compact dismissible />
         {tab === 'carte'
-          ? <LiveMap track={track} points={points} incidents={incidents} members={members} />
+          ? <LiveMap track={track} points={points} sos={sos} members={members} />
           : <CoordinationPanel event={event} canEdit={organizer} liveTick={tick} members={showMembers ? members : null} sections={[tab]} onCounts={setCounts} />}
       </main>
 
@@ -90,7 +89,7 @@ export function LiveCoordPage({ eventId }: { eventId: number }) {
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => choose(id)}>
             <span className="icon" aria-hidden>{icon}</span>
             <span>{label}</span>
-            {id === 'incidents' && counts.incidents > 0 && <span className="count">{counts.incidents}</span>}
+            {id === 'sos' && counts.sos > 0 && <span className="count">{counts.sos}</span>}
           </button>
         ))}
       </nav>

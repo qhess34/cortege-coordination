@@ -1,4 +1,4 @@
-// Jour J : vue de mission, statuts depuis le terrain, incidents, messages, progression, tableau de bord, direct.
+// Jour J : vue de mission, statuts depuis le terrain, SOS, messages, progression, tableau de bord, direct.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { Agent, createUser, memberAgent, setup, type TestContext } from './helpers/app.js';
 import { at, gpxFrom } from './helpers/osm.js';
@@ -65,54 +65,46 @@ describe('statuts posés depuis le terrain', () => {
   });
 });
 
-describe('incidents', () => {
-  let incidentId: number;
-  it('un signalement sur la mission la passe en « incident » ; « aide » est prioritaire', async () => {
-    const r = await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', description: 'Voiture qui force le passage', missionId: missionA, position: at(200, 5) });
+describe('SOS', () => {
+  let sosId: number;
+  let typeRenforts: number;
+  let typeSecours: number;
+  it('déclenchement : un type + un texte facultatif, lieu signalé ou point de la mission', async () => {
+    // Les types par défaut sont créés à la création de la manifestation.
+    const types = (await orga.get('/api/events/' + eventId + '/sos-types')).json();
+    expect(types.map((t: { label: string }) => t.label)).toEqual(['Besoin de renforts', 'Besoin de secours', 'Agression', 'Problème / blocage']);
+    typeRenforts = types[0].id;
+    typeSecours = types[1].id;
+    const r = await alice.post('/api/terrain/equipes/' + teamA + '/sos', { typeId: typeRenforts, message: 'Voiture qui force le passage', missionId: missionA, position: at(200, 5) });
     expect(r.statusCode).toBe(201);
-    expect(r.json()).toMatchObject({ priority: 'haute', status: 'ouvert', pointName: 'Angle', reporterName: 'Alice', teamName: 'Équipe A' });
+    expect(r.json()).toMatchObject({ type: 'Besoin de renforts', status: 'ouvert', pointName: 'Angle', reporterName: 'Alice', teamName: 'Équipe A', message: 'Voiture qui force le passage' });
     expect(r.json().positionSource).toBe('signalee');
     expect(r.json().position[1]).toBeCloseTo(at(200, 5)[1], 6);
+    sosId = r.json().id;
     // Sans position jointe : le lieu est celui du point de la mission (pour que l'équipe volante puisse s'y rendre).
-    const sans = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'sante', description: 'Malaise', missionId: missionA })).json();
-    expect(sans).toMatchObject({ positionSource: 'point', duplicate: false });
+    const sans = (await alice.post('/api/terrain/equipes/' + teamA + '/sos', { typeId: typeSecours, missionId: missionA })).json();
+    expect(sans).toMatchObject({ type: 'Besoin de secours', positionSource: 'point', message: '' });
     expect(sans.position).not.toBeNull();
-    // Double saisie : même nature, même mission ou à moins de 30 m, incident encore ouvert → l'incident existant est complété.
-    const count = async () => (await ctx.db.query('SELECT count(*)::int AS n FROM incidents')).rows[0].n;
-    const before = await count();
-    const again = await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', description: 'Toujours là', missionId: missionA });
-    expect(again.statusCode).toBe(200);
-    expect(again.json()).toMatchObject({ id: r.json().id, duplicate: true });
-    expect(again.json().description).toContain('Voiture qui force le passage');
-    expect(again.json().description).toContain('Alice : Toujours là');
-    const near = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', position: at(210, 5) })).json();
-    expect(near).toMatchObject({ id: r.json().id, duplicate: true });
-    expect(await count()).toBe(before);
-    // Plus loin, ou d'une autre nature : nouvel incident.
-    const far = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'aide', position: at(300, 5) })).json();
-    expect(far.duplicate).toBe(false);
-    expect((await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'materiel', position: at(200, 5) })).json().duplicate).toBe(false);
-    expect(await count()).toBe(before + 2);
-    const hors = (await alice.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'autre', description: 'Sans lieu' })).json();
+    // Sans mission ni position : aucun lieu.
+    const hors = (await alice.post('/api/terrain/equipes/' + teamA + '/sos', { typeId: typeRenforts })).json();
     expect(hors).toMatchObject({ position: null, positionSource: null });
-    incidentId = r.json().id;
-    expect((await mission(alice)).status).toBe('incident');
-    expect((await bob.post('/api/terrain/equipes/' + teamA + '/incidents', { category: 'autre' })).statusCode).toBe(404);
-    const list = (await orga.get('/api/events/' + eventId + '/incidents')).json();
-    expect(list.map((i: { id: number }) => i.id)).toContain(incidentId);
+    // Un SOS ne change pas le statut de la mission.
+    expect((await mission(alice)).status).not.toBe('incident');
+    // Type inconnu refusé (400) ; une autre équipe ne peut pas signaler (404).
+    expect((await alice.post('/api/terrain/equipes/' + teamA + '/sos', { typeId: 999999 })).statusCode).toBe(400);
+    expect((await bob.post('/api/terrain/equipes/' + teamA + '/sos', { typeId: typeRenforts })).statusCode).toBe(404);
+    const list = (await orga.get('/api/events/' + eventId + '/sos')).json();
+    expect(list.map((s: { id: number }) => s.id)).toContain(sosId);
   });
-  it('suivi par l’organisation ; un simple membre ne peut pas clore', async () => {
-    let i = (await orga.get('/api/events/' + eventId + '/incidents')).json()[0];
-    expect((await alice.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version })).statusCode).toBe(403);
-    expect((await bob.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version })).statusCode).toBe(404);
-    const taken = await orga.patch('/api/incidents/' + i.id, { status: 'pris_en_charge', version: i.version });
-    expect(taken.json()).toMatchObject({ status: 'pris_en_charge', handledByName: expect.any(String) });
-    expect((await orga.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version })).statusCode).toBe(409);
-    i = taken.json();
-    expect((await orga.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version })).json().resolvedAt).toBeTruthy();
-    // La mission peut reprendre depuis le terrain.
-    const m = await mission(alice);
-    expect((await alice.post('/api/terrain/missions/' + m.id + '/statut', { status: 'en_position', version: m.version })).statusCode).toBe(200);
+  it('résolution par l’organisation ; un simple membre ne peut pas clore', async () => {
+    const s = (await orga.get('/api/events/' + eventId + '/sos')).json().find((x: { id: number }) => x.id === sosId);
+    expect((await alice.patch('/api/sos/' + s.id, { resolved: true, version: s.version })).statusCode).toBe(403);
+    expect((await bob.patch('/api/sos/' + s.id, { resolved: true, version: s.version })).statusCode).toBe(404);
+    const done = await orga.patch('/api/sos/' + s.id, { resolved: true, version: s.version });
+    expect(done.json()).toMatchObject({ status: 'resolu', handledByName: expect.any(String) });
+    expect(done.json().resolvedAt).toBeTruthy();
+    // Version périmée refusée.
+    expect((await orga.patch('/api/sos/' + s.id, { resolved: true, version: s.version })).statusCode).toBe(409);
   });
 });
 
@@ -226,16 +218,17 @@ describe('équipes volante, d’ouverture et de fermeture', () => {
     expect((await queue.agent.get('/api/terrain/equipes/' + queue.team.id)).json().eventPoints.map((p: { name: string }) => p.name)).toContain('Angle');
   });
 
-  it('l’équipe volante voit et prend en charge les incidents de toutes les équipes', async () => {
+  it('l’équipe volante voit et résout les SOS de toutes les équipes', async () => {
     const vol = await joinTeam('volante', 'Vic');
-    const inc = (await bob.post('/api/terrain/equipes/' + teamB + '/incidents', { category: 'materiel', description: 'Barrière tombée' })).json();
+    const typeId = (await orga.get('/api/events/' + eventId + '/sos-types')).json()[3].id;
+    const inc = (await bob.post('/api/terrain/equipes/' + teamB + '/sos', { typeId, message: 'Barrière tombée' })).json();
     const v = (await vol.agent.get('/api/terrain/equipes/' + vol.team.id)).json();
-    expect(v.canHandleIncidents).toBe(true);
-    expect(v.incidents.map((i: { id: number }) => i.id)).toContain(inc.id);
-    const taken = await vol.agent.patch('/api/incidents/' + inc.id, { status: 'pris_en_charge', version: inc.version });
-    expect(taken.json()).toMatchObject({ status: 'pris_en_charge', handledByName: 'Vic' });
-    // Un membre d'une équipe à points fixes ne voit que les incidents de son équipe.
-    expect((await alice.get('/api/terrain/equipes/' + teamA)).json().incidents.map((i: { id: number }) => i.id)).not.toContain(inc.id);
-    expect((await alice.patch('/api/incidents/' + inc.id, { status: 'resolu', version: taken.json().version })).statusCode).toBe(404);
+    expect(v.canHandleSos).toBe(true);
+    expect(v.sos.map((s: { id: number }) => s.id)).toContain(inc.id);
+    const done = await vol.agent.patch('/api/sos/' + inc.id, { resolved: true, version: inc.version });
+    expect(done.json()).toMatchObject({ status: 'resolu', handledByName: 'Vic' });
+    // Un membre d'une équipe à points fixes ne voit que les SOS de son équipe.
+    expect((await alice.get('/api/terrain/equipes/' + teamA)).json().sos.map((s: { id: number }) => s.id)).not.toContain(inc.id);
+    expect((await alice.patch('/api/sos/' + inc.id, { resolved: true, version: done.json().version })).statusCode).toBe(404);
   });
 });

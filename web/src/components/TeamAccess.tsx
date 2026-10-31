@@ -70,7 +70,7 @@ export function TeamAccess({ teamId, organizer, onChanged }: {
                   {m.phone && <> <PhoneLink phone={m.phone} name={m.displayName} /></>}
                 </span>
                 {organizer && (
-                  <button title={m.role === 'responsable' ? 'Redevient simple membre de l’équipe' : 'Peut suivre les incidents de l’équipe ; son téléphone est affiché aux membres'}
+                  <button title={m.role === 'responsable' ? 'Redevient simple membre de l’équipe' : 'Peut suivre les SOS de l’équipe ; son téléphone est affiché aux membres'}
                     onClick={() => act(() => api.patch(base + '/members/' + m.id, { role: m.role === 'responsable' ? 'membre' : 'responsable' }),
                       m.role === 'responsable' ? m.displayName + ' n’est plus responsable.' : m.displayName + ' est responsable de l’équipe.')}>
                     {m.role === 'responsable' ? 'Retirer « responsable »' : 'Nommer responsable'}

@@ -22,6 +22,7 @@ import { roadbookRoutes } from './routes/roadbook.js';
 import { suggestionRoutes } from './routes/suggestions.js';
 import { teamRoutes } from './routes/teams.js';
 import { terrainRoutes } from './routes/terrain.js';
+import { sosRoutes } from './routes/sos.js';
 import { trackRoutes } from './routes/tracks.js';
 
 declare module 'fastify' {
@@ -135,6 +136,7 @@ export async function buildApp(deps: AppDeps): Promise<FastifyInstance> {
   await app.register(roadbookRoutes);
   await app.register(memberRoutes);
   await app.register(terrainRoutes);
+  await app.register(sosRoutes);
   await app.register(owntracksRoutes);
   await app.register(loginLinkRoutes);
   return app;

@@ -1,31 +1,34 @@
 ---
 name: jour-j
-description: Règles métier du jour J (statuts de mission, types d'équipe, incidents et SOS, progression tête/queue, positions partagées et OwnTracks, carrefours) à respecter quand on touche à la vue terrain ou à la coordination.
+description: Règles métier du jour J (statuts de mission, types d'équipe, SOS, progression tête/queue, positions partagées et OwnTracks, carrefours) à respecter quand on touche à la vue terrain ou à la coordination.
 ---
 
 # Règles métier du jour J
 
 ## Missions
 
-- Statuts : `a_preparer` → `affectee` → `en_deplacement` → `en_position` → `terminee`, plus `releve_necessaire` et
-  `incident`. Transitions de l'organisation : `TRANSITIONS` (`routes/teams.ts`) ; un membre ne peut qu'avancer
+- Statuts : `a_preparer` → `affectee` → `en_deplacement` → `en_position` → `terminee`, plus `releve_necessaire`.
+  Transitions de l'organisation : `TRANSITIONS` (`routes/teams.ts`) ; un membre ne peut qu'avancer
   (`MEMBER_TRANSITIONS`, `routes/terrain.ts`). Terminer une mission ne libère pas le point.
 - Remise de toutes les missions (ou d'une équipe) à « Affectée » : `POST /api/events/:id/missions/reinitialiser`.
 
 ## Équipes
 
-- `points` : tiennent leurs points ; `volante` : voit tous les incidents, les SOS et les relèves avec un lien GPS
-  (alerte + vibration à chaque nouvelle demande) ; `ouverture` : porte la tête ; `fermeture` : porte la queue
+- `points` : tiennent leurs points ; `volante` : voit tous les SOS et les relèves avec un lien GPS
+  (alerte + vibration à chaque nouveau SOS) ; `ouverture` : porte la tête ; `fermeture` : porte la queue
   (points dépassés « à lever »).
 - Responsables : nommés par l'organisation seulement ; leur téléphone est visible des membres de l'équipe.
 
-## Incidents
+## SOS
 
-- `aide`, `sante`, `securite` sont prioritaires. Lieu : position jointe, sinon le point de la mission
-  (`positionSource` : `signalee` | `point`).
-- **Pas de double saisie** : même nature, encore ouvert, même mission ou à moins de 30 m → l'incident existant est
-  complété (`duplicate: true`).
-- Rappel toujours affiché : un signalement ne prévient pas les secours (15, 17, 18, 112).
+- Un bouton SOS (vue terrain) ouvre une fenêtre : un **type** (liste configurable par l'organisation, 4 types par
+  défaut, table `sos_types`) et un **texte facultatif**. Ni catégorie figée, ni priorité : ouvert, puis résolu.
+- Lieu : position jointe, sinon le point de la mission (`positionSource` : `signalee` | `point`). Un SOS ne change pas
+  le statut de la mission.
+- Types configurés dans l'onglet Équipes (routes `/api/events/:id/sos-types`) ; le libellé est copié sur chaque SOS
+  (`type_label`) pour rester lisible si le type est renommé ou retiré.
+- Résolution : organisation, équipe volante, ou responsable de l'équipe concernée (`PATCH /api/sos/:id`).
+- Rappel toujours affiché : un SOS ne prévient pas les secours (15, 17, 18, 112).
 
 ## Progression du cortège
 

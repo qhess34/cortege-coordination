@@ -1,4 +1,4 @@
-// Vue terrain (téléphone) d'une équipe : ma mission, grands boutons de statut, itinéraire, messages, incidents.
+// Vue terrain (téléphone) d'une équipe : ma mission, grands boutons de statut, itinéraire, messages, SOS.
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { ApiError, api } from '../api';
 import { MISSION_STATUS, SUGGESTION_TYPES, TEAM_KIND, km } from '../labels';
@@ -19,11 +19,12 @@ export interface FieldMission {
   passedByTail: boolean;
 }
 export interface FieldMessage { id: number; teamId: number | null; body: string; urgent: boolean; createdAt: string; authorName: string; fromOrganisation: boolean; read?: boolean }
-export interface FieldIncident {
-  id: number; teamId: number | null; missionId: number | null; pointName: string | null; category: string; priority: string; status: string;
-  description: string; reporterName: string | null; handledByName: string | null; createdAt: string; updatedAt: string; version: number;
+export interface FieldSos {
+  id: number; teamId: number | null; missionId: number | null; pointName: string | null; type: string; status: string;
+  message: string; reporterName: string | null; handledByName: string | null; createdAt: string; resolvedAt: string | null; version: number;
   teamName?: string | null; position?: Position | null; positionSource?: 'signalee' | 'point' | null;
 }
+export interface SosType { id: number; label: string; position: number }
 export interface Progress { distance: number; note: string; at: string; authorName: string | null }
 export interface Terrain {
   /** Responsables de l'équipe joignables par téléphone. */
@@ -33,14 +34,16 @@ export interface Terrain {
   team: { id: number; name: string; color: string; instructions: string; leaderName: string | null; closed: boolean; kind: TeamKind };
   missions: FieldMission[];
   messages: FieldMessage[];
-  incidents: FieldIncident[];
+  sos: FieldSos[];
+  /** Types de SOS proposés (configurés par l'organisation). */
+  sosTypes: SosType[];
   track: Position[][];
   /** Tête et queue du cortège déclarées. */
   progress: Progress | null;
   tail: Progress | null;
   canDeclare: { tete: boolean; queue: boolean };
-  /** Peut prendre en charge et clore les incidents affichés (volante, responsable, organisation). */
-  canHandleIncidents: boolean;
+  /** Peut résoudre les SOS affichés (volante, responsable, organisation). */
+  canHandleSos: boolean;
   /** Peut ajouter ou retirer des membres depuis la vue terrain (responsable autorisé, organisation). */
   canManageMembers: boolean;
   /** Points tenus par toutes les équipes (équipes sans point fixe). */
@@ -52,10 +55,7 @@ export interface Terrain {
   owntracks: OwnTracksState | null;
 }
 
-export const INCIDENT_CATEGORY: Record<string, string> = {
-  aide: 'Besoin d’aide', securite: 'Sécurité', sante: 'Santé / secours', circulation: 'Circulation / véhicule', materiel: 'Matériel', autre: 'Autre',
-};
-export const INCIDENT_STATUS: Record<string, string> = { ouvert: 'Ouvert', pris_en_charge: 'Pris en charge', resolu: 'Résolu' };
+export const SOS_STATUS: Record<string, string> = { ouvert: 'Ouvert', resolu: 'Résolu' };
 
 /** Grands boutons proposés selon le statut (transitions autorisées aux membres côté serveur). */
 const ACTIONS: Record<string, { to: string; label: string; primary?: boolean }[]> = {
@@ -63,15 +63,11 @@ const ACTIONS: Record<string, { to: string; label: string; primary?: boolean }[]
   en_deplacement: [{ to: 'en_position', label: 'Arrivé', primary: true }],
   en_position: [{ to: 'terminee', label: 'Terminé', primary: true }, { to: 'releve_necessaire', label: 'Relève nécessaire' }],
   releve_necessaire: [{ to: 'en_position', label: 'Toujours en position' }, { to: 'terminee', label: 'Terminé', primary: true }],
-  incident: [{ to: 'en_position', label: 'Reprendre la position', primary: true }, { to: 'en_deplacement', label: 'En route' }, { to: 'terminee', label: 'Terminé' }],
 };
 
-type Tab = 'mission' | 'messages' | 'incidents' | 'aide';
+type Tab = 'mission' | 'messages' | 'sos' | 'aide';
 /** Message de confirmation d'une action, fixe ou selon la réponse du serveur. */
 type Ok = string | ((response: unknown) => string);
-/** Signalement : nouveau, ou rattaché à un incident déjà ouvert au même endroit (pas de double saisie). */
-const reported = (text: string): Ok => (r) =>
-  (r as { duplicate?: boolean } | null)?.duplicate ? 'Déjà signalé à cet endroit : l’incident en cours est complété, l’organisation est prévenue.' : text;
 
 const meters = (m: number) => (m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km');
 /**
@@ -96,12 +92,12 @@ function GpsLink({ to, label, children }: { to: Position; label: string; childre
   );
 }
 
-/** Lien GPS vers le lieu d'un incident (position signalée, sinon le point concerné). */
-function JoinButton({ incident: i }: { incident: FieldIncident }) {
-  const label = (INCIDENT_CATEGORY[i.category] ?? 'Incident') + (i.pointName ? ' · ' + i.pointName : '');
+/** Lien GPS vers le lieu d'un SOS (position signalée, sinon le point concerné). */
+function JoinButton({ sos: s }: { sos: FieldSos }) {
+  const label = s.type + (s.pointName ? ' · ' + s.pointName : '');
   return (
-    <GpsLink to={i.position!} label={label}>
-      🧭 Rejoindre le lieu{i.positionSource === 'point' ? ' (point « ' + i.pointName + ' »)' : ' signalé'}
+    <GpsLink to={s.position!} label={label}>
+      🧭 Rejoindre le lieu{s.positionSource === 'point' ? ' (point « ' + s.pointName + ' »)' : ' signalé'}
     </GpsLink>
   );
 }
@@ -157,14 +153,14 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
   }, [data, selected]);
   const next = data && current ? data.missions.find((m) => m.order > current.order && m.status !== 'terminee') ?? null : null;
   const unread = data?.messages.filter((m) => m.read === false).length ?? 0;
-  const openIncidents = data?.incidents.filter((i) => i.status !== 'resolu').length ?? 0;
+  const openSos = data?.sos.filter((s) => s.status !== 'resolu').length ?? 0;
 
-  // Équipe volante : une nouvelle demande d'aide ou de relève fait vibrer le téléphone et s'annonce (pas au chargement).
+  // Équipe volante : un nouveau SOS ou une nouvelle relève fait vibrer le téléphone et s'annonce (pas au chargement).
   const alerts = useRef<Set<string> | null>(null);
   useEffect(() => {
     if (!data || data.team.kind !== 'volante') return;
     const now = [
-      ...data.incidents.filter((i) => i.category === 'aide' && i.status !== 'resolu').map((i) => ({ key: 'aide-' + i.id, text: '🆘 Besoin d’aide' + (i.pointName ? ' · ' + i.pointName : '') })),
+      ...data.sos.filter((s) => s.status !== 'resolu').map((s) => ({ key: 'sos-' + s.id, text: '🆘 ' + s.type + (s.pointName ? ' · ' + s.pointName : '') })),
       ...data.eventPoints.filter((p) => p.status === 'releve_necessaire').map((p) => ({ key: 'releve-' + p.missionId, text: '🔄 Relève nécessaire · ' + p.name })),
     ];
     const fresh = alerts.current ? now.filter((a) => !alerts.current!.has(a.key)) : [];
@@ -246,7 +242,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
       <nav className="field-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'mission'} onClick={() => setTab('mission')}>Mission</button>
         <button role="tab" aria-selected={tab === 'messages'} onClick={() => setTab('messages')}>Messages{unread ? <span className="count">{unread}</span> : null}</button>
-        <button role="tab" aria-selected={tab === 'incidents'} onClick={() => setTab('incidents')}>Incidents{openIncidents ? <span className="count">{openIncidents}</span> : null}</button>
+        <button role="tab" aria-selected={tab === 'sos'} onClick={() => setTab('sos')}>SOS{openSos ? <span className="count">{openSos}</span> : null}</button>
         <button role="tab" aria-selected={tab === 'aide'} onClick={() => setTab('aide')} aria-label="Aide" className="help-tab">?</button>
       </nav>
 
@@ -255,7 +251,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
           {data.messages.some((m) => m.urgent && m.read === false) && (
             <button className="urgent-banner" onClick={() => setTab('messages')}>⚠ Message urgent de l’organisation — lire</button>
           )}
-          {data.team.kind !== 'points' && <RoleCard data={data} openIncidents={() => setTab('incidents')} />}
+          {data.team.kind !== 'points' && <RoleCard data={data} openSos={() => setTab('sos')} />}
           {!current ? (data.team.kind !== 'points' ? null :
             <div className="card"><p>{data.missions.length ? 'Toutes les missions de l’équipe sont terminées. Merci !' : 'Aucune mission pour l’instant.'}</p></div>
           ) : (
@@ -281,10 +277,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
                 ))}
               </div>
               <div className="row">
-                <button className="big danger" disabled={busy} onClick={() => act(() => api.post('/api/terrain/equipes/' + teamId + '/incidents', {
-                  category: 'aide', description: 'Demande d’aide depuis « ' + current.point.name + ' »', missionId: current.id, position: me,
-                }), reported('Demande d’aide envoyée à l’organisation.'))}>🆘 Aide</button>
-                <button className="big" onClick={() => setTab('incidents')}>Signaler un incident</button>
+                <button className="big danger" onClick={() => setTab('sos')}>🆘 SOS</button>
               </div>
               {next && (
                 <NextPointButton to={next.point.position} label={next.point.name} />
@@ -364,7 +357,7 @@ export function FieldView({ teamId, header, onUnauthorized }: { teamId: number; 
       )}
 
       {tab === 'messages' && <Messages data={data} teamId={teamId} act={act} busy={busy} />}
-      {tab === 'incidents' && <Incidents data={data} teamId={teamId} current={current} me={me} locate={locate} act={act} busy={busy} />}
+      {tab === 'sos' && <Sos data={data} teamId={teamId} current={current} me={me} locate={locate} act={act} busy={busy} />}
 
       {tab === 'aide' && <section className="card" data-testid="aide-membre"><Markdown source={guideMembre} toc /></section>}
 
@@ -431,21 +424,20 @@ function Progression({ data, reload, setToast, locate, me }: {
 }
 
 /** Rôle d'une équipe sans point fixe. */
-function RoleCard({ data, openIncidents }: { data: Terrain; openIncidents: () => void }) {
-  const open = data.incidents.filter((i) => i.status !== 'resolu');
+function RoleCard({ data, openSos }: { data: Terrain; openSos: () => void }) {
+  const open = data.sos.filter((s) => s.status !== 'resolu');
   const behindTail = data.tail ? data.eventPoints.filter((p) => p.distance !== null && p.distance <= data.tail!.distance && p.status !== 'terminee') : [];
   return (
     <div className="card mission-card" data-testid="role-equipe">
       <h2>{TEAM_KIND[data.team.kind]}</h2>
       {data.team.kind === 'volante' && (
         <>
-          <p>Pas de point fixe : vous intervenez là où l’organisation ou les équipes en ont besoin. Les incidents de toute la manifestation s’affichent ici.</p>
-          {/* Demandes d'aide en cours : lien direct vers le lieu, sans passer par l'onglet Incidents. */}
-          {open.filter((i) => i.category === 'aide' && i.position).map((i) => (
-            <div key={i.id} className="sos-alert" data-testid={'sos-' + i.id}>
-              <p><b>🆘 Besoin d’aide</b>{i.pointName ? ' · ' + i.pointName : ''}{i.teamName ? ' (' + i.teamName + ')' : ''} · {ago(i.createdAt)}
-                {i.handledByName && i.status === 'pris_en_charge' ? <span className="muted"> · pris en charge par {i.handledByName}</span> : null}</p>
-              <JoinButton incident={i} />
+          <p>Pas de point fixe : vous intervenez là où l’organisation ou les équipes en ont besoin. Les SOS de toute la manifestation s’affichent ici.</p>
+          {/* SOS en cours : lien direct vers le lieu, sans passer par l'onglet SOS. */}
+          {open.filter((s) => s.position).map((s) => (
+            <div key={s.id} className="sos-alert" data-testid={'sos-' + s.id}>
+              <p><b>🆘 {s.type}</b>{s.pointName ? ' · ' + s.pointName : ''}{s.teamName ? ' (' + s.teamName + ')' : ''} · {ago(s.createdAt)}</p>
+              <JoinButton sos={s} />
             </div>
           ))}
           {/* Relèves demandées : l'équipe volante peut aller relever le point. */}
@@ -455,7 +447,7 @@ function RoleCard({ data, openIncidents }: { data: Terrain; openIncidents: () =>
               <GpsLink to={p.position} label={'Relève · ' + p.name}>🧭 Rejoindre le point « {p.name} »</GpsLink>
             </div>
           ))}
-          <button className="big primary" onClick={openIncidents}>{open.length ? open.length + ' incident(s) en cours' : 'Aucun incident en cours'}</button>
+          <button className="big primary" onClick={openSos}>{open.length ? open.length + ' SOS en cours' : 'Aucun SOS en cours'}</button>
         </>
       )}
       {data.team.kind === 'ouverture' && <p>Vous ouvrez le cortège : votre position partagée fait avancer la tête ; sinon déclarez-la régulièrement (bouton ci-dessous). Les équipes voient à quelle distance elle se trouve de leur point.</p>}
@@ -497,49 +489,53 @@ function Messages({ data, teamId, act, busy }: { data: Terrain; teamId: number; 
   );
 }
 
-function Incidents({ data, teamId, current, me, locate, act, busy }: {
+function Sos({ data, teamId, current, me, locate, act, busy }: {
   data: Terrain; teamId: number; current: FieldMission | null; me: Position | null; locate: () => Promise<Position | null>;
   act: (fn: () => Promise<unknown>, ok: Ok) => Promise<boolean>; busy: boolean;
 }) {
-  const [category, setCategory] = useState('securite');
-  const [description, setDescription] = useState('');
+  const [typeId, setTypeId] = useState<number | null>(data.sosTypes[0]?.id ?? null);
+  const [message, setMessage] = useState('');
   const [onMission, setOnMission] = useState(true);
   const [withPosition, setWithPosition] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
+    if (!typeId) return;
     const position = withPosition ? me ?? (await locate()) : null;
-    const ok = await act(() => api.post('/api/terrain/equipes/' + teamId + '/incidents', {
-      category, description, missionId: onMission && current ? current.id : null, position,
-    }), reported('Incident signalé à l’organisation.'));
-    if (ok) setDescription('');
+    const ok = await act(() => api.post('/api/terrain/equipes/' + teamId + '/sos', {
+      typeId, message, missionId: onMission && current ? current.id : null, position,
+    }), 'SOS envoyé à l’organisation.');
+    if (ok) setMessage('');
   };
   return (
-    <section className="stack" data-testid="incidents">
+    <section className="stack" data-testid="sos">
+      {data.sosTypes.length === 0
+        ? <p className="muted">Aucun type de SOS configuré pour cette manifestation.</p>
+        : (
       <form className="card stack" onSubmit={submit}>
-        <h2>Signaler un incident</h2>
-        <label>Nature
-          <select value={category} onChange={(e) => setCategory(e.target.value)}>
-            {Object.entries(INCIDENT_CATEGORY).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
+        <h2>🆘 Déclencher un SOS</h2>
+        <label>Type
+          <select value={typeId ?? ''} onChange={(e) => setTypeId(Number(e.target.value))}>
+            {data.sosTypes.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
           </select>
         </label>
-        <label>Description<textarea rows={3} value={description} onChange={(e) => setDescription(e.target.value)} maxLength={2000} /></label>
+        <label>Précisions (facultatif)<textarea rows={3} value={message} onChange={(e) => setMessage(e.target.value)} maxLength={1000} placeholder="Décrivez brièvement la situation" /></label>
         {current && <label className="check"><input type="checkbox" checked={onMission} onChange={(e) => setOnMission(e.target.checked)} /> Concerne « {current.point.name} »</label>}
         <label className="check"><input type="checkbox" checked={withPosition} onChange={(e) => setWithPosition(e.target.checked)} /> Joindre ma position actuelle</label>
-        <button className="big danger" disabled={busy}>Envoyer le signalement</button>
-        <p className="muted small">En cas d’urgence vitale, appelez le 15, le 17, le 18 ou le 112 : ce signalement ne les prévient pas.</p>
+        <button className="big danger" disabled={busy}>Envoyer le SOS</button>
+        <p className="muted small">En cas d’urgence vitale, appelez le 15, le 17, le 18 ou le 112 : ce SOS ne les prévient pas.</p>
       </form>
-      {data.incidents.length === 0 && <p className="muted">Aucun incident récent pour l’équipe.</p>}
+      )}
+      {data.sos.length === 0 && <p className="muted">Aucun SOS récent pour l’équipe.</p>}
       <ul className="plain">
-        {data.incidents.map((i) => (
-          <li key={i.id} className={'card incident p-' + i.priority + ' st-' + i.status}>
-            <p><b>{INCIDENT_CATEGORY[i.category] ?? i.category}</b> — {INCIDENT_STATUS[i.status]}{i.handledByName && i.status !== 'ouvert' ? ' par ' + i.handledByName : ''}</p>
-            {i.description && <p className="pre small">{i.description}</p>}
-            <p className="muted small">{i.teamName && i.teamId !== teamId ? i.teamName + ' · ' : ''}{i.pointName ? i.pointName + ' · ' : ''}{i.reporterName ?? ''} · {ago(i.createdAt)}</p>
-            {data.canHandleIncidents && i.status !== 'resolu' && (
+        {data.sos.map((s) => (
+          <li key={s.id} className={'card incident st-' + s.status}>
+            <p><b>🆘 {s.type}</b> — {SOS_STATUS[s.status] ?? s.status}{s.handledByName && s.status === 'resolu' ? ' par ' + s.handledByName : ''}</p>
+            {s.message && <p className="pre small">{s.message}</p>}
+            <p className="muted small">{s.teamName && s.teamId !== teamId ? s.teamName + ' · ' : ''}{s.pointName ? s.pointName + ' · ' : ''}{s.reporterName ?? ''} · {ago(s.createdAt)}</p>
+            {data.canHandleSos && s.status !== 'resolu' && (
               <div className="row">
-                {i.position && <JoinButton incident={i} />}
-                {i.status === 'ouvert' && <button className="primary" disabled={busy} onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'pris_en_charge', version: i.version }), 'Vous prenez l’incident en charge.')}>J’y vais</button>}
-                <button disabled={busy} onClick={() => act(() => api.patch('/api/incidents/' + i.id, { status: 'resolu', version: i.version }), 'Incident résolu.')}>Résolu</button>
+                {s.position && <JoinButton sos={s} />}
+                <button disabled={busy} onClick={() => act(() => api.patch('/api/sos/' + s.id, { resolved: true, version: s.version }), 'SOS résolu.')}>Résolu</button>
               </div>
             )}
           </li>

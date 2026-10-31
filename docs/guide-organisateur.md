@@ -37,10 +37,10 @@ Chaque manifestation de la liste propose deux boutons :
 - **📱 Coordination en direct** : l'interface du jour J, pensée pour le **téléphone**. Une barre d'onglets en bas
   d'écran donne accès à :
   - *Direct* : compteurs, prochains points et état des équipes ;
-  - *Incidents*, avec un badge du nombre d'incidents ouverts ;
+  - *SOS*, avec un badge du nombre de SOS ouverts ;
   - *Équipes* : statut de chaque point ;
   - *Messages* ;
-  - *Carte* : points colorés selon leur statut, incidents et membres suivis.
+  - *Carte* : points colorés selon leur statut, SOS et membres suivis.
 
   Tout se met à jour en direct. Le lien *🗺 Planification* ramène à l'interface complète.
 
@@ -127,7 +127,7 @@ Chaque manifestation de la liste propose deux boutons :
 |---|---|
 | **Points fixes** | Tient les points de sa liste, dans l'ordre. |
 | **Ouverture** | Marche en tête et déclare la position de la **tête** du cortège. |
-| **Volante** | Sans point fixe, intervient sur les **incidents** de toute la manifestation. |
+| **Volante** | Sans point fixe, intervient sur les **SOS** de toute la manifestation. |
 | **Fermeture** | Ferme la marche et déclare la **queue**. Les points dépassés pourront être levés. |
 
 ### Créer et répartir
@@ -152,7 +152,7 @@ Dans la section **Membres** d'une équipe :
   responsable**. Vous pouvez ajouter les comptes « membre d'équipe » et les comptes d'organisation qui ont accès à la
   manifestation.
 - **Nommer responsable** / **Retirer « responsable »** : change le rôle d'un membre déjà dans l'équipe. Seule
-  l'organisation désigne les responsables ; ils suivent les incidents de l'équipe, et leur téléphone est affiché aux
+  l'organisation désigne les responsables ; ils suivent les SOS de l'équipe, et leur téléphone est affiché aux
   membres.
 - **Lien de connexion** : pour un membre qui a perdu son accès ou changé de téléphone. Le lien vaut 72 h et ne sert
   qu'une fois ; il n'est **affiché qu'une fois**, copiez-le aussitôt et transmettez-le-lui.
@@ -173,7 +173,7 @@ Dans la section **Membres** d'une équipe :
 - **GPX de tous les points** (bas de l'onglet *Équipes*), par carrefour ou *(par accès)*, à charger dans une
   application de navigation.
 - **↺ Remettre toutes les missions à « Affectée »** (bas de l'onglet *Équipes*, ou réglages d'une équipe pour elle
-  seule) : après une répétition, ou pour repartir de zéro. Les affectations et l'ordre sont conservés ; les incidents,
+  seule) : après une répétition, ou pour repartir de zéro. Les affectations et l'ordre sont conservés ; les SOS,
   les messages et la progression ne sont pas effacés.
 
 ## Le jour J : onglet Coordination
@@ -182,12 +182,12 @@ Sur téléphone, préférez **📱 Coordination en direct** : mêmes information
 tout s'y met à jour **en direct**. L'indicateur **● direct** à côté du nom de la manifestation le confirme ; en cas de
 coupure, l'écran se recharge toutes les 30 secondes.
 
-- **Compteurs** : incidents ouverts, tête et queue du cortège, **points à lever**.
+- **Compteurs** : SOS ouverts, tête et queue du cortège, **points à lever**.
 - **Prochains points devant la tête** : les six points (ou carrefours) suivants sur le parcours, avec la distance depuis la tête, leurs
-  équipes et leur état, le plus grave d'abord : **🆘 Besoin d'aide** (demande d'aide en cours), **⚠ Incident**,
+  équipes et leur état, le plus grave d'abord : **🆘 SOS** (SOS en cours),
   *Relève nécessaire*, **✓ Équipe en position**, *Personne · équipe en route*, **Personne** (aucune équipe sur place),
   *Levé* (missions terminées). Tant que la tête n'est pas connue, la liste part du départ.
-- **Équipes** (onglet *Direct*) : le statut résumé de chaque équipe (le plus urgent d'abord : incident, relève, en
+- **Équipes** (onglet *Direct*) : le statut résumé de chaque équipe (le plus urgent d'abord : relève, en
   route, en position…), son responsable et des raccourcis pour le joindre : **📞 appel** et **💬 SMS** si son
   téléphone est renseigné, **✉ message** dans l'application à toute l'équipe.
 - **Progression du cortège** : si le partage de position est autorisé, la tête et la queue avancent **automatiquement**
@@ -196,11 +196,12 @@ coupure, l'écran se recharge toutes les 30 secondes.
   imprécises ignorées). Sinon, l'ouverture (tête) et la fermeture (queue) la déclarent depuis leur vue terrain, en km
   parcourus ou « 📍 ici ». Les compteurs *Tête* et *Queue* de l'écran *Direct* la reprennent ; chaque membre voit à
   quelle distance la tête se trouve de son point. C'est une indication, à confirmer sur le terrain.
-- **Sur la carte** (écran *Planifier* et onglet *Carte* de la coordination en direct) : chaque incident en cours est
-  marqué au lieu signalé, ou au point concerné : **🆘 SOS** pour une demande d'aide, **⚠** pour les autres. Le marqueur
-  **clignote tant que personne ne l'a pris en charge** et disparaît une fois l'incident résolu.
-- **Incidents** : les prioritaires (aide, santé, sécurité) en premier. *Je m'en occupe* indique à l'équipe que c'est
-  pris en charge, *Résolu* clôt l'incident. L'équipe volante peut aussi les prendre en charge ; elle a un lien **🧭 Rejoindre le lieu** vers chaque demande d'aide.
+- **Sur la carte** (écran *Planifier* et onglet *Carte* de la coordination en direct) : chaque SOS en cours est
+  marqué **🆘** au lieu signalé, ou au point concerné. Le marqueur **clignote tant que le SOS n'est pas résolu** et
+  disparaît une fois résolu.
+- **SOS** : type et texte du signalement, équipe et lieu. *Résolu* clôt le SOS. L'équipe volante peut aussi les
+  résoudre ; elle a un lien **🧭 Rejoindre le lieu** vers chaque SOS. Les **types de SOS** se configurent dans
+  l'onglet *Équipes* (ajout, renommage, retrait).
 - **Équipes** : statut de chaque point (qui l'a changé, quand), nombre de membres actifs, badge **à lever** quand la
   queue a dépassé un point encore tenu.
 - **Messages** : à toutes les équipes ou à une seule, éventuellement **urgents** (bandeau rouge sur les téléphones).

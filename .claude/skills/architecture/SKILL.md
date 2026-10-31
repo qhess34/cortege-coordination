@@ -17,7 +17,7 @@ Conception détaillée : `docs/CONCEPTION.md`.
 - `src/routes/` : une route par domaine.
   - `events`, `tracks` (GPX), `suggestions` (analyse OSM, validation → point), `points` (+ carrefours : regrouper,
     séparer), `teams` (missions, statuts, remise à « Affectée »), `roadbook` (roadbook et GPX).
-  - `terrain` (jour J : vue d'équipe, incidents, messages, progression, tableau, positions, WebSocket `/api/direct`).
+  - `terrain` (jour J : vue d'équipe, SOS, messages, progression, tableau, positions, WebSocket `/api/direct`).
   - `owntracks`, `members` (membres d'équipe, profil), `admin` (comptes), `auth`, `login-links` (liens magiques).
 - `src/services/` : `live.ts` (signal du direct), `locations.ts` (positions, arrivée et progression automatiques),
   `places.ts` (carrefours), `merge.ts` (nouvelle analyse non destructive), `missions.ts`, `overpass.ts`,
@@ -35,7 +35,7 @@ Conception détaillée : `docs/CONCEPTION.md`.
   (retenus ; `place_id` → `places` = carrefour regroupant ses accès).
 - `teams` (`kind` ∈ points | volante | ouverture | fermeture) → `missions` (ordre, statut) ; `team_memberships`
   (membre | responsable).
-- Jour J : `incidents`, `messages` + `message_receipts`, `event_progress` (tête/queue), `member_locations`
+- Jour J : `sos` (+ `sos_types`), `messages` + `message_receipts`, `event_progress` (tête/queue), `member_locations`
   (dernière position seulement, jamais dans l'audit), `trackers` (OwnTracks).
 - `audit_logs` : toute modification importante (`audit()`), jamais de secret ni de position.
 
@@ -53,6 +53,6 @@ appeler `app.live.publish` elle-même. Côté client : `web/src/useLive.ts` (rec
   onglets) ; `pages/event/CoordinationPanel.tsx` (sections partagées par les deux, `placeGroups` pour le suivi par
   carrefour).
 - `components/FieldView.tsx` (vue terrain des équipes), `MapView.tsx` (carte de planification), `LiveMap.tsx`,
-  `FieldMap.tsx`, `PointEditor.tsx` (bulle d'un point), `incidentMarkers.ts`, `TeamAccess.tsx`.
+  `FieldMap.tsx`, `PointEditor.tsx` (bulle d'un point), `sosMarkers.ts`, `TeamAccess.tsx`.
 - `types.ts`, `labels.ts` (libellés et formats), `api.ts` (en-tête CSRF, erreurs `ApiError`).
 - Guides affichés dans l'application : `docs/guide-*.md` importés en `?raw` (d'où leur copie dans le Dockerfile).

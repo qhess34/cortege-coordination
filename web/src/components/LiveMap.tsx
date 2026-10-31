@@ -1,4 +1,4 @@
-// Carte de la coordination en direct (téléphone) : parcours, points colorés par statut, incidents, membres suivis.
+// Carte de la coordination en direct (téléphone) : parcours, points colorés par statut, SOS, membres suivis.
 import * as maplibregl from 'maplibre-gl';
 import type { GeoJSONSource, Map as MlMap } from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
@@ -9,14 +9,14 @@ import { MISSION_STATUS } from '../labels';
 import type { Position } from '../types';
 import type { MemberPosition } from './MapView';
 import { loadVectorBasemap } from './vectorBasemap';
-import { syncIncidentMarkers, type MapIncident } from './incidentMarkers';
+import { syncSosMarkers, type MapSos } from './sosMarkers';
 
 maplibregl.setWorkerUrl(workerUrl);
 
 /** Couleur d'un point selon le statut de sa mission (légende affichée sous la carte). */
 export const STATUS_COLOR: Record<string, string> = {
   a_preparer: '#adb5bd', affectee: '#8d99ae', en_deplacement: '#3a86ff', en_position: '#2a9d8f', terminee: '#ced4da',
-  releve_necessaire: '#f4a261', incident: '#d62828',
+  releve_necessaire: '#f4a261', sos: '#d62828',
 };
 
 export interface LivePoint { position: Position; label: string; status: string; passedByTail: boolean }
@@ -24,14 +24,14 @@ export interface LivePoint { position: Position; label: string; status: string; 
 type Feature = { type: 'Feature'; properties: Record<string, unknown>; geometry: { type: 'Point' | 'LineString'; coordinates: unknown } };
 const fc = (features: Feature[]) => ({ type: 'FeatureCollection' as const, features }) as never;
 
-export function LiveMap({ track, points, incidents, members }: { track: Position[][]; points: LivePoint[]; incidents: MapIncident[]; members: MemberPosition[] }) {
+export function LiveMap({ track, points, sos, members }: { track: Position[][]; points: LivePoint[]; sos: MapSos[]; members: MemberPosition[] }) {
   const el = useRef<HTMLDivElement>(null);
   const map = useRef<MlMap | null>(null);
   const ready = useRef(false);
   const markers = useRef(new Map<number, maplibregl.Marker>());
-  const incidentMarkers = useRef(new Map<number, maplibregl.Marker>());
-  const latest = useRef({ track, points, incidents, members });
-  latest.current = { track, points, incidents, members };
+  const sosMarkers = useRef(new Map<number, maplibregl.Marker>());
+  const latest = useRef({ track, points, sos, members });
+  latest.current = { track, points, sos, members };
   const fitted = useRef(false);
   const [basemapError, setBasemapError] = useState(false);
 
@@ -43,7 +43,7 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
     (m.getSource('points') as GeoJSONSource).setData(fc(d.points.map((p) => ({
       type: 'Feature', properties: { color: STATUS_COLOR[p.status] ?? '#8d99ae', lever: p.passedByTail && p.status !== 'terminee' }, geometry: { type: 'Point', coordinates: p.position },
     }))));
-    syncIncidentMarkers(m, incidentMarkers.current, d.incidents);
+    syncSosMarkers(m, sosMarkers.current, d.sos);
     const seen = new Set<number>();
     for (const p of d.members) {
       seen.add(p.userId);
@@ -105,23 +105,22 @@ export function LiveMap({ track, points, incidents, members }: { track: Position
       if (vector?.style) loadVectorBasemap(m, vector.style, 'parcours').catch(fallback);
       else fallback();
     });
-    return () => { ro.disconnect(); ready.current = false; for (const mk of markers.current.values()) mk.remove(); markers.current.clear(); for (const mk of incidentMarkers.current.values()) mk.remove(); incidentMarkers.current.clear(); m.remove(); map.current = null; };
+    return () => { ro.disconnect(); ready.current = false; for (const mk of markers.current.values()) mk.remove(); markers.current.clear(); for (const mk of sosMarkers.current.values()) mk.remove(); sosMarkers.current.clear(); m.remove(); map.current = null; };
     // La carte est créée une fois ; les données suivent par sync().
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  useEffect(sync, [track, points, incidents, members]);
+  useEffect(sync, [track, points, sos, members]);
 
   return (
     <div className="stack">
       <div ref={el} className="live-map" data-testid="carte-direct" />
       {basemapError && <p className="warning small" role="status">Le fond de carte ne se charge pas (connexion ou fournisseur de tuiles) : le parcours et les points restent affichés.</p>}
       <p className="legend small">
-        {['en_deplacement', 'en_position', 'releve_necessaire', 'incident', 'affectee'].map((s) => (
+        {['en_deplacement', 'en_position', 'releve_necessaire', 'affectee'].map((s) => (
           <span key={s}><span className="dot" style={{ background: STATUS_COLOR[s] }} /> {MISSION_STATUS[s]}</span>
         ))}
         <span><span className="dot ring" /> à lever</span>
-        <span>🆘 demande d’aide</span>
-        <span>⚠ incident (clignote tant que personne ne l’a pris en charge)</span>
+        <span>🆘 SOS (clignote tant qu’il n’est pas résolu)</span>
       </p>
     </div>
   );
