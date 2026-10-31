@@ -44,17 +44,23 @@ export async function detectArrival(c: Client, p: {
 }): Promise<Arrival | null> {
   const kind = (await c.query('SELECT kind FROM teams WHERE id = $1', [p.teamId])).rows[0]?.kind;
   if (kind !== 'points') return null;
+  // Point d'arrivée candidat : parmi les points encore à tenir (affectée ou en route), le plus proche de la
+  // position (ou, pour OwnTracks, celui de la zone franchie). On ne prend plus le premier point du parcours :
+  // sinon l'arrivée restait bloquée dessus une fois « en position » et les points suivants n'étaient jamais
+  // détectés — le compteur « en position » de l'équipe ne dépassait jamais 1.
   const m = (await c.query(
     `SELECT m.id, m.status, p.name,
             CASE WHEN $2::float8 IS NULL THEN NULL ELSE ST_DistanceSphere(p.geom, ST_SetSRID(ST_MakePoint($2, $3), 4326)) END AS d
        FROM missions m JOIN mission_points p ON p.id = m.mission_point_id
-      WHERE m.team_id = $1 AND m.cancelled_at IS NULL AND m.status <> 'terminee'
-      ORDER BY m.position LIMIT 1 FOR UPDATE OF m`,
-    [p.teamId, p.position?.[0] ?? null, p.position?.[1] ?? null],
+      WHERE m.team_id = $1 AND m.cancelled_at IS NULL AND m.status IN ('affectee', 'en_deplacement')
+        AND ($4::int IS NULL OR m.id = $4)
+      ORDER BY (CASE WHEN $4::int IS NOT NULL THEN 0 ELSE 1 END), d ASC NULLS LAST, m.position
+      LIMIT 1 FOR UPDATE OF m`,
+    [p.teamId, p.position?.[0] ?? null, p.position?.[1] ?? null, p.zoneMissionId ?? null],
   )).rows[0];
-  if (!m || (m.status !== 'affectee' && m.status !== 'en_deplacement')) return null;
+  if (!m) return null;
   const near = m.d !== null && m.d <= ARRIVAL_RADIUS && (p.accuracy === null || p.accuracy <= ARRIVAL_MAX_ACCURACY);
-  const inZone = p.zoneMissionId === m.id;
+  const inZone = p.zoneMissionId != null && p.zoneMissionId === m.id;
   if (!near && !inZone) return null;
   await c.query(
     "UPDATE missions SET status = 'en_position', version = version + 1, updated_at = now(), status_changed_at = now(), status_changed_by = $2 WHERE id = $1",

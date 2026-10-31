@@ -49,9 +49,12 @@ export function ProfilePage({ onSaved, onLogout }: { onSaved: () => void; onLogo
       <div className="card stack small">
         {p.login && <p>Identifiant : <b>{p.login}</b></p>}
         {p.expiresAt && <p>Ce compte expire le <b>{dateTime(p.expiresAt)}</b> : il sera alors supprimé automatiquement.</p>}
-        <p><ConnectDevice /> — connecter un autre appareil (téléphone) à ce compte, sans mot de passe.</p>
+        <div className="profile-device">
+          <ConnectDevice />
+          <p className="muted">Connectez un autre appareil (téléphone) à ce compte, sans mot de passe.</p>
+        </div>
         <InstallCard compact />
-        <button onClick={async () => { await api.post('/api/auth/logout').catch(() => undefined); onLogout(); }}>Se déconnecter de cet appareil</button>
+        <button className="danger" onClick={async () => { await api.post('/api/auth/logout').catch(() => undefined); onLogout(); }}>Se déconnecter de cet appareil</button>
       </div>
     </main>
   );
