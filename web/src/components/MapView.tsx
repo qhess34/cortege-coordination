@@ -454,11 +454,13 @@ export function MapView(props: Props) {
           const edit = latest.current.edit;
           // Glisser un point qui n'est pas en cours d'édition ouvre sa bulle.
           if (el.dataset.id && !(edit?.kind === 'existing' && edit.id === id)) latest.current.onSelect({ kind: 'point', id });
+          // Masquer la bulle tout de suite, y compris quand le point est déjà en cours d'édition (pas de re-rendu).
+          placeBubble();
         });
         marker.on('drag', () => {
+          // La bulle reste masquée pendant le geste ; on garde sa position à jour pour la replacer au relâchement.
           const ll = marker.getLngLat();
           bubbleAt.current = [ll.lng, ll.lat];
-          placeBubble();
         });
         marker.on('dragend', () => {
           dragging.current = null;
@@ -496,6 +498,8 @@ export function MapView(props: Props) {
     const el = bubble.current;
     const at = bubbleAt.current;
     if (!m || !el || !at) return;
+    // Pendant un glisser-déposer, la bulle est masquée pour ne pas couvrir le point que l'on déplace.
+    if (dragging.current) { el.style.visibility = 'hidden'; return; }
     const p = m.project(at);
     const pane = m.getContainer();
     const w = el.offsetWidth;
