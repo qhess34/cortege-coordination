@@ -22,7 +22,7 @@ Guides utilisateurs : [docs/guide-organisateur.md](docs/guide-organisateur.md), 
 ## État actuel (octobre 2026)
 
 Migrations : `001_initial.sql` (schéma complet), `002_telephone.sql` (téléphone des comptes), `003_lieux.sql`
-(carrefours).
+(carrefours), `004_sos.sql` (SOS à types configurables, remplace les incidents).
 
 **Préparation** : GPX, analyse OSM non destructive (un point par accès ou par carrefour), points nommés d'après la rue
 ou le croisement, équipes (points fixes, volante, ouverture, fermeture), missions ordonnées, roadbook imprimable,
@@ -35,21 +35,23 @@ QR « Connecter un appareil »), profil prénom / nom / e-mail / **téléphone**
 Responsables nommés par l'organisation (boutons *Nommer responsable* / *Ajouter comme responsable*).
 
 **Jour J — membres (vue terrain)** : la mission à traiter en premier (statut, consignes, En route / Arrivé / Terminé,
-🆘 Aide, Signaler un incident, **🧭 Aller au point suivant**), téléphone du responsable, carte, partage de position et
+**🆘 SOS**, **🧭 Aller au point suivant**), téléphone du responsable, carte, partage de position et
 OwnTracks réduits à une ligne, **points restants** avec leur distance depuis le point en cours, GPX de l'équipe.
+Le bouton **SOS** ouvre une fenêtre : choix du **type** (liste configurable par l'organisation, 4 types par défaut :
+renforts, secours, agression, problème / blocage) et message facultatif.
 Plus d'itinéraire piéton ni de « Ma position » (service et `ROUTING_URL` retirés).
 Équipe volante : SOS et relèves en tête d'écran avec **🧭 Rejoindre le lieu**, vibration à chaque nouvelle demande.
 Bouton « 📍 La tête est ici » pour tout membre dont la position est connue (sauf la fermeture).
 
-**Jour J — organisation** : onglet *Direct* = compteurs (incidents, tête, queue, points à lever), **prochains points
-devant la tête** groupés par carrefour avec leur état (🆘, incident, relève, équipe en position, personne,
+**Jour J — organisation** : onglet *Direct* = compteurs (SOS ouverts, tête, queue, points à lever), **prochains points
+devant la tête** groupés par carrefour avec leur état (🆘 SOS, relève, équipe en position, personne,
 « x/y accès tenus »), **statut de chaque équipe** avec raccourcis 📞 / 💬 SMS / ✉ message vers le responsable. Le bloc
-« Progression du cortège » et les compteurs En position / En route ont été retirés. **SOS et incidents affichés sur
-les cartes** (planification et coordination en direct), clignotants tant que non pris en charge.
+« Progression du cortège » et les compteurs En position / En route ont été retirés. **SOS affichés sur
+les cartes** (planification et coordination en direct), clignotants tant que non résolus. Onglet *Équipes* : éditeur
+des types de SOS de la manifestation.
 
 **Automatismes** : progression tête/queue calculée depuis les positions partagées de l'ouverture et de la fermeture ;
-arrivée automatique au point (30 m ou zone OwnTracks) ; **pas de double saisie** d'un incident (même nature, même
-mission ou < 30 m d'un incident ouvert → l'existant est complété) ; un incident sans position prend celle du point.
+arrivée automatique au point (30 m ou zone OwnTracks) ; un SOS sans position prend celle du point de la mission concernée.
 
 ## Pistes non faites
 
