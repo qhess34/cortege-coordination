@@ -67,8 +67,10 @@ describe('partage de position', () => {
     expect(r.arrived).toMatchObject({ pointName: 'Premier' });
     const m = (await terrain(alice, teamA)).missions;
     expect(m[0].status).toBe('en_position');
-    // Le point suivant n'est pas pris tant que le premier n'est pas terminé.
-    expect((await send(alice, teamA, 400, 0)).json().arrived).toBeNull();
+    // Chaque point encore à tenir est pris dès qu'on s'en approche : l'équipe en tient plusieurs à la fois
+    // (le compteur « en position » progresse, il ne reste pas bloqué sur le premier point).
+    expect((await send(alice, teamA, 400, 0)).json().arrived).toMatchObject({ pointName: 'Second' });
+    expect((await terrain(alice, teamA)).missions.filter((x: { status: string }) => x.status === 'en_position')).toHaveLength(2);
     const t = (await orga.get('/api/events/' + eventId + '/tableau')).json();
     expect(t.teams.find((x: { id: number }) => x.id === teamA).missions.find((x: { pointName: string }) => x.pointName === 'Premier').changedBy).toBe('Alice');
   });
